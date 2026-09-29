@@ -1,0 +1,9 @@
+Murmur client
+Copyright 2026 The Murmur Authors
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+It depends on third-party packages under their own licenses (BSD-3-Clause,
+Apache-2.0, MIT and others), listed in pubspec.lock. The app shows every
+bundled package's license notice under Chain -> Licenses, as binary
+distributions must.

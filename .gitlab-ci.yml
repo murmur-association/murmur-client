@@ -1,0 +1,89 @@
+# Checks on every push: static analysis, the unit tests, and a web build.
+# The Flutter version is pinned by the image; raise it deliberately.
+stages:
+- check
+- test
+- build
+- secret-detection
+- deploy
+
+include:
+- template: Security/SAST.gitlab-ci.yml
+- template: Security/Secret-Detection.gitlab-ci.yml
+
+variables:
+  SECRET_DETECTION_ENABLED: 'true'
+
+sast:
+  stage: test
+secret_detection:
+  stage: secret-detection
+
+.flutter:
+  image: ghcr.io/cirruslabs/flutter:3.47.5
+  before_script:
+  - flutter --version
+  - flutter pub get
+  cache:
+    key:
+      files:
+      - pubspec.lock
+    paths:
+    - .pub-cache/
+  variables:
+    PUB_CACHE: "$CI_PROJECT_DIR/.pub-cache"
+
+analyze:
+  extends: .flutter
+  stage: check
+  script:
+  # The generated localizations must match the ARB files.
+  - flutter gen-l10n
+  - git diff --exit-code -- lib/l10n
+  - flutter analyze
+
+test:
+  extends: .flutter
+  stage: test
+  script:
+  # The live-node tests skip themselves without MURMUR_NODE.
+  - flutter test
+
+build-web:
+  extends: .flutter
+  stage: build
+  script:
+  - flutter build web --release
+  artifacts:
+    paths:
+    - build/web/
+    expire_in: 1 week
+
+# The public testnet page (GitLab Pages, custom domain app.murmur.info; see
+# README "Deploying the web app"). It connects to wss://node.murmur.info by
+# default and loads nothing from other origins: CanvasKit is served locally
+# and the fallback fonts are copied next to the page.
+pages:
+  extends: .flutter
+  stage: deploy
+  rules:
+  - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  script:
+  - >-
+    flutter build web --release --no-web-resources-cdn --base-href /
+    --dart-define=MURMUR_NODE_HOST=node.murmur.info --dart-define=MURMUR_NODE_PORT=443
+  - dart run tool/fetch_fallback_fonts.dart --cache .font-cache
+  - rm -rf public
+  - mv build/web public
+  cache:
+  - key:
+      files:
+      - pubspec.lock
+    paths:
+    - .pub-cache/
+  - key: fallback-fonts
+    paths:
+    - .font-cache/
+  artifacts:
+    paths:
+    - public

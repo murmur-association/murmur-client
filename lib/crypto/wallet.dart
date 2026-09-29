@@ -1,0 +1,96 @@
+// A Murmur wallet: an Ed25519 key (RFC 8032) whose address is SHA-256 of
+// the public key. The 32-byte seed is the same format as a key file made
+// with `murmur-node keygen` (64 hex chars).
+
+import 'dart:math';
+import 'dart:typed_data';
+
+import 'package:cryptography/cryptography.dart';
+
+import '../protocol/bytes.dart';
+import '../protocol/models.dart';
+
+/// A wallet's public side: its address and public key. What the app keeps
+/// at hand; the key itself is decrypted only to sign (services/key_vault.dart).
+class WalletId {
+  const WalletId(this.address, this.publicKey);
+
+  final Uint8List address;
+  final Uint8List publicKey;
+
+  String get addressHex => toHex(address);
+}
+
+class MurmurWallet {
+  MurmurWallet._(this.seed, this.publicKey, this._keyPair)
+      : address = sha256Bytes(publicKey);
+
+  static final _ed25519 = Ed25519();
+
+  final Uint8List seed;
+  final Uint8List publicKey;
+  final Uint8List address;
+  final SimpleKeyPair _keyPair;
+
+  String get addressHex => toHex(address);
+  String get seedHex => toHex(seed);
+
+  WalletId get id => WalletId(address, publicKey);
+
+  static Future<MurmurWallet> fromSeed(Uint8List seed) async {
+    if (seed.length != 32) {
+      throw const FormatException('a wallet seed is 32 bytes (64 hex chars)');
+    }
+    final kp = await _ed25519.newKeyPairFromSeed(seed);
+    final pk = await kp.extractPublicKey();
+    return MurmurWallet._(Uint8List.fromList(seed), Uint8List.fromList(pk.bytes), kp);
+  }
+
+  static Future<MurmurWallet> generate() {
+    final rng = Random.secure();
+    return fromSeed(Uint8List.fromList(List.generate(32, (_) => rng.nextInt(256))));
+  }
+
+  /// Signs a transaction with the sender's next `nonce`: the nonce proven
+  /// in the state, plus its own pending transactions (PROTOCOL.md Section 5).
+  Future<Transaction> sign({
+    required TxKind kind,
+    required int nonce,
+    required Uint8List? to,
+    required int amount,
+    required int fee,
+    required Uint8List? messageHash,
+    int contentSize = 0,
+    Uint8List? reference,
+    required int timestamp,
+  }) async {
+    final bytes = Transaction.signingBytesFor(
+      kind: kind,
+      from: address,
+      nonce: nonce,
+      to: to,
+      amount: amount,
+      fee: fee,
+      messageHash: messageHash,
+      contentSize: contentSize,
+      reference: reference,
+      timestamp: timestamp,
+      pubkey: publicKey,
+    );
+    final sig = await _ed25519.sign(bytes, keyPair: _keyPair);
+    return Transaction(
+      kind: kind,
+      from: address,
+      nonce: nonce,
+      to: to,
+      amount: amount,
+      fee: fee,
+      messageHash: messageHash,
+      contentSize: contentSize,
+      reference: reference,
+      timestamp: timestamp,
+      pubkey: publicKey,
+      signature: Uint8List.fromList(sig.bytes),
+    );
+  }
+}

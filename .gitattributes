@@ -1,0 +1,5 @@
+# Store text files with LF line endings in the repository, whatever the
+# platform; each checkout converts to its own convention.
+* text=auto
+# Generated from the ARB files by `flutter gen-l10n`.
+lib/l10n/app_localizations*.dart linguist-generated=true

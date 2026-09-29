@@ -1,0 +1,6 @@
+# Flutter's gen-l10n: the ARB files in lib/l10n (ICU message syntax) are
+# compiled into lib/l10n/app_localizations*.dart on every build.
+arb-dir: lib/l10n
+template-arb-file: app_en.arb
+output-localization-file: app_localizations.dart
+nullable-getter: false
