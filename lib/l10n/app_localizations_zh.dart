@@ -1687,4 +1687,13 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get inviteFromNoPublic => '没有已知的公开名字';
+
+  @override
+  String get starredTitle => '已加星标';
+
+  @override
+  String get noStarred => '还没有加星标的内容。在话题或消息的页面上加星标，它就会出现在这里。';
+
+  @override
+  String get starredGone => '已不在链上';
 }

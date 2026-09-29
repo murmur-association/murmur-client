@@ -394,5 +394,8 @@
   "aliasCleared": "公開名を消去しました",
   "nonTextMessage": "（テキストではありません：アプリ規約のデータ）",
   "explainAlias": "公開名を公開します。新しいスレッドと同じく、費用は手数料の {total} 倍です。手数料はマイナーに渡り、手数料の {burn} 倍が焼却されます。",
-  "inviteFromNoPublic": "既知の公開名はありません"
+  "inviteFromNoPublic": "既知の公開名はありません",
+  "starredTitle": "スター付き",
+  "noStarred": "まだスター付きのものはありません。スレッドやメッセージのページでスターを付けると、ここに表示されます。",
+  "starredGone": "チェーン上にありません"
 }

@@ -1736,4 +1736,14 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get inviteFromNoPublic => 'No public name known';
+
+  @override
+  String get starredTitle => 'Starred';
+
+  @override
+  String get noStarred =>
+      'Nothing starred yet. Star a thread or a message from its page, and it shows up here.';
+
+  @override
+  String get starredGone => 'No longer on the chain';
 }

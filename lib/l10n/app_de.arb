@@ -394,5 +394,8 @@
   "aliasCleared": "Öffentlicher Name entfernt",
   "nonTextMessage": "(kein Text: Daten einer App-Konvention)",
   "explainAlias": "Veröffentlicht deinen öffentlichen Namen. Wie ein neuer Thread kostet er {total} × die Gebühr: Die Gebühr geht an den Miner, {burn} × die Gebühr wird verbrannt.",
-  "inviteFromNoPublic": "Kein öffentlicher Name bekannt"
+  "inviteFromNoPublic": "Kein öffentlicher Name bekannt",
+  "starredTitle": "Markiert",
+  "noStarred": "Noch nichts markiert. Markiere einen Thread oder eine Nachricht auf ihrer Seite, dann erscheint sie hier.",
+  "starredGone": "Nicht mehr in der Kette"
 }

@@ -2481,6 +2481,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'No public name known'**
   String get inviteFromNoPublic;
+
+  /// The Starred page, opened from the top bar
+  ///
+  /// In en, this message translates to:
+  /// **'Starred'**
+  String get starredTitle;
+
+  /// The Starred page, opened from the top bar
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing starred yet. Star a thread or a message from its page, and it shows up here.'**
+  String get noStarred;
+
+  /// The Starred page, opened from the top bar
+  ///
+  /// In en, this message translates to:
+  /// **'No longer on the chain'**
+  String get starredGone;
 }
 
 class _AppLocalizationsDelegate

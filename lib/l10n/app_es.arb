@@ -394,5 +394,8 @@
   "aliasCleared": "Nombre público quitado",
   "nonTextMessage": "(no es texto: datos de una convención de apps)",
   "explainAlias": "Publica tu nombre público. Como un hilo nuevo, cuesta {total} × la comisión: la comisión va al minero y se queman {burn} × la comisión.",
-  "inviteFromNoPublic": "Sin nombre público conocido"
+  "inviteFromNoPublic": "Sin nombre público conocido",
+  "starredTitle": "Destacados",
+  "noStarred": "Aún no has destacado nada. Destaca un hilo o un mensaje desde su página y aparecerá aquí.",
+  "starredGone": "Ya no está en la cadena"
 }

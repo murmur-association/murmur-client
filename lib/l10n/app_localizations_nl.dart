@@ -1747,4 +1747,14 @@ class AppLocalizationsNl extends AppLocalizations {
 
   @override
   String get inviteFromNoPublic => 'Geen openbare naam bekend';
+
+  @override
+  String get starredTitle => 'Met ster';
+
+  @override
+  String get noStarred =>
+      'Nog niets met een ster. Geef een draadje of bericht een ster op de eigen pagina, dan verschijnt het hier.';
+
+  @override
+  String get starredGone => 'Niet meer in de keten';
 }

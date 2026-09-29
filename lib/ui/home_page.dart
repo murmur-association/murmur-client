@@ -11,6 +11,7 @@ import 'chain_tab.dart';
 import 'common.dart';
 import 'compose_page.dart';
 import 'messages_tab.dart';
+import 'starred_page.dart';
 import 'threads_tab.dart';
 import 'wallet_tab.dart';
 import 'glyphs.dart';
@@ -127,6 +128,12 @@ class _HomePageState extends State<HomePage> with RouteAware {
           ]),
           actions: [
             ConnectionChip(client: client),
+            // What the user starred, from any tab.
+            IconButton(
+              icon: const MurmurIcon(Glyph.star),
+              tooltip: l.starredTitle,
+              onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const StarredPage())),
+            ),
             const LanguageMenu(),
             const ThemeToggle(),
             IconButton(

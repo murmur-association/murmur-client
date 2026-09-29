@@ -1698,4 +1698,13 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get inviteFromNoPublic => '既知の公開名はありません';
+
+  @override
+  String get starredTitle => 'スター付き';
+
+  @override
+  String get noStarred => 'まだスター付きのものはありません。スレッドやメッセージのページでスターを付けると、ここに表示されます。';
+
+  @override
+  String get starredGone => 'チェーン上にありません';
 }

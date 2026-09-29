@@ -394,5 +394,8 @@
   "aliasCleared": "Nome pubblico tolto",
   "nonTextMessage": "(non è testo: dati di una convenzione delle app)",
   "explainAlias": "Pubblica il tuo nome pubblico. Come una nuova discussione, costa {total} × la commissione: la commissione va al miner e {burn} × la commissione viene bruciato.",
-  "inviteFromNoPublic": "Nessun nome pubblico noto"
+  "inviteFromNoPublic": "Nessun nome pubblico noto",
+  "starredTitle": "Con stella",
+  "noStarred": "Ancora nessuna stella. Metti una stella a una discussione o a un messaggio dalla sua pagina e comparirà qui.",
+  "starredGone": "Non è più nella catena"
 }

@@ -1755,4 +1755,14 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get inviteFromNoPublic => 'Kein öffentlicher Name bekannt';
+
+  @override
+  String get starredTitle => 'Markiert';
+
+  @override
+  String get noStarred =>
+      'Noch nichts markiert. Markiere einen Thread oder eine Nachricht auf ihrer Seite, dann erscheint sie hier.';
+
+  @override
+  String get starredGone => 'Nicht mehr in der Kette';
 }

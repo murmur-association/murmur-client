@@ -394,5 +394,8 @@
   "aliasCleared": "Openbare naam gewist",
   "nonTextMessage": "(geen tekst: gegevens voor een app-conventie)",
   "explainAlias": "Publiceert je openbare naam. Net als een nieuw draadje kost dat {total} × de fee: de fee gaat naar de miner en {burn} × de fee wordt verbrand.",
-  "inviteFromNoPublic": "Geen openbare naam bekend"
+  "inviteFromNoPublic": "Geen openbare naam bekend",
+  "starredTitle": "Met ster",
+  "noStarred": "Nog niets met een ster. Geef een draadje of bericht een ster op de eigen pagina, dan verschijnt het hier.",
+  "starredGone": "Niet meer in de keten"
 }

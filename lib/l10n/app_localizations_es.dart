@@ -1749,4 +1749,14 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get inviteFromNoPublic => 'Sin nombre público conocido';
+
+  @override
+  String get starredTitle => 'Destacados';
+
+  @override
+  String get noStarred =>
+      'Aún no has destacado nada. Destaca un hilo o un mensaje desde su página y aparecerá aquí.';
+
+  @override
+  String get starredGone => 'Ya no está en la cadena';
 }

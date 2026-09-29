@@ -1771,4 +1771,14 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get inviteFromNoPublic => 'لا اسم عام معروف';
+
+  @override
+  String get starredTitle => 'المميزة بنجمة';
+
+  @override
+  String get noStarred =>
+      'لا شيء مميز بنجمة بعد. ميّز موضوعًا أو رسالة بنجمة من صفحتها وستظهر هنا.';
+
+  @override
+  String get starredGone => 'لم يعد على السلسلة';
 }

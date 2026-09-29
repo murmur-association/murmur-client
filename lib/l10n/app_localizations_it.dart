@@ -1753,4 +1753,14 @@ class AppLocalizationsIt extends AppLocalizations {
 
   @override
   String get inviteFromNoPublic => 'Nessun nome pubblico noto';
+
+  @override
+  String get starredTitle => 'Con stella';
+
+  @override
+  String get noStarred =>
+      'Ancora nessuna stella. Metti una stella a una discussione o a un messaggio dalla sua pagina e comparirà qui.';
+
+  @override
+  String get starredGone => 'Non è più nella catena';
 }
