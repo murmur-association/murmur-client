@@ -1,5 +1,6 @@
 # Checks on every push: static analysis, the unit tests, and a web build.
-# The Flutter version is pinned by the image; raise it deliberately.
+# The Flutter version is pinned by FLUTTER_VERSION below; raise it
+# deliberately, together with the version used locally.
 stages:
 - check
 - test
@@ -20,18 +21,32 @@ secret_detection:
   stage: secret-detection
 
 .flutter:
-  image: ghcr.io/cirruslabs/flutter:3.47.5
+  # A base system with Flutter's dependencies. The Flutter SDK itself is
+  # pinned by FLUTTER_VERSION and cloned from the official repository (and
+  # cached), since images aren't published for every release.
+  image: ghcr.io/cirruslabs/flutter:3.44.0
+  variables:
+    FLUTTER_VERSION: "3.47.5"
+    PUB_CACHE: "$CI_PROJECT_DIR/.pub-cache"
   before_script:
+  - |
+    if [ "$(cat .flutter-sdk/.ci-version 2>/dev/null)" != "$FLUTTER_VERSION" ]; then
+      rm -rf .flutter-sdk
+      git clone --depth 1 --branch "$FLUTTER_VERSION" https://github.com/flutter/flutter.git .flutter-sdk
+      echo "$FLUTTER_VERSION" > .flutter-sdk/.ci-version
+    fi
+  - export PATH="$CI_PROJECT_DIR/.flutter-sdk/bin:$PATH"
   - flutter --version
   - flutter pub get
   cache:
-    key:
+  - key: flutter-sdk-$FLUTTER_VERSION
+    paths:
+    - .flutter-sdk/
+  - key:
       files:
       - pubspec.lock
     paths:
     - .pub-cache/
-  variables:
-    PUB_CACHE: "$CI_PROJECT_DIR/.pub-cache"
 
 analyze:
   extends: .flutter
@@ -76,6 +91,9 @@ pages:
   - rm -rf public
   - mv build/web public
   cache:
+  - key: flutter-sdk-$FLUTTER_VERSION
+    paths:
+    - .flutter-sdk/
   - key:
       files:
       - pubspec.lock

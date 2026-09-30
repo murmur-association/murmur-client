@@ -30,6 +30,9 @@ migrate_working_dir/
 .flutter-plugins-dependencies
 .pub-cache/
 .pub/
+# CI caches: the pinned Flutter SDK and the fallback fonts (.gitlab-ci.yml).
+/.flutter-sdk/
+/.font-cache/
 /build/
 /coverage/
 
