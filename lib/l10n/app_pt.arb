@@ -409,5 +409,11 @@
   "publicNameNotUnique": "**Não é único**: qualquer pessoa pode escolher o mesmo nome. O endereço ao lado distingue as pessoas.",
   "publicNameCost": "**Custa tanto como um tópico novo**, sempre que o define ou muda.",
   "publicNameRemovable": "**É uma mensagem na cadeia**: qualquer nó a pode apagar, e então desaparece.",
-  "publicNameClear": "**Deixe vazio** para o retirar."
+  "publicNameClear": "**Deixe vazio** para o retirar.",
+  "passkeyNoPrfTitle": "Este gestor de chaves de acesso não pode proteger a carteira",
+  "passkeyNoPrfWhy": "**Não consegue cifrar.** Para trancar a chave da carteira, o gestor tem de derivar uma chave da chave de acesso (WebAuthn PRF). O que escolheu não o faz.",
+  "passkeyNoPrfTry": "**Experimente outro gestor**, como as Palavras-passe da Apple ou o Gestor de palavras-passe da Google, ou proteja a carteira com uma **frase-passe**.",
+  "passkeyNoPrfLeftover": "A chave de acesso que acabou de guardar (**Murmur wallet**) não desbloqueia nada: pode apagá-la desse gestor.",
+  "passkeyTryAnother": "Experimentar outro gestor",
+  "passkeyUsePassphrase": "Usar uma frase-passe"
 }

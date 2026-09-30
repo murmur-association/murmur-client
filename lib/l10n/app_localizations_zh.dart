@@ -1722,4 +1722,25 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get publicNameClear => '**留空**即可清除。';
+
+  @override
+  String get passkeyNoPrfTitle => '这个通行密钥管理器无法保护钱包';
+
+  @override
+  String get passkeyNoPrfWhy =>
+      '**它无法加密。**要锁住钱包密钥，管理器必须能从通行密钥派生出密钥（WebAuthn PRF）。你选的这个不支持。';
+
+  @override
+  String get passkeyNoPrfTry =>
+      '**换一个管理器试试**，例如 Apple 密码或 Google 密码管理器，或用**密码短语**保护钱包。';
+
+  @override
+  String get passkeyNoPrfLeftover =>
+      '它刚保存的通行密钥（**Murmur wallet**）解锁不了任何东西：你可以在那个管理器里删除它。';
+
+  @override
+  String get passkeyTryAnother => '换一个通行密钥管理器';
+
+  @override
+  String get passkeyUsePassphrase => '使用密码短语';
 }

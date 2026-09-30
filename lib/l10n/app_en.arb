@@ -561,5 +561,17 @@
   "publicNameRemovable": "**A message on the chain**: any node may delete it, and then it's gone.",
   "@publicNameRemovable": {"description":"Words between ** show in bold copper (Emphasized); keep the markers around the key words"},
   "publicNameClear": "**Leave it empty** to clear it.",
-  "@publicNameClear": {"description":"Words between ** show in bold copper (Emphasized); keep the markers around the key words"}
+  "@publicNameClear": {"description":"Words between ** show in bold copper (Emphasized); keep the markers around the key words"},
+  "passkeyNoPrfTitle": "This passkey manager can't protect the wallet",
+  "@passkeyNoPrfTitle": {"description":"Browser: the chosen passkey manager lacks WebAuthn PRF. Words between ** show in bold copper"},
+  "passkeyNoPrfWhy": "**It can't encrypt.** To lock your wallet key, a passkey manager has to derive a key from the passkey (WebAuthn PRF). The one you picked doesn't.",
+  "@passkeyNoPrfWhy": {"description":"Browser: the chosen passkey manager lacks WebAuthn PRF. Words between ** show in bold copper"},
+  "passkeyNoPrfTry": "**Try another manager**, such as Apple Passwords or Google Password Manager, or protect the wallet with a **passphrase**.",
+  "@passkeyNoPrfTry": {"description":"Browser: the chosen passkey manager lacks WebAuthn PRF. Words between ** show in bold copper"},
+  "passkeyNoPrfLeftover": "The passkey it just saved (**Murmur wallet**) unlocks nothing: you can delete it from that manager.",
+  "@passkeyNoPrfLeftover": {"description":"Browser: the chosen passkey manager lacks WebAuthn PRF. Words between ** show in bold copper"},
+  "passkeyTryAnother": "Try another passkey manager",
+  "@passkeyTryAnother": {"description":"Browser: the chosen passkey manager lacks WebAuthn PRF. Words between ** show in bold copper"},
+  "passkeyUsePassphrase": "Use a passphrase",
+  "@passkeyUsePassphrase": {"description":"Browser: the chosen passkey manager lacks WebAuthn PRF. Words between ** show in bold copper"}
 }

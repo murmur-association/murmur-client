@@ -409,5 +409,11 @@
   "publicNameNotUnique": "**一意ではありません**：誰でも同じ名前を選べます。横に表示されるアドレスで見分けます。",
   "publicNameCost": "**新しいスレッドと同じ費用**が、設定や変更のたびにかかります。",
   "publicNameRemovable": "**チェーン上のメッセージです**：どのノードも削除でき、削除されると消えます。",
-  "publicNameClear": "**空欄にすると**消去します。"
+  "publicNameClear": "**空欄にすると**消去します。",
+  "passkeyNoPrfTitle": "このパスキー管理アプリではウォレットを保護できません",
+  "passkeyNoPrfWhy": "**暗号化できません。**ウォレットの鍵をロックするには、管理アプリがパスキーから鍵を導出できる必要があります（WebAuthn PRF）。選んだアプリは対応していません。",
+  "passkeyNoPrfTry": "**別の管理アプリを試す**（Apple のパスワードや Google パスワード マネージャーなど）か、**パスフレーズ**でウォレットを保護してください。",
+  "passkeyNoPrfLeftover": "いま保存されたパスキー（**Murmur wallet**）は何も解除できません。その管理アプリから削除して構いません。",
+  "passkeyTryAnother": "別のパスキー管理アプリを試す",
+  "passkeyUsePassphrase": "パスフレーズを使う"
 }

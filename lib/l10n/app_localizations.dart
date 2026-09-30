@@ -2571,6 +2571,42 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'**Leave it empty** to clear it.'**
   String get publicNameClear;
+
+  /// Browser: the chosen passkey manager lacks WebAuthn PRF. Words between ** show in bold copper
+  ///
+  /// In en, this message translates to:
+  /// **'This passkey manager can\'t protect the wallet'**
+  String get passkeyNoPrfTitle;
+
+  /// Browser: the chosen passkey manager lacks WebAuthn PRF. Words between ** show in bold copper
+  ///
+  /// In en, this message translates to:
+  /// **'**It can\'t encrypt.** To lock your wallet key, a passkey manager has to derive a key from the passkey (WebAuthn PRF). The one you picked doesn\'t.'**
+  String get passkeyNoPrfWhy;
+
+  /// Browser: the chosen passkey manager lacks WebAuthn PRF. Words between ** show in bold copper
+  ///
+  /// In en, this message translates to:
+  /// **'**Try another manager**, such as Apple Passwords or Google Password Manager, or protect the wallet with a **passphrase**.'**
+  String get passkeyNoPrfTry;
+
+  /// Browser: the chosen passkey manager lacks WebAuthn PRF. Words between ** show in bold copper
+  ///
+  /// In en, this message translates to:
+  /// **'The passkey it just saved (**Murmur wallet**) unlocks nothing: you can delete it from that manager.'**
+  String get passkeyNoPrfLeftover;
+
+  /// Browser: the chosen passkey manager lacks WebAuthn PRF. Words between ** show in bold copper
+  ///
+  /// In en, this message translates to:
+  /// **'Try another passkey manager'**
+  String get passkeyTryAnother;
+
+  /// Browser: the chosen passkey manager lacks WebAuthn PRF. Words between ** show in bold copper
+  ///
+  /// In en, this message translates to:
+  /// **'Use a passphrase'**
+  String get passkeyUsePassphrase;
 }
 
 class _AppLocalizationsDelegate

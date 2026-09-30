@@ -112,6 +112,33 @@ class DialogPrompts implements VaultPrompts {
       ),
     );
   }
+
+  @override
+  Future<bool?> passkeyUnsupported() {
+    final l = context.l10n;
+    final small = Theme.of(context).textTheme.bodyMedium;
+    return showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        icon: Center(child: MurmurIcon(Glyph.warning, size: 32, color: Theme.of(context).colorScheme.primary)),
+        title: Text(l.passkeyNoPrfTitle),
+        content: SizedBox(
+          width: 440,
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            InfoPoint(Glyph.key, l.passkeyNoPrfWhy, style: small),
+            InfoPoint(Glyph.refresh, l.passkeyNoPrfTry, style: small),
+            InfoPoint(Glyph.logout, l.passkeyNoPrfLeftover, style: small),
+          ]),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: Text(l.cancel)),
+          TextButton(onPressed: () => Navigator.pop(context, false), child: Text(l.passkeyUsePassphrase)),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: Text(l.passkeyTryAnother)),
+        ],
+      ),
+    );
+  }
 }
 
 /// The wallet with its key, for one use, after the device's check or the

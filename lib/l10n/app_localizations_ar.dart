@@ -1812,4 +1812,26 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get publicNameClear => '**اتركه فارغًا** لإزالته.';
+
+  @override
+  String get passkeyNoPrfTitle =>
+      'مدير مفاتيح المرور هذا لا يستطيع حماية المحفظة';
+
+  @override
+  String get passkeyNoPrfWhy =>
+      '**لا يستطيع التشفير.** لقفل مفتاح محفظتك، يجب أن يشتق المدير مفتاحًا من مفتاح المرور (WebAuthn PRF). المدير الذي اخترته لا يفعل ذلك.';
+
+  @override
+  String get passkeyNoPrfTry =>
+      '**جرّب مديرًا آخر**، مثل كلمات سر Apple أو مدير كلمات المرور من Google، أو احمِ المحفظة **بعبارة مرور**.';
+
+  @override
+  String get passkeyNoPrfLeftover =>
+      'مفتاح المرور الذي حفظه للتو (**Murmur wallet**) لا يفتح شيئًا: يمكنك حذفه من ذلك المدير.';
+
+  @override
+  String get passkeyTryAnother => 'جرّب مدير مفاتيح مرور آخر';
+
+  @override
+  String get passkeyUsePassphrase => 'استخدم عبارة مرور';
 }

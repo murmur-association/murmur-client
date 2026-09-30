@@ -1790,4 +1790,26 @@ class AppLocalizationsNl extends AppLocalizations {
 
   @override
   String get publicNameClear => '**Laat leeg** om hem te wissen.';
+
+  @override
+  String get passkeyNoPrfTitle =>
+      'Deze passkeybeheerder kan de wallet niet beschermen';
+
+  @override
+  String get passkeyNoPrfWhy =>
+      '**Hij kan niet versleutelen.** Om je walletsleutel te vergrendelen, moet de beheerder een sleutel uit de passkey afleiden (WebAuthn PRF). Die je koos doet dat niet.';
+
+  @override
+  String get passkeyNoPrfTry =>
+      '**Probeer een andere beheerder**, zoals Apple Wachtwoorden of Google Wachtwoordmanager, of bescherm de wallet met een **wachtzin**.';
+
+  @override
+  String get passkeyNoPrfLeftover =>
+      'De passkey die hij net bewaarde (**Murmur wallet**) ontgrendelt niets: je kunt hem uit die beheerder verwijderen.';
+
+  @override
+  String get passkeyTryAnother => 'Andere passkeybeheerder proberen';
+
+  @override
+  String get passkeyUsePassphrase => 'Een wachtzin gebruiken';
 }

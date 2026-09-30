@@ -409,5 +409,11 @@
   "publicNameNotUnique": "**Niet uniek**: iedereen kan dezelfde naam kiezen. Het adres ernaast onderscheidt mensen.",
   "publicNameCost": "**Kost evenveel als een nieuw draadje**, elke keer dat je hem instelt of wijzigt.",
   "publicNameRemovable": "**Een bericht in de keten**: elke node mag het wissen, en dan is het weg.",
-  "publicNameClear": "**Laat leeg** om hem te wissen."
+  "publicNameClear": "**Laat leeg** om hem te wissen.",
+  "passkeyNoPrfTitle": "Deze passkeybeheerder kan de wallet niet beschermen",
+  "passkeyNoPrfWhy": "**Hij kan niet versleutelen.** Om je walletsleutel te vergrendelen, moet de beheerder een sleutel uit de passkey afleiden (WebAuthn PRF). Die je koos doet dat niet.",
+  "passkeyNoPrfTry": "**Probeer een andere beheerder**, zoals Apple Wachtwoorden of Google Wachtwoordmanager, of bescherm de wallet met een **wachtzin**.",
+  "passkeyNoPrfLeftover": "De passkey die hij net bewaarde (**Murmur wallet**) ontgrendelt niets: je kunt hem uit die beheerder verwijderen.",
+  "passkeyTryAnother": "Andere passkeybeheerder proberen",
+  "passkeyUsePassphrase": "Een wachtzin gebruiken"
 }

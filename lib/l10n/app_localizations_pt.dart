@@ -1789,4 +1789,26 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get publicNameClear => '**Deixe vazio** para o retirar.';
+
+  @override
+  String get passkeyNoPrfTitle =>
+      'Este gestor de chaves de acesso não pode proteger a carteira';
+
+  @override
+  String get passkeyNoPrfWhy =>
+      '**Não consegue cifrar.** Para trancar a chave da carteira, o gestor tem de derivar uma chave da chave de acesso (WebAuthn PRF). O que escolheu não o faz.';
+
+  @override
+  String get passkeyNoPrfTry =>
+      '**Experimente outro gestor**, como as Palavras-passe da Apple ou o Gestor de palavras-passe da Google, ou proteja a carteira com uma **frase-passe**.';
+
+  @override
+  String get passkeyNoPrfLeftover =>
+      'A chave de acesso que acabou de guardar (**Murmur wallet**) não desbloqueia nada: pode apagá-la desse gestor.';
+
+  @override
+  String get passkeyTryAnother => 'Experimentar outro gestor';
+
+  @override
+  String get passkeyUsePassphrase => 'Usar uma frase-passe';
 }

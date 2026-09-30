@@ -1796,4 +1796,26 @@ class AppLocalizationsIt extends AppLocalizations {
 
   @override
   String get publicNameClear => '**Lascialo vuoto** per toglierlo.';
+
+  @override
+  String get passkeyNoPrfTitle =>
+      'Questo gestore di passkey non può proteggere il portafoglio';
+
+  @override
+  String get passkeyNoPrfWhy =>
+      '**Non sa cifrare.** Per bloccare la chiave del portafoglio, il gestore deve ricavare una chiave dalla passkey (WebAuthn PRF). Quello scelto non lo fa.';
+
+  @override
+  String get passkeyNoPrfTry =>
+      '**Prova un altro gestore**, come Password di Apple o Gestore delle password di Google, oppure proteggi il portafoglio con una **passphrase**.';
+
+  @override
+  String get passkeyNoPrfLeftover =>
+      'La passkey appena salvata (**Murmur wallet**) non sblocca nulla: puoi eliminarla da quel gestore.';
+
+  @override
+  String get passkeyTryAnother => 'Prova un altro gestore';
+
+  @override
+  String get passkeyUsePassphrase => 'Usa una passphrase';
 }

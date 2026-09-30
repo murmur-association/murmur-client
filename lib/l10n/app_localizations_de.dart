@@ -1798,4 +1798,26 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get publicNameClear => '**Leer lassen**, um ihn zu entfernen.';
+
+  @override
+  String get passkeyNoPrfTitle =>
+      'Dieser Passkey-Manager kann die Wallet nicht schützen';
+
+  @override
+  String get passkeyNoPrfWhy =>
+      '**Er kann nicht verschlüsseln.** Um den Wallet-Schlüssel zu sperren, muss der Manager aus dem Passkey einen Schlüssel ableiten (WebAuthn PRF). Der gewählte kann das nicht.';
+
+  @override
+  String get passkeyNoPrfTry =>
+      '**Versuche einen anderen Manager**, etwa Apple Passwörter oder den Google Passwortmanager, oder schütze die Wallet mit einer **Passphrase**.';
+
+  @override
+  String get passkeyNoPrfLeftover =>
+      'Der eben gespeicherte Passkey (**Murmur wallet**) entsperrt nichts: Du kannst ihn in diesem Manager löschen.';
+
+  @override
+  String get passkeyTryAnother => 'Anderen Passkey-Manager versuchen';
+
+  @override
+  String get passkeyUsePassphrase => 'Passphrase verwenden';
 }

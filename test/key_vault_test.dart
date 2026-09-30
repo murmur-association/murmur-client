@@ -14,11 +14,14 @@ import 'package:murmur_client/services/key_vault.dart';
 import 'package:murmur_client/services/storage.dart';
 
 class _Prompts implements VaultPrompts {
-  _Prompts(this.setup, this.entered);
+  _Prompts(this.setup, this.entered, {this.onPasskeyUnsupported = const []});
 
   final String? setup;
   final String? entered;
-  int asked = 0;
+
+  /// Answers to "this manager can't encrypt", in turn.
+  final List<bool?> onPasskeyUnsupported;
+  int asked = 0, passkeyAsked = 0;
 
   @override
   Future<String?> newPassphrase() async => setup;
@@ -28,11 +31,43 @@ class _Prompts implements VaultPrompts {
     asked++;
     return entered;
   }
+
+  @override
+  Future<bool?> passkeyUnsupported() async => onPasskeyUnsupported[passkeyAsked++];
 }
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   final seed = Uint8List.fromList(List.generate(32, (i) => i + 1));
+
+  group('a passkey manager that can\'t encrypt', () {
+    // The first passkey's manager lacks PRF; a second try uses one that has it.
+    Future<Map<String, String>?> Function(Uint8List, String) tries() {
+      var n = 0;
+      return (seed, reason) async {
+        if (n++ == 0) throw const PasskeyUnsupported();
+        return {'protection': 'passkey', 'try': '$n'};
+      };
+    }
+
+    test('lets the user try another manager', () async {
+      final prompts = _Prompts(null, null, onPasskeyUnsupported: [true]);
+      final stored = await sealSeed(seed, prompts, reason: 'test', device: tries());
+      expect(stored, {'protection': 'passkey', 'try': '2'});
+      expect(prompts.passkeyAsked, 1);
+    });
+
+    test('or use a passphrase instead', () async {
+      final prompts = _Prompts('correct horse', null, onPasskeyUnsupported: [false]);
+      final stored = await sealSeed(seed, prompts, reason: 'test', device: tries());
+      expect(stored['protection'], 'passphrase');
+    });
+
+    test('or cancel, saving nothing', () async {
+      final prompts = _Prompts(null, null, onPasskeyUnsupported: [null]);
+      await expectLater(sealSeed(seed, prompts, reason: 'test', device: tries()), throwsA(isA<VaultLocked>()));
+    });
+  });
 
   test('the stored record holds no trace of the seed, and only the passphrase opens it', () async {
     final watch = Stopwatch()..start();

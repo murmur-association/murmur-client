@@ -409,5 +409,11 @@
   "publicNameNotUnique": "**Nicht eindeutig**: Jeder kann denselben Namen wählen. Die Adresse daneben unterscheidet die Leute.",
   "publicNameCost": "**Kostet so viel wie ein neuer Thread**, jedes Mal, wenn du ihn setzt oder änderst.",
   "publicNameRemovable": "**Eine Nachricht in der Kette**: Jeder Knoten kann sie löschen, dann ist sie weg.",
-  "publicNameClear": "**Leer lassen**, um ihn zu entfernen."
+  "publicNameClear": "**Leer lassen**, um ihn zu entfernen.",
+  "passkeyNoPrfTitle": "Dieser Passkey-Manager kann die Wallet nicht schützen",
+  "passkeyNoPrfWhy": "**Er kann nicht verschlüsseln.** Um den Wallet-Schlüssel zu sperren, muss der Manager aus dem Passkey einen Schlüssel ableiten (WebAuthn PRF). Der gewählte kann das nicht.",
+  "passkeyNoPrfTry": "**Versuche einen anderen Manager**, etwa Apple Passwörter oder den Google Passwortmanager, oder schütze die Wallet mit einer **Passphrase**.",
+  "passkeyNoPrfLeftover": "Der eben gespeicherte Passkey (**Murmur wallet**) entsperrt nichts: Du kannst ihn in diesem Manager löschen.",
+  "passkeyTryAnother": "Anderen Passkey-Manager versuchen",
+  "passkeyUsePassphrase": "Passphrase verwenden"
 }

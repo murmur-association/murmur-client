@@ -33,6 +33,19 @@ abstract class VaultPrompts {
 
   /// The passphrase, to `reason`; null if the user cancels.
   Future<String?> passphrase(String reason);
+
+  /// A passkey was made, but its manager can't encrypt with it (no PRF):
+  /// true to try again (another manager), false to use a passphrase, null
+  /// to cancel.
+  Future<bool?> passkeyUnsupported();
+}
+
+/// A passkey was created, but the passkey manager the user picked can't
+/// derive an encryption key from it (the WebAuthn PRF extension). Unlike a
+/// device with no passkeys at all, this is worth telling the user: another
+/// manager on the same device may well support it.
+class PasskeyUnsupported implements Exception {
+  const PasskeyUnsupported();
 }
 
 /// The user cancelled, or the check or passphrase failed.
@@ -44,9 +57,27 @@ class VaultLocked implements Exception {
 }
 
 /// Encrypts `seed`, choosing the strongest protection this device has;
-/// returns what to store (never the seed). May prompt.
-Future<Map<String, String>> sealSeed(Uint8List seed, VaultPrompts prompts, {required String reason}) async =>
-    await impl.sealWithDevice(seed, reason) ?? await sealWithPassphrase(seed, prompts);
+/// returns what to store (never the seed). May prompt. When the chosen
+/// passkey manager can't encrypt, the user picks: another try, or a
+/// passphrase. `device` replaces the platform's own protection in tests.
+Future<Map<String, String>> sealSeed(Uint8List seed, VaultPrompts prompts,
+    {required String reason, Future<Map<String, String>?> Function(Uint8List, String)? device}) async {
+  final seal = device ?? impl.sealWithDevice;
+  while (true) {
+    try {
+      return await seal(seed, reason) ?? await sealWithPassphrase(seed, prompts);
+    } on PasskeyUnsupported {
+      switch (await prompts.passkeyUnsupported()) {
+        case true:
+          continue; // another manager
+        case false:
+          return sealWithPassphrase(seed, prompts);
+        case null:
+          throw const VaultLocked(false);
+      }
+    }
+  }
+}
 
 /// Decrypts what [sealSeed] stored; prompts every time. Throws [VaultLocked].
 Future<Uint8List> openSeed(Map<String, String> stored, VaultPrompts prompts, {required String reason}) async {

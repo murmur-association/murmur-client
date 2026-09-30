@@ -1734,4 +1734,25 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get publicNameClear => '**空欄にすると**消去します。';
+
+  @override
+  String get passkeyNoPrfTitle => 'このパスキー管理アプリではウォレットを保護できません';
+
+  @override
+  String get passkeyNoPrfWhy =>
+      '**暗号化できません。**ウォレットの鍵をロックするには、管理アプリがパスキーから鍵を導出できる必要があります（WebAuthn PRF）。選んだアプリは対応していません。';
+
+  @override
+  String get passkeyNoPrfTry =>
+      '**別の管理アプリを試す**（Apple のパスワードや Google パスワード マネージャーなど）か、**パスフレーズ**でウォレットを保護してください。';
+
+  @override
+  String get passkeyNoPrfLeftover =>
+      'いま保存されたパスキー（**Murmur wallet**）は何も解除できません。その管理アプリから削除して構いません。';
+
+  @override
+  String get passkeyTryAnother => '別のパスキー管理アプリを試す';
+
+  @override
+  String get passkeyUsePassphrase => 'パスフレーズを使う';
 }

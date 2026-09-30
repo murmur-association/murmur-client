@@ -48,10 +48,18 @@ Uint8List? _first(JSObject results) {
   return first?.toDart.asUint8List();
 }
 
+/// Protects `seed` with a new passkey, if this browser can. Returns null
+/// when it can't make one at all (not a secure page, no platform
+/// authenticator): the passphrase is then the protection, without asking.
+/// Throws [PasskeyUnsupported] when a passkey was made but its manager
+/// can't encrypt with it (a third-party manager without PRF, say), so the
+/// user can try another, and [VaultLocked] when they dismiss the prompt.
 Future<Map<String, String>?> sealWithDevice(Uint8List seed, String reason) async {
+  var created = false;
   try {
     if (!web.window.isSecureContext) return null;
     if (!(await web.PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable().toDart).toDart) return null;
+    final salt = randomBytes(32);
     // A passkey for this wallet on this device, asking for PRF support.
     final creation = web.PublicKeyCredentialCreationOptions(
       challenge: randomBytes(32).toJS,
@@ -68,25 +76,35 @@ Future<Map<String, String>?> sealWithDevice(Uint8List seed, String reason) async
       ),
       timeout: 120000,
     );
-    creation.extensions = {'prf': <String, Object>{}}.jsify() as web.AuthenticationExtensionsClientInputs;
-    final created = await web.window.navigator.credentials.create(web.CredentialCreationOptions(publicKey: creation)).toDart;
-    if (created == null) throw const VaultLocked(false);
-    final credential = created as web.PublicKeyCredential;
-    final enabled = credential.getClientExtensionResults().getProperty<JSObject?>('prf'.toJS)?.getProperty<JSBoolean?>(
-          'enabled'.toJS,
-        );
-    if (enabled?.toDart != true) return null; // no PRF here: a passphrase instead
+    // Asking for the output already: some authenticators give it at
+    // creation, which saves a second prompt.
+    creation.extensions = {
+      'prf': {
+        'eval': {'first': salt.toJS},
+      },
+    }.jsify() as web.AuthenticationExtensionsClientInputs;
+    final made = await web.window.navigator.credentials.create(web.CredentialCreationOptions(publicKey: creation)).toDart;
+    if (made == null) throw const VaultLocked(false);
+    created = true;
+    final credential = made as web.PublicKeyCredential;
+    final results = credential.getClientExtensionResults();
+    final enabled = results.getProperty<JSObject?>('prf'.toJS)?.getProperty<JSBoolean?>('enabled'.toJS)?.toDart;
+    // Only a clear "no" settles it now: some managers say nothing at
+    // creation, yet give the output when asked.
+    if (enabled == false) throw const PasskeyUnsupported();
     final id = credential.rawId.toDart.asUint8List();
-    final salt = randomBytes(32);
-    // Most authenticators give the PRF output only when asked with get().
-    final secret = await _prf(id, salt);
-    if (secret == null) return null;
+    final secret = _first(results) ?? await _prf(id, salt);
+    if (secret == null) throw const PasskeyUnsupported();
     return {'protection': 'passkey', 'credential': toHex(id), 'salt': toHex(salt), ...await seal(seed, SecretKey(secret))};
   } on VaultLocked {
+    rethrow;
+  } on PasskeyUnsupported {
     rethrow;
   } catch (e) {
     // The user dismissed the prompt: nothing is saved.
     if (e is JSObject && (e as web.DOMException).name == 'NotAllowedError') throw const VaultLocked(false);
+    // Anything else once a passkey exists: that manager can't do it.
+    if (created) throw const PasskeyUnsupported();
     return null;
   }
 }

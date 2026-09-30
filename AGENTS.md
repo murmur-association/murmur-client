@@ -56,7 +56,7 @@ set TMP=%TEMP%
 3. **The chain cache needs consent.** `ChainCache` is used only when `Preferences.storageConsent == allowed`. Turning it off deletes it. The wallet seed (secure storage) and preferences are always stored.
 4. **Never print, log or send a wallet seed, and never store it in the clear.** It lives encrypted in the key vault (`services/key_vault.dart`):
    - **Android, iOS and macOS:** the system's hardware key store via `biometric_storage`. Every read needs biometrics; Apple devices also accept the device passcode, while Android with "every time" allows biometrics only.
-   - **Browsers:** a passkey with the WebAuthn PRF extension; its secret after the device check is the AES-GCM key.
+   - **Browsers:** a passkey with the WebAuthn PRF extension; its secret after the device check is the AES-GCM key. The user picks the passkey manager (on iOS, Apple Passwords or a third-party one such as Proton Pass), and not all of them support PRF. Only an explicit `prf.enabled: false` rejects one at creation; otherwise the output is asked for (already at creation, else with a get). If none comes, `PasskeyUnsupported` makes `sealSeed` ask (`VaultPrompts.passkeyUnsupported`): try another manager, use a passphrase, or cancel. The user found the old silent fallback to a passphrase confusing.
    - **Otherwise** (including browsers without PRF, such as Firefox): a passphrase, stretched with PBKDF2-SHA256 over 600,000 rounds into an AES-GCM key.
 
    The Wallet tab shows which one is used (`WalletController.protection`).
