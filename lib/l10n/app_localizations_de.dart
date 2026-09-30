@@ -989,44 +989,6 @@ class AppLocalizationsDe extends AppLocalizations {
   String get checkingFees => 'Netzgebühren werden abgefragt…';
 
   @override
-  String suggestedBusy(int fee, int weight) {
-    final intl.NumberFormat feeNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String feeString = feeNumberFormat.format(fee);
-    final intl.NumberFormat weightNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String weightString = weightNumberFormat.format(weight);
-
-    return 'Vorgeschlagene Gebühr: $feeString für $weightString Byte (das Netz ist ausgelastet)';
-  }
-
-  @override
-  String suggestedQuiet(int fee, int weight) {
-    final intl.NumberFormat feeNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String feeString = feeNumberFormat.format(fee);
-    final intl.NumberFormat weightNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String weightString = weightNumberFormat.format(weight);
-
-    return 'Vorgeschlagene Gebühr: $feeString für $weightString Byte (das Minimum; in den Blöcken ist Platz)';
-  }
-
-  @override
-  String feePerByte(int base) {
-    return 'Gebühren gelten pro Byte: Eine Transaktion wiegt $base Byte plus ihre Nachricht, daher kosten lange Nachrichten mehr, wenn die Blöcke voll sind.';
-  }
-
-  @override
-  String feeThreadCost(int total, int multiple) {
-    final intl.NumberFormat totalNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String totalString = totalNumberFormat.format(total);
-
-    return 'Ein neuer Thread kostet mit dieser Gebühr insgesamt $totalString (die Gebühr plus das $multiple-Fache der Gebühr, das verbrannt wird).';
-  }
-
-  @override
   String feeLocal(int count) {
     final intl.NumberFormat countNumberFormat =
         intl.NumberFormat.decimalPattern(localeName);
@@ -1034,33 +996,6 @@ class AppLocalizationsDe extends AppLocalizations {
 
     return 'Geschätzt aus dem, was dieser Client gesehen hat ($countString ausstehend seit der Verbindung); der Gebührenbericht des Knotens war nicht verfügbar.';
   }
-
-  @override
-  String feeForSize(int next, int entry, int min) {
-    final intl.NumberFormat nextNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String nextString = nextNumberFormat.format(next);
-    final intl.NumberFormat entryNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String entryString = entryNumberFormat.format(entry);
-
-    return 'Für diese Größe: Der nächste Block braucht $nextString, die Aufnahme in den Mempool $entryString, das Minimum ist $min.';
-  }
-
-  @override
-  String feeRecent(int lowest, int median) {
-    final intl.NumberFormat lowestNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String lowestString = lowestNumberFormat.format(lowest);
-    final intl.NumberFormat medianNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String medianString = medianNumberFormat.format(median);
-
-    return 'Jüngste Blöcke enthielten Gebühren ab $lowestString (Median der niedrigsten Gebühr je Block: $medianString).';
-  }
-
-  @override
-  String get feeNoRecent => 'Keine Transaktionen in den jüngsten Blöcken.';
 
   @override
   String get use => 'Übernehmen';
@@ -1387,10 +1322,6 @@ class AppLocalizationsDe extends AppLocalizations {
   String get inviteHowMany => 'Wie viele Karten';
 
   @override
-  String get invitePrivacy =>
-      'Die Chain zeigt, dass du jede Karte finanziert hast und welche Wallet sie eingelöst hat.';
-
-  @override
   String get inviteFund => 'Karten finanzieren';
 
   @override
@@ -1462,10 +1393,6 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get claim => 'Einlösen';
-
-  @override
-  String get inviteLifetimeNote =>
-      'Eine Karte gilt, bis sie eingelöst wird: Sie läuft nicht ab. Um sie zu stoppen, storniere sie, und ihre Token kommen zu dir zurück.';
 
   @override
   String get cancelInvitation => 'Einladung stornieren';
@@ -1719,10 +1646,6 @@ class AppLocalizationsDe extends AppLocalizations {
   String get publicNameSet => 'Öffentlichen Namen festlegen';
 
   @override
-  String get publicNameHelp =>
-      'Dein öffentlicher Name erscheint neben deiner Adresse in Apps, die Murmurs Alias-Konvention folgen. Er ist nicht eindeutig: Jeder kann denselben Namen wählen, daher zeigen Apps immer einen Teil der Adresse dazu. Er ist eine Nachricht in der Kette: Veröffentlichen oder Ändern kostet so viel wie ein neuer Thread, und jeder Knoten kann ihn löschen, womit er verschwindet. Leer lassen, um ihn zu entfernen.';
-
-  @override
   String get publicNameField => 'Name';
 
   @override
@@ -1765,4 +1688,88 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get starredGone => 'Nicht mehr in der Kette';
+
+  @override
+  String get feeSuggestedLabel => 'Vorgeschlagene Gebühr';
+
+  @override
+  String feeForBytes(int weight) {
+    return 'für $weight Bytes';
+  }
+
+  @override
+  String get feeRoom => 'Blöcke haben Platz';
+
+  @override
+  String get feeFull => 'Blöcke sind voll';
+
+  @override
+  String get feeNextBlock => 'Nächster Block';
+
+  @override
+  String get feePoolEntry => 'Um in den Pool zu kommen';
+
+  @override
+  String get feeMinimum => 'Minimum';
+
+  @override
+  String get feeWhy => 'Warum diese Gebühr';
+
+  @override
+  String feePerBytePoint(int base) {
+    return '**Gebühren gelten pro Byte**: $base Bytes plus deine Nachricht. Lange Nachrichten kosten mehr, wenn die Blöcke voll sind.';
+  }
+
+  @override
+  String feeRecentPoint(int lowest, int median) {
+    return '**Letzte Blöcke** nahmen Gebühren ab **$lowest** (Median $median).';
+  }
+
+  @override
+  String get feeRecentNonePoint =>
+      '**Letzte Blöcke** hatten keine Transaktionen.';
+
+  @override
+  String get inviteNoExpiryPoint =>
+      '**Läuft nicht ab**: Eine Karte gilt, bis jemand sie einlöst.';
+
+  @override
+  String get inviteCancelPoint =>
+      '**Jederzeit stornierbar**: Ihre Token kommen zurück.';
+
+  @override
+  String get invitePublicPoint =>
+      '**Öffentlich**: Die Kette zeigt, dass du jede Karte finanziert hast und welche Wallet sie eingelöst hat.';
+
+  @override
+  String get inviteCashPoint =>
+      '**Wer den Code hat**, kann die Karte einlösen. Halte Karten privat, bis du sie übergibst.';
+
+  @override
+  String get inviteLocalPoint =>
+      '**Nur auf diesem Gerät gespeichert.** Werden seine Daten gelöscht oder die App entfernt, sind die Codes **für immer verloren**, ebenso die Token auf noch nicht übergebenen Karten.';
+
+  @override
+  String get publicNameIntro =>
+      'Dein öffentlicher Name steht in Murmur-Apps **neben deiner Adresse**.';
+
+  @override
+  String publicNameShownAs(String name) {
+    return 'Erscheint als **$name**';
+  }
+
+  @override
+  String get publicNameNotUnique =>
+      '**Nicht eindeutig**: Jeder kann denselben Namen wählen. Die Adresse daneben unterscheidet die Leute.';
+
+  @override
+  String get publicNameCost =>
+      '**Kostet so viel wie ein neuer Thread**, jedes Mal, wenn du ihn setzt oder änderst.';
+
+  @override
+  String get publicNameRemovable =>
+      '**Eine Nachricht in der Kette**: Jeder Knoten kann sie löschen, dann ist sie weg.';
+
+  @override
+  String get publicNameClear => '**Leer lassen**, um ihn zu entfernen.';
 }

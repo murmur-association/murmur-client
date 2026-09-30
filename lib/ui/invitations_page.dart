@@ -7,6 +7,7 @@ import '../protocol/invite.dart';
 import '../services/invitations.dart';
 import '../services/node_client.dart';
 import '../services/storage.dart';
+import 'brand.dart';
 import 'claim_page.dart';
 import 'common.dart';
 import 'glyphs.dart';
@@ -126,13 +127,20 @@ class _InvitationsPageState extends State<InvitationsPage> {
                     label: Text(l.createInvitations),
                   ),
             body: ListView(padding: const EdgeInsets.fromLTRB(8, 8, 8, 96), children: [
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(l.inviteLifetimeNote, style: theme.textTheme.bodySmall),
-                  const SizedBox(height: 4),
-                  Text(l.invitePrivacy, style: theme.textTheme.bodySmall),
-                ]),
+              // How cards work, one point each.
+              Card(
+                margin: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    InfoPoint(Glyph.pending, l.inviteNoExpiryPoint, style: theme.textTheme.bodySmall),
+                    InfoPoint(Glyph.coin, l.inviteCancelPoint, style: theme.textTheme.bodySmall),
+                    InfoPoint(Glyph.show, l.invitePublicPoint, style: theme.textTheme.bodySmall),
+                    InfoPoint(Glyph.key, l.inviteCashPoint, style: theme.textTheme.bodySmall),
+                    InfoPoint(Glyph.warning, l.inviteLocalPoint,
+                        color: StatusColors.of(context).pending, style: theme.textTheme.bodySmall),
+                  ]),
+                ),
               ),
               if (selectable.isNotEmpty)
                 // Select all, and what applies to the selection.
@@ -750,8 +758,10 @@ class _CreateDialogState extends State<_CreateDialog> {
                     style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.error)),
               ),
           ],
-          const SizedBox(height: 16),
-          Text(l.inviteLifetimeNote, style: caption),
+          const SizedBox(height: 12),
+          InfoPoint(Glyph.pending, l.inviteNoExpiryPoint, style: caption),
+          // They exist only here: say so before any are made.
+          InfoPoint(Glyph.warning, l.inviteLocalPoint, color: StatusColors.of(context).pending, style: caption),
         ]),
       ),
       actions: [

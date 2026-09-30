@@ -986,44 +986,6 @@ class AppLocalizationsNl extends AppLocalizations {
   String get checkingFees => 'Netwerkvergoedingen opvragen…';
 
   @override
-  String suggestedBusy(int fee, int weight) {
-    final intl.NumberFormat feeNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String feeString = feeNumberFormat.format(fee);
-    final intl.NumberFormat weightNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String weightString = weightNumberFormat.format(weight);
-
-    return 'Voorgestelde vergoeding: $feeString voor $weightString bytes (het netwerk is druk)';
-  }
-
-  @override
-  String suggestedQuiet(int fee, int weight) {
-    final intl.NumberFormat feeNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String feeString = feeNumberFormat.format(fee);
-    final intl.NumberFormat weightNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String weightString = weightNumberFormat.format(weight);
-
-    return 'Voorgestelde vergoeding: $feeString voor $weightString bytes (het minimum; er is ruimte in de blokken)';
-  }
-
-  @override
-  String feePerByte(int base) {
-    return 'Vergoedingen gelden per byte: een transactie weegt $base bytes plus haar bericht, dus lange berichten kosten meer als de blokken vol zijn.';
-  }
-
-  @override
-  String feeThreadCost(int total, int multiple) {
-    final intl.NumberFormat totalNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String totalString = totalNumberFormat.format(total);
-
-    return 'Een nieuwe draad kost met deze vergoeding in totaal $totalString (de vergoeding plus een verbranding van $multiple × de vergoeding).';
-  }
-
-  @override
   String feeLocal(int count) {
     final intl.NumberFormat countNumberFormat =
         intl.NumberFormat.decimalPattern(localeName);
@@ -1031,33 +993,6 @@ class AppLocalizationsNl extends AppLocalizations {
 
     return 'Geschat op basis van wat deze client zag ($countString openstaand sinds het verbinden); het vergoedingsrapport van de node was niet beschikbaar.';
   }
-
-  @override
-  String feeForSize(int next, int entry, int min) {
-    final intl.NumberFormat nextNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String nextString = nextNumberFormat.format(next);
-    final intl.NumberFormat entryNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String entryString = entryNumberFormat.format(entry);
-
-    return 'Voor deze grootte: het volgende blok vraagt $nextString, toegang tot de mempool vraagt $entryString, het minimum is $min.';
-  }
-
-  @override
-  String feeRecent(int lowest, int median) {
-    final intl.NumberFormat lowestNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String lowestString = lowestNumberFormat.format(lowest);
-    final intl.NumberFormat medianNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String medianString = medianNumberFormat.format(median);
-
-    return 'Recente blokken bevatten vergoedingen vanaf $lowestString (mediaan van de laagste per blok: $medianString).';
-  }
-
-  @override
-  String get feeNoRecent => 'Geen transacties in recente blokken.';
 
   @override
   String get use => 'Gebruiken';
@@ -1383,10 +1318,6 @@ class AppLocalizationsNl extends AppLocalizations {
   String get inviteHowMany => 'Hoeveel kaarten';
 
   @override
-  String get invitePrivacy =>
-      'De keten laat zien dat jij elke kaart hebt gefinancierd en welke wallet hem heeft geïnd.';
-
-  @override
   String get inviteFund => 'Kaarten financieren';
 
   @override
@@ -1457,10 +1388,6 @@ class AppLocalizationsNl extends AppLocalizations {
 
   @override
   String get claim => 'Innen';
-
-  @override
-  String get inviteLifetimeNote =>
-      'Een kaart werkt tot hij wordt geïnd: hij verloopt niet. Om hem te stoppen, annuleer je hem en komen de tokens terug naar jou.';
 
   @override
   String get cancelInvitation => 'Uitnodiging annuleren';
@@ -1711,10 +1638,6 @@ class AppLocalizationsNl extends AppLocalizations {
   String get publicNameSet => 'Openbare naam instellen';
 
   @override
-  String get publicNameHelp =>
-      'Je openbare naam staat naast je adres in apps die de aliasconventie van Murmur volgen. Hij is niet uniek: iedereen kan dezelfde naam kiezen, dus apps tonen er altijd een deel van het adres bij. Het is een bericht in de keten: publiceren of wijzigen kost evenveel als een nieuw draadje, en elke node kan hem wissen, waarmee hij verdwijnt. Laat leeg om hem te wissen.';
-
-  @override
   String get publicNameField => 'Naam';
 
   @override
@@ -1757,4 +1680,88 @@ class AppLocalizationsNl extends AppLocalizations {
 
   @override
   String get starredGone => 'Niet meer in de keten';
+
+  @override
+  String get feeSuggestedLabel => 'Voorgestelde fee';
+
+  @override
+  String feeForBytes(int weight) {
+    return 'voor $weight bytes';
+  }
+
+  @override
+  String get feeRoom => 'Blokken hebben ruimte';
+
+  @override
+  String get feeFull => 'Blokken zijn vol';
+
+  @override
+  String get feeNextBlock => 'Volgend blok';
+
+  @override
+  String get feePoolEntry => 'Om in de pool te komen';
+
+  @override
+  String get feeMinimum => 'Minimum';
+
+  @override
+  String get feeWhy => 'Waarom deze fee';
+
+  @override
+  String feePerBytePoint(int base) {
+    return '**De fee is per byte**: $base bytes plus je bericht. Lange berichten kosten meer als blokken vol zijn.';
+  }
+
+  @override
+  String feeRecentPoint(int lowest, int median) {
+    return '**Recente blokken** namen fees vanaf **$lowest** (mediaan $median).';
+  }
+
+  @override
+  String get feeRecentNonePoint =>
+      '**Recente blokken** hadden geen transacties.';
+
+  @override
+  String get inviteNoExpiryPoint =>
+      '**Verloopt niet**: een kaart werkt tot iemand hem claimt.';
+
+  @override
+  String get inviteCancelPoint =>
+      '**Altijd te annuleren**: de tokens komen terug.';
+
+  @override
+  String get invitePublicPoint =>
+      '**Openbaar**: de keten laat zien dat jij elke kaart financierde en welke wallet hem claimde.';
+
+  @override
+  String get inviteCashPoint =>
+      '**Wie de code heeft**, kan de kaart claimen. Houd kaarten privé tot je ze overhandigt.';
+
+  @override
+  String get inviteLocalPoint =>
+      '**Alleen op dit apparaat bewaard.** Worden de gegevens gewist of de app verwijderd, dan zijn de codes **voorgoed kwijt**, en ook de tokens op kaarten die nog niet zijn overhandigd.';
+
+  @override
+  String get publicNameIntro =>
+      'Je openbare naam staat **naast je adres** in Murmur-apps.';
+
+  @override
+  String publicNameShownAs(String name) {
+    return 'Verschijnt als **$name**';
+  }
+
+  @override
+  String get publicNameNotUnique =>
+      '**Niet uniek**: iedereen kan dezelfde naam kiezen. Het adres ernaast onderscheidt mensen.';
+
+  @override
+  String get publicNameCost =>
+      '**Kost evenveel als een nieuw draadje**, elke keer dat je hem instelt of wijzigt.';
+
+  @override
+  String get publicNameRemovable =>
+      '**Een bericht in de keten**: elke node mag het wissen, en dan is het weg.';
+
+  @override
+  String get publicNameClear => '**Laat leeg** om hem te wissen.';
 }

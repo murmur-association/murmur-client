@@ -961,44 +961,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get checkingFees => '正在查询网络手续费…';
 
   @override
-  String suggestedBusy(int fee, int weight) {
-    final intl.NumberFormat feeNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String feeString = feeNumberFormat.format(fee);
-    final intl.NumberFormat weightNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String weightString = weightNumberFormat.format(weight);
-
-    return '建议手续费：$weightString 字节 $feeString（网络繁忙）';
-  }
-
-  @override
-  String suggestedQuiet(int fee, int weight) {
-    final intl.NumberFormat feeNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String feeString = feeNumberFormat.format(fee);
-    final intl.NumberFormat weightNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String weightString = weightNumberFormat.format(weight);
-
-    return '建议手续费：$weightString 字节 $feeString（最低值；区块尚有空间）';
-  }
-
-  @override
-  String feePerByte(int base) {
-    return '手续费按字节计算：一笔交易的权重为 $base 字节加上消息长度，因此区块拥挤时消息越长费用越高。';
-  }
-
-  @override
-  String feeThreadCost(int total, int multiple) {
-    final intl.NumberFormat totalNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String totalString = totalNumberFormat.format(total);
-
-    return '按此手续费，发起新话题共需 $totalString（手续费加上销毁手续费的 $multiple 倍）。';
-  }
-
-  @override
   String feeLocal(int count) {
     final intl.NumberFormat countNumberFormat =
         intl.NumberFormat.decimalPattern(localeName);
@@ -1006,33 +968,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
     return '根据本客户端所见估算（自连接以来 $countString 笔待确认）；节点自身的手续费报告不可用。';
   }
-
-  @override
-  String feeForSize(int next, int entry, int min) {
-    final intl.NumberFormat nextNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String nextString = nextNumberFormat.format(next);
-    final intl.NumberFormat entryNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String entryString = entryNumberFormat.format(entry);
-
-    return '此大小下：进入下一区块需要 $nextString，进入交易池需要 $entryString，最低为 $min。';
-  }
-
-  @override
-  String feeRecent(int lowest, int median) {
-    final intl.NumberFormat lowestNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String lowestString = lowestNumberFormat.format(lowest);
-    final intl.NumberFormat medianNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String medianString = medianNumberFormat.format(median);
-
-    return '近期区块收录的最低手续费为 $lowestString（各区块最低手续费的中位数：$medianString）。';
-  }
-
-  @override
-  String get feeNoRecent => '近期区块中没有交易。';
 
   @override
   String get use => '使用';
@@ -1347,9 +1282,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get inviteHowMany => '卡片数量';
 
   @override
-  String get invitePrivacy => '区块链会显示你为每张卡片注资，以及哪个钱包领取了它。';
-
-  @override
   String get inviteFund => '为卡片注资';
 
   @override
@@ -1417,9 +1349,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get claim => '领取';
-
-  @override
-  String get inviteLifetimeNote => '卡片在被领取前一直有效，不会过期。要停用某张卡片，请取消它，其代币会退回给你。';
 
   @override
   String get cancelInvitation => '取消邀请';
@@ -1652,10 +1581,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get publicNameSet => '设置公开名字';
 
   @override
-  String get publicNameHelp =>
-      '在遵循 Murmur 别名约定的应用中，你的公开名字会显示在地址旁边。它并不唯一：任何人都能取同样的名字，所以应用总会同时显示部分地址。它是链上的一条消息：发布或修改它的费用与新话题相同，任何节点都可能删除它，删除后它就消失了。留空即可清除。';
-
-  @override
   String get publicNameField => '名字';
 
   @override
@@ -1696,4 +1621,79 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get starredGone => '已不在链上';
+
+  @override
+  String get feeSuggestedLabel => '建议手续费';
+
+  @override
+  String feeForBytes(int weight) {
+    return '适用于 $weight 字节';
+  }
+
+  @override
+  String get feeRoom => '区块有空间';
+
+  @override
+  String get feeFull => '区块已满';
+
+  @override
+  String get feeNextBlock => '下一个区块';
+
+  @override
+  String get feePoolEntry => '进入交易池';
+
+  @override
+  String get feeMinimum => '最低';
+
+  @override
+  String get feeWhy => '为什么是这个手续费';
+
+  @override
+  String feePerBytePoint(int base) {
+    return '**手续费按字节计算**：$base 字节加上你的消息。区块满时，长消息更贵。';
+  }
+
+  @override
+  String feeRecentPoint(int lowest, int median) {
+    return '**最近的区块**接受的手续费低至 **$lowest**（中位数 $median）。';
+  }
+
+  @override
+  String get feeRecentNonePoint => '**最近的区块**没有交易。';
+
+  @override
+  String get inviteNoExpiryPoint => '**不会过期**：卡片在有人领取前一直有效。';
+
+  @override
+  String get inviteCancelPoint => '**随时可取消**：代币会退回。';
+
+  @override
+  String get invitePublicPoint => '**公开可见**：链上会显示每张卡由你出资，以及由哪个钱包领取。';
+
+  @override
+  String get inviteCashPoint => '**持有代码的人**都能领取卡片。交出之前请妥善保管。';
+
+  @override
+  String get inviteLocalPoint =>
+      '**只保存在本设备上。**如果清除其数据或删除应用，代码会**永久丢失**，尚未交出的卡片上的代币也会一并丢失。';
+
+  @override
+  String get publicNameIntro => '你的公开名字会显示在 Murmur 应用中**你的地址旁边**。';
+
+  @override
+  String publicNameShownAs(String name) {
+    return '显示为 **$name**';
+  }
+
+  @override
+  String get publicNameNotUnique => '**并不唯一**：任何人都能取同样的名字。旁边的地址用来区分不同的人。';
+
+  @override
+  String get publicNameCost => '**费用与新话题相同**，每次设置或修改都要付。';
+
+  @override
+  String get publicNameRemovable => '**是链上的一条消息**：任何节点都可能删除它，删除后就消失了。';
+
+  @override
+  String get publicNameClear => '**留空**即可清除。';
 }

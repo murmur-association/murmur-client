@@ -81,6 +81,9 @@ set TMP=%TEMP%
 
    So use `~/`, `*` and `%` for anything past 32 bits, `ByteWriter.u64` and `ByteReader.u64` for u64, and `BigInt` for u128 (targets, work). Past bugs: `1 << 40` became 0, which froze a timer, and a 64-bit shift broke the subsidy.
 8. **No user-facing text in Dart.** Strings live in `lib/l10n/app_*.arb`, in ICU format with plurals. Arabic has six plural forms. The client layer returns codes (`LinkError`, `TxProblem`, `TxStatusCode`), and `lib/ui/l10n.dart` words them. A new key goes into **all nine** ARB files. Format numbers with `formatAmount`, times with `formatTime`, `formatClock` and `formatElapsed`, and never with `toString()` in the UI.
+   - **Emphasis:** in explanations, `**key words**` in an ARB string show in bold copper (`Emphasized` in `ui/common.dart`). Each language marks its own key words, and translations keep the markers.
+   - **Structure over paragraphs:** the user asked for no big blocks of text. Explain with short points, each an icon plus one emphasized line (`InfoPoint`), as in the fee card, the Invitations page and the Public name dialog. Fold details that only some want (the fee card's "Why this fee").
+   - **Copper is the only accent colour.** A second colour (teal and others) was tried and rejected by the user.
 9. **Salt every message.** Content is `salt(16) ‖ message`, from `Random.secure()`. The salt is never shown (`messageOf`).
 10. **Keep the legal posture.** Nowhere in the app, the docs or the ARB files: token prices, value in money, returns, or buying. The testnet line says only that the tokens are for testing, in every language (`testnetLabel`).
 

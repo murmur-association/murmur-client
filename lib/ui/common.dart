@@ -160,6 +160,60 @@ String messageOrUnavailable(BuildContext context, TxView view) {
 String? liveMessageText(BuildContext context, TxView view) =>
     messageText(context, AppScope.of(context).client.liveContent(view));
 
+/// Text whose `**key words**` show in bold copper: how explanations mark
+/// what matters, so they read at a glance. The markers live in the ARB
+/// strings, so each language chooses its own key words.
+class Emphasized extends StatelessWidget {
+  const Emphasized(this.text, {super.key, this.style});
+
+  final String text;
+  final TextStyle? style;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final strong = TextStyle(fontWeight: FontWeight.w700, color: theme.colorScheme.primary);
+    final parts = text.split('**');
+    return Text.rich(
+      TextSpan(children: [
+        // Odd pieces sit between markers.
+        for (var i = 0; i < parts.length; i++)
+          if (parts[i].isNotEmpty) TextSpan(text: parts[i], style: i.isOdd ? strong : null),
+      ]),
+      style: style ?? theme.textTheme.bodyMedium,
+    );
+  }
+}
+
+/// One point of an explanation: an icon, and a short line with its key
+/// words emphasized. Several stacked replace a paragraph.
+class InfoPoint extends StatelessWidget {
+  const InfoPoint(this.glyph, this.text, {super.key, this.color, this.style});
+
+  final Glyph glyph;
+  final String text;
+
+  /// The icon's color; the muted text color unless given (a warning, say).
+  final Color? color;
+  final TextStyle? style;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Padding(
+          padding: const EdgeInsets.only(top: 1),
+          child: MurmurIcon(glyph, size: 18, color: color ?? theme.colorScheme.onSurfaceVariant),
+        ),
+        const SizedBox(width: 10),
+        Expanded(child: Emphasized(text, style: style ?? theme.textTheme.bodyMedium)),
+      ]),
+    );
+  }
+}
+
 /// Stars or unstars a message, or a whole thread by its root: starred ones
 /// are easy to find, and their content stays in the local copy however old.
 class StarButton extends StatelessWidget {
@@ -175,7 +229,8 @@ class StarButton extends StatelessWidget {
       builder: (context, _) {
         final starred = prefs.starred.contains(txid);
         return IconButton(
-          icon: MurmurIcon(Glyph.star, filled: starred),
+          // Starred: a solid copper star, unmistakable next to an outline.
+          icon: MurmurIcon(Glyph.star, filled: starred, color: starred ? Theme.of(context).colorScheme.primary : null),
           tooltip: starred ? context.l10n.unstar : context.l10n.star,
           onPressed: () => prefs.setStarred(txid, !starred),
         );

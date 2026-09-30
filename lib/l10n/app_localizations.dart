@@ -1414,53 +1414,11 @@ abstract class AppLocalizations {
   /// **'Checking network fees…'**
   String get checkingFees;
 
-  /// No description provided for @suggestedBusy.
-  ///
-  /// In en, this message translates to:
-  /// **'Suggested fee: {fee} for {weight} bytes (the network is busy)'**
-  String suggestedBusy(int fee, int weight);
-
-  /// No description provided for @suggestedQuiet.
-  ///
-  /// In en, this message translates to:
-  /// **'Suggested fee: {fee} for {weight} bytes (the minimum; blocks have room)'**
-  String suggestedQuiet(int fee, int weight);
-
-  /// No description provided for @feePerByte.
-  ///
-  /// In en, this message translates to:
-  /// **'Fees are per byte: a transaction weighs {base} bytes plus its message, so longer messages cost more when blocks are full.'**
-  String feePerByte(int base);
-
-  /// No description provided for @feeThreadCost.
-  ///
-  /// In en, this message translates to:
-  /// **'A new thread at this fee costs {total} in total (the fee plus a burn of {multiple} × the fee).'**
-  String feeThreadCost(int total, int multiple);
-
   /// No description provided for @feeLocal.
   ///
   /// In en, this message translates to:
   /// **'Estimated from what this client has seen ({count} pending since it connected); the node\'s own fee report was not available.'**
   String feeLocal(int count);
-
-  /// No description provided for @feeForSize.
-  ///
-  /// In en, this message translates to:
-  /// **'For this size: the next block needs {next}, mempool entry needs {entry}, the minimum is {min}.'**
-  String feeForSize(int next, int entry, int min);
-
-  /// No description provided for @feeRecent.
-  ///
-  /// In en, this message translates to:
-  /// **'Recent blocks included fees as low as {lowest} (median of each block\'s lowest: {median}).'**
-  String feeRecent(int lowest, int median);
-
-  /// No description provided for @feeNoRecent.
-  ///
-  /// In en, this message translates to:
-  /// **'No transactions in recent blocks.'**
-  String get feeNoRecent;
 
   /// No description provided for @use.
   ///
@@ -1870,12 +1828,6 @@ abstract class AppLocalizations {
   /// **'How many cards'**
   String get inviteHowMany;
 
-  /// No description provided for @invitePrivacy.
-  ///
-  /// In en, this message translates to:
-  /// **'The chain shows that you funded each card, and which wallet claimed it.'**
-  String get invitePrivacy;
-
   /// No description provided for @inviteFund.
   ///
   /// In en, this message translates to:
@@ -1989,12 +1941,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Claim'**
   String get claim;
-
-  /// No description provided for @inviteLifetimeNote.
-  ///
-  /// In en, this message translates to:
-  /// **'A card works until it\'s claimed: it doesn\'t expire. To stop one, cancel it, and its tokens come back to you.'**
-  String get inviteLifetimeNote;
 
   /// No description provided for @cancelInvitation.
   ///
@@ -2425,12 +2371,6 @@ abstract class AppLocalizations {
   /// Aliases (PROTOCOL.md 7.8) and non-text messages (2.4)
   ///
   /// In en, this message translates to:
-  /// **'Your public name is shown next to your address in apps that follow Murmur\'s alias convention. It isn\'t unique: anyone can pick the same name, so apps always show part of the address with it. It\'s a message on the chain, so publishing or changing it costs as much as a new thread, and any node may delete it, which removes it. Leave it empty to clear it.'**
-  String get publicNameHelp;
-
-  /// Aliases (PROTOCOL.md 7.8) and non-text messages (2.4)
-  ///
-  /// In en, this message translates to:
   /// **'Name'**
   String get publicNameField;
 
@@ -2499,6 +2439,138 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'No longer on the chain'**
   String get starredGone;
+
+  /// Words between ** show in bold copper (Emphasized); keep the markers around the key words
+  ///
+  /// In en, this message translates to:
+  /// **'Suggested fee'**
+  String get feeSuggestedLabel;
+
+  /// Words between ** show in bold copper (Emphasized); keep the markers around the key words
+  ///
+  /// In en, this message translates to:
+  /// **'for {weight} bytes'**
+  String feeForBytes(int weight);
+
+  /// Words between ** show in bold copper (Emphasized); keep the markers around the key words
+  ///
+  /// In en, this message translates to:
+  /// **'Blocks have room'**
+  String get feeRoom;
+
+  /// Words between ** show in bold copper (Emphasized); keep the markers around the key words
+  ///
+  /// In en, this message translates to:
+  /// **'Blocks are full'**
+  String get feeFull;
+
+  /// Words between ** show in bold copper (Emphasized); keep the markers around the key words
+  ///
+  /// In en, this message translates to:
+  /// **'Next block'**
+  String get feeNextBlock;
+
+  /// Words between ** show in bold copper (Emphasized); keep the markers around the key words
+  ///
+  /// In en, this message translates to:
+  /// **'To enter the pool'**
+  String get feePoolEntry;
+
+  /// Words between ** show in bold copper (Emphasized); keep the markers around the key words
+  ///
+  /// In en, this message translates to:
+  /// **'Minimum'**
+  String get feeMinimum;
+
+  /// Words between ** show in bold copper (Emphasized); keep the markers around the key words
+  ///
+  /// In en, this message translates to:
+  /// **'Why this fee'**
+  String get feeWhy;
+
+  /// Words between ** show in bold copper (Emphasized); keep the markers around the key words
+  ///
+  /// In en, this message translates to:
+  /// **'**Fees are per byte**: {base} bytes plus your message. Longer messages cost more when blocks are full.'**
+  String feePerBytePoint(int base);
+
+  /// Words between ** show in bold copper (Emphasized); keep the markers around the key words
+  ///
+  /// In en, this message translates to:
+  /// **'**Recent blocks** took fees as low as **{lowest}** (median {median}).'**
+  String feeRecentPoint(int lowest, int median);
+
+  /// Words between ** show in bold copper (Emphasized); keep the markers around the key words
+  ///
+  /// In en, this message translates to:
+  /// **'**Recent blocks** had no transactions.'**
+  String get feeRecentNonePoint;
+
+  /// Words between ** show in bold copper (Emphasized); keep the markers around the key words
+  ///
+  /// In en, this message translates to:
+  /// **'**No expiry**: a card works until someone claims it.'**
+  String get inviteNoExpiryPoint;
+
+  /// Words between ** show in bold copper (Emphasized); keep the markers around the key words
+  ///
+  /// In en, this message translates to:
+  /// **'**Cancel any time**: its tokens come back.'**
+  String get inviteCancelPoint;
+
+  /// Words between ** show in bold copper (Emphasized); keep the markers around the key words
+  ///
+  /// In en, this message translates to:
+  /// **'**Public**: the chain shows you funded each card, and which wallet claimed it.'**
+  String get invitePublicPoint;
+
+  /// Words between ** show in bold copper (Emphasized); keep the markers around the key words
+  ///
+  /// In en, this message translates to:
+  /// **'**Whoever has the code** can claim the card. Keep cards private until you hand them over.'**
+  String get inviteCashPoint;
+
+  /// Words between ** show in bold copper (Emphasized); keep the markers around the key words
+  ///
+  /// In en, this message translates to:
+  /// **'**Kept only on this device.** If its data is cleared or the app is removed, the codes are **lost for good**, and so are the tokens on cards not yet handed over.'**
+  String get inviteLocalPoint;
+
+  /// Words between ** show in bold copper (Emphasized); keep the markers around the key words
+  ///
+  /// In en, this message translates to:
+  /// **'Your public name appears **next to your address** in Murmur apps.'**
+  String get publicNameIntro;
+
+  /// Words between ** show in bold copper (Emphasized); keep the markers around the key words
+  ///
+  /// In en, this message translates to:
+  /// **'Appears as **{name}**'**
+  String publicNameShownAs(String name);
+
+  /// Words between ** show in bold copper (Emphasized); keep the markers around the key words
+  ///
+  /// In en, this message translates to:
+  /// **'**Not unique**: anyone can pick the same name. The address beside it tells people apart.'**
+  String get publicNameNotUnique;
+
+  /// Words between ** show in bold copper (Emphasized); keep the markers around the key words
+  ///
+  /// In en, this message translates to:
+  /// **'**Costs as much as a new thread**, each time you set or change it.'**
+  String get publicNameCost;
+
+  /// Words between ** show in bold copper (Emphasized); keep the markers around the key words
+  ///
+  /// In en, this message translates to:
+  /// **'**A message on the chain**: any node may delete it, and then it\'s gone.'**
+  String get publicNameRemovable;
+
+  /// Words between ** show in bold copper (Emphasized); keep the markers around the key words
+  ///
+  /// In en, this message translates to:
+  /// **'**Leave it empty** to clear it.'**
+  String get publicNameClear;
 }
 
 class _AppLocalizationsDelegate

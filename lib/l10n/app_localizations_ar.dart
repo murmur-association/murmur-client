@@ -1007,44 +1007,6 @@ class AppLocalizationsAr extends AppLocalizations {
   String get checkingFees => 'جارٍ التحقق من رسوم الشبكة…';
 
   @override
-  String suggestedBusy(int fee, int weight) {
-    final intl.NumberFormat feeNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String feeString = feeNumberFormat.format(fee);
-    final intl.NumberFormat weightNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String weightString = weightNumberFormat.format(weight);
-
-    return 'الرسوم المقترحة: $feeString مقابل $weightString بايت (الشبكة مزدحمة)';
-  }
-
-  @override
-  String suggestedQuiet(int fee, int weight) {
-    final intl.NumberFormat feeNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String feeString = feeNumberFormat.format(fee);
-    final intl.NumberFormat weightNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String weightString = weightNumberFormat.format(weight);
-
-    return 'الرسوم المقترحة: $feeString مقابل $weightString بايت (الحد الأدنى؛ في الكتل متسع)';
-  }
-
-  @override
-  String feePerByte(int base) {
-    return 'الرسوم لكل بايت: تزن المعاملة $base بايت إضافة إلى رسالتها، لذا تكلّف الرسائل الأطول أكثر حين تمتلئ الكتل.';
-  }
-
-  @override
-  String feeThreadCost(int total, int multiple) {
-    final intl.NumberFormat totalNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String totalString = totalNumberFormat.format(total);
-
-    return 'يكلّف موضوع جديد بهذه الرسوم $totalString إجمالًا (الرسوم إضافة إلى حرق $multiple × الرسوم).';
-  }
-
-  @override
   String feeLocal(int count) {
     final intl.NumberFormat countNumberFormat =
         intl.NumberFormat.decimalPattern(localeName);
@@ -1052,33 +1014,6 @@ class AppLocalizationsAr extends AppLocalizations {
 
     return 'تقدير مبني على ما رآه هذا العميل ($countString معلّقة منذ اتصاله)؛ لم يكن تقرير الرسوم الخاص بالعقدة متاحًا.';
   }
-
-  @override
-  String feeForSize(int next, int entry, int min) {
-    final intl.NumberFormat nextNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String nextString = nextNumberFormat.format(next);
-    final intl.NumberFormat entryNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String entryString = entryNumberFormat.format(entry);
-
-    return 'لهذا الحجم: تحتاج الكتلة التالية $nextString، ويحتاج الدخول إلى مجمع المعاملات $entryString، والحد الأدنى $min.';
-  }
-
-  @override
-  String feeRecent(int lowest, int median) {
-    final intl.NumberFormat lowestNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String lowestString = lowestNumberFormat.format(lowest);
-    final intl.NumberFormat medianNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String medianString = medianNumberFormat.format(median);
-
-    return 'تضمنت الكتل الأخيرة رسومًا منخفضة حتى $lowestString (وسيط أدنى رسوم كل كتلة: $medianString).';
-  }
-
-  @override
-  String get feeNoRecent => 'لا معاملات في الكتل الأخيرة.';
 
   @override
   String get use => 'استخدام';
@@ -1415,10 +1350,6 @@ class AppLocalizationsAr extends AppLocalizations {
   String get inviteHowMany => 'عدد البطاقات';
 
   @override
-  String get invitePrivacy =>
-      'تُظهر السلسلة أنك موّلت كل بطاقة وأي محفظة استلمتها.';
-
-  @override
   String get inviteFund => 'تمويل البطاقات';
 
   @override
@@ -1488,10 +1419,6 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get claim => 'استلام';
-
-  @override
-  String get inviteLifetimeNote =>
-      'تبقى البطاقة صالحة حتى تُستلم: لا تنتهي صلاحيتها. لإيقافها، ألغِها فتعود رموزها إليك.';
 
   @override
   String get cancelInvitation => 'إلغاء الدعوة';
@@ -1735,10 +1662,6 @@ class AppLocalizationsAr extends AppLocalizations {
   String get publicNameSet => 'تعيين الاسم العام';
 
   @override
-  String get publicNameHelp =>
-      'يظهر اسمك العام بجانب عنوانك في التطبيقات التي تتبع اصطلاح الأسماء المستعارة في Murmur. ليس فريدًا: يمكن لأي شخص اختيار الاسم نفسه، لذا تعرض التطبيقات دائمًا جزءًا من العنوان معه. إنه رسالة على السلسلة، لذا يكلف نشره أو تغييره ما يكلفه موضوع جديد، ويمكن لأي عقدة حذفه فيزول. اتركه فارغًا لإزالته.';
-
-  @override
   String get publicNameField => 'الاسم';
 
   @override
@@ -1781,4 +1704,86 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get starredGone => 'لم يعد على السلسلة';
+
+  @override
+  String get feeSuggestedLabel => 'الرسوم المقترحة';
+
+  @override
+  String feeForBytes(int weight) {
+    return 'لـ $weight بايت';
+  }
+
+  @override
+  String get feeRoom => 'في الكتل متسع';
+
+  @override
+  String get feeFull => 'الكتل ممتلئة';
+
+  @override
+  String get feeNextBlock => 'الكتلة التالية';
+
+  @override
+  String get feePoolEntry => 'لدخول المجمّع';
+
+  @override
+  String get feeMinimum => 'الحد الأدنى';
+
+  @override
+  String get feeWhy => 'لماذا هذه الرسوم';
+
+  @override
+  String feePerBytePoint(int base) {
+    return '**الرسوم لكل بايت**: $base بايت إضافة إلى رسالتك. الرسائل الطويلة تكلف أكثر حين تمتلئ الكتل.';
+  }
+
+  @override
+  String feeRecentPoint(int lowest, int median) {
+    return '**الكتل الأخيرة** قبلت رسومًا لا تتجاوز **$lowest** (الوسيط $median).';
+  }
+
+  @override
+  String get feeRecentNonePoint => '**الكتل الأخيرة** لم تحوِ معاملات.';
+
+  @override
+  String get inviteNoExpiryPoint =>
+      '**لا تنتهي صلاحيتها**: تبقى البطاقة صالحة حتى يستلمها أحد.';
+
+  @override
+  String get inviteCancelPoint => '**ألغِها متى شئت**: تعود رموزها.';
+
+  @override
+  String get invitePublicPoint =>
+      '**علني**: تُظهر السلسلة أنك موّلت كل بطاقة وأي محفظة استلمتها.';
+
+  @override
+  String get inviteCashPoint =>
+      '**من يملك الرمز** يمكنه استلام البطاقة. أبقِ البطاقات خاصة حتى تسلّمها.';
+
+  @override
+  String get inviteLocalPoint =>
+      '**محفوظة على هذا الجهاز فقط.** إذا مُسحت بياناته أو أُزيل التطبيق، **تضيع الرموز إلى الأبد**، ومعها رموز البطاقات التي لم تُسلَّم بعد.';
+
+  @override
+  String get publicNameIntro =>
+      'يظهر اسمك العام **بجانب عنوانك** في تطبيقات Murmur.';
+
+  @override
+  String publicNameShownAs(String name) {
+    return 'سيظهر هكذا: **$name**';
+  }
+
+  @override
+  String get publicNameNotUnique =>
+      '**ليس فريدًا**: يمكن لأي شخص اختيار الاسم نفسه. العنوان بجانبه يميّز الناس.';
+
+  @override
+  String get publicNameCost =>
+      '**يكلف ما يكلفه موضوع جديد**، في كل مرة تعيّنه أو تغيّره.';
+
+  @override
+  String get publicNameRemovable =>
+      '**رسالة على السلسلة**: يمكن لأي عقدة حذفها، فتختفي.';
+
+  @override
+  String get publicNameClear => '**اتركه فارغًا** لإزالته.';
 }

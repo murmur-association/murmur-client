@@ -186,7 +186,7 @@ class _PublicName extends StatelessWidget {
             child: Form(
               key: formKey,
               child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(l.publicNameHelp, style: Theme.of(context).textTheme.bodySmall),
+                Emphasized(l.publicNameIntro),
                 const SizedBox(height: 12),
                 TextFormField(
                   controller: controller,
@@ -204,6 +204,21 @@ class _PublicName extends StatelessWidget {
                     null => null,
                   },
                 ),
+                // How it will read, as the user types.
+                if (controller.text.isNotEmpty && aliasProblem(controller.text) == null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Row(children: [
+                      AddressAvatar(address, size: 28),
+                      const SizedBox(width: 10),
+                      Expanded(child: Emphasized(l.publicNameShownAs(publicNameOf(controller.text, address)))),
+                    ]),
+                  ),
+                const SizedBox(height: 12),
+                InfoPoint(Glyph.warning, l.publicNameNotUnique, style: Theme.of(context).textTheme.bodySmall),
+                InfoPoint(Glyph.burn, l.publicNameCost, style: Theme.of(context).textTheme.bodySmall),
+                InfoPoint(Glyph.blocks, l.publicNameRemovable, style: Theme.of(context).textTheme.bodySmall),
+                InfoPoint(Glyph.edit, l.publicNameClear, style: Theme.of(context).textTheme.bodySmall),
               ]),
             ),
           ),

@@ -966,44 +966,6 @@ class AppLocalizationsJa extends AppLocalizations {
   String get checkingFees => 'ネットワークの手数料を確認しています…';
 
   @override
-  String suggestedBusy(int fee, int weight) {
-    final intl.NumberFormat feeNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String feeString = feeNumberFormat.format(fee);
-    final intl.NumberFormat weightNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String weightString = weightNumberFormat.format(weight);
-
-    return '推奨手数料：$weightString バイトで $feeString（ネットワークが混雑しています）';
-  }
-
-  @override
-  String suggestedQuiet(int fee, int weight) {
-    final intl.NumberFormat feeNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String feeString = feeNumberFormat.format(fee);
-    final intl.NumberFormat weightNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String weightString = weightNumberFormat.format(weight);
-
-    return '推奨手数料：$weightString バイトで $feeString（最低額。ブロックに空きがあります）';
-  }
-
-  @override
-  String feePerByte(int base) {
-    return '手数料はバイト単位です。トランザクションの重みは $base バイトにメッセージを加えたものなので、ブロックが混んでいるときは長いメッセージほど高くなります。';
-  }
-
-  @override
-  String feeThreadCost(int total, int multiple) {
-    final intl.NumberFormat totalNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String totalString = totalNumberFormat.format(total);
-
-    return 'この手数料で新しいスレッドを始めると、合計 $totalString かかります（手数料に加えて手数料の $multiple 倍をバーン）。';
-  }
-
-  @override
   String feeLocal(int count) {
     final intl.NumberFormat countNumberFormat =
         intl.NumberFormat.decimalPattern(localeName);
@@ -1011,33 +973,6 @@ class AppLocalizationsJa extends AppLocalizations {
 
     return 'このクライアントが見たものから推定しています（接続後の未確認 $countString 件）。ノード自身の手数料レポートは利用できませんでした。';
   }
-
-  @override
-  String feeForSize(int next, int entry, int min) {
-    final intl.NumberFormat nextNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String nextString = nextNumberFormat.format(next);
-    final intl.NumberFormat entryNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String entryString = entryNumberFormat.format(entry);
-
-    return 'このサイズの場合：次のブロックには $nextString、メモリプールへの登録には $entryString が必要で、最低額は $min です。';
-  }
-
-  @override
-  String feeRecent(int lowest, int median) {
-    final intl.NumberFormat lowestNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String lowestString = lowestNumberFormat.format(lowest);
-    final intl.NumberFormat medianNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String medianString = medianNumberFormat.format(median);
-
-    return '最近のブロックには $lowestString という低い手数料も含まれています（各ブロックの最低手数料の中央値：$medianString）。';
-  }
-
-  @override
-  String get feeNoRecent => '最近のブロックにトランザクションはありません。';
 
   @override
   String get use => '使う';
@@ -1354,9 +1289,6 @@ class AppLocalizationsJa extends AppLocalizations {
   String get inviteHowMany => 'カードの枚数';
 
   @override
-  String get invitePrivacy => 'チェーン上には、あなたが各カードに入金したことと、どのウォレットが受け取ったかが残ります。';
-
-  @override
   String get inviteFund => 'カードに入金';
 
   @override
@@ -1424,10 +1356,6 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get claim => '受け取る';
-
-  @override
-  String get inviteLifetimeNote =>
-      'カードは受け取られるまで有効で、期限切れはありません。止めるにはキャンセルすると、トークンがあなたに戻ります。';
 
   @override
   String get cancelInvitation => '招待をキャンセル';
@@ -1663,10 +1591,6 @@ class AppLocalizationsJa extends AppLocalizations {
   String get publicNameSet => '公開名を設定';
 
   @override
-  String get publicNameHelp =>
-      '公開名は、Murmur のエイリアス規約に従うアプリでアドレスの横に表示されます。一意ではありません。誰でも同じ名前を選べるので、アプリは必ずアドレスの一部も一緒に表示します。チェーン上のメッセージなので、公開や変更には新しいスレッドと同じ費用がかかり、どのノードも削除でき、削除されると消えます。空欄にすると消去します。';
-
-  @override
   String get publicNameField => '名前';
 
   @override
@@ -1707,4 +1631,81 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get starredGone => 'チェーン上にありません';
+
+  @override
+  String get feeSuggestedLabel => '推奨手数料';
+
+  @override
+  String feeForBytes(int weight) {
+    return '$weight バイト分';
+  }
+
+  @override
+  String get feeRoom => 'ブロックに空きあり';
+
+  @override
+  String get feeFull => 'ブロックが満杯';
+
+  @override
+  String get feeNextBlock => '次のブロック';
+
+  @override
+  String get feePoolEntry => 'プール入りに必要';
+
+  @override
+  String get feeMinimum => '最低';
+
+  @override
+  String get feeWhy => 'この手数料の理由';
+
+  @override
+  String feePerBytePoint(int base) {
+    return '**手数料はバイト単位**：$base バイトにメッセージ分が加わります。ブロックが満杯のときは長いメッセージほど高くなります。';
+  }
+
+  @override
+  String feeRecentPoint(int lowest, int median) {
+    return '**最近のブロック**は最低 **$lowest** の手数料を受け入れました（中央値 $median）。';
+  }
+
+  @override
+  String get feeRecentNonePoint => '**最近のブロック**には取引がありませんでした。';
+
+  @override
+  String get inviteNoExpiryPoint => '**期限なし**：カードは誰かが受け取るまで有効です。';
+
+  @override
+  String get inviteCancelPoint => '**いつでも取り消し可能**：トークンは戻ります。';
+
+  @override
+  String get invitePublicPoint =>
+      '**公開されます**：各カードにあなたが入金したことと、どのウォレットが受け取ったかがチェーンに残ります。';
+
+  @override
+  String get inviteCashPoint => '**コードを持つ人**なら誰でもカードを受け取れます。渡すまでは人に見せないでください。';
+
+  @override
+  String get inviteLocalPoint =>
+      '**この端末にだけ保存されます。**データを消去したりアプリを削除したりすると、コードは**永久に失われ**、まだ渡していないカードのトークンも失われます。';
+
+  @override
+  String get publicNameIntro => '公開名は Murmur アプリで**アドレスの横**に表示されます。';
+
+  @override
+  String publicNameShownAs(String name) {
+    return '表示：**$name**';
+  }
+
+  @override
+  String get publicNameNotUnique =>
+      '**一意ではありません**：誰でも同じ名前を選べます。横に表示されるアドレスで見分けます。';
+
+  @override
+  String get publicNameCost => '**新しいスレッドと同じ費用**が、設定や変更のたびにかかります。';
+
+  @override
+  String get publicNameRemovable => '**チェーン上のメッセージです**：どのノードも削除でき、削除されると消えます。';
+
+  @override
+  String get publicNameClear => '**空欄にすると**消去します。';
 }

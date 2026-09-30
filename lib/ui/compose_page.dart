@@ -7,6 +7,7 @@ import '../protocol/alias.dart';
 import '../protocol/bytes.dart';
 import '../protocol/models.dart';
 import '../services/node_client.dart';
+import 'brand.dart';
 import 'common.dart';
 import 'thread_page.dart';
 import 'tx_page.dart';
@@ -656,7 +657,9 @@ class _CostSummary extends StatelessWidget {
   }
 }
 
-/// The suggested fee for this transaction's weight, and what it's based on.
+/// The suggested fee for this transaction's weight, at a glance: the number,
+/// whether blocks have room, and the three bars it's drawn from. Why fees
+/// work this way is folded away beneath.
 class _FeeCard extends StatelessWidget {
   const _FeeCard(
       {required this.info, required this.weight, required this.loading, required this.onRefresh, required this.onUse});
@@ -671,46 +674,115 @@ class _FeeCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final l = context.l10n;
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final muted = theme.textTheme.labelMedium?.copyWith(color: scheme.onSurfaceVariant);
     final info = this.info;
-    final String title;
-    final List<String> lines;
+    final refresh = IconButton(
+      tooltip: l.checkAgain,
+      onPressed: loading ? null : onRefresh,
+      icon: loading
+          ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+          : const MurmurIcon(Glyph.refresh),
+    );
     if (info == null) {
-      title = l.checkingFees;
-      lines = const [];
-    } else {
-      final suggested = info.suggested(weight);
-      title = info.congested ? l.suggestedBusy(suggested, weight) : l.suggestedQuiet(suggested, weight);
-      lines = [
-        l.feePerByte(txBaseBytes),
-        l.feeThreadCost(suggested * (orphanBurnMultiple + 1), orphanBurnMultiple),
-        info.source == FeeSource.node ? l.feeFromNode(info.pending) : l.feeLocal(info.pending),
-        l.feeForSize(info.nextBlockFee(weight), info.poolEntryFee(weight), minFee),
-        if (info.recentLowest != null)
-          l.feeRecent(info.recentLowest!, info.recentMedian!)
-        else
-          l.feeNoRecent,
-      ];
-    }
-    return Card(
-      child: Padding(
-        padding: const EdgeInsetsDirectional.fromSTEB(16, 8, 8, 12),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [
-            MurmurIcon(Glyph.fee, size: 20, color: theme.colorScheme.primary),
-            const SizedBox(width: 8),
-            Expanded(child: Text(title, style: theme.textTheme.titleSmall)),
-            if (info != null) TextButton(onPressed: () => onUse(info.suggested(weight)), child: Text(l.use)),
-            IconButton(
-              tooltip: l.checkAgain,
-              onPressed: loading ? null : onRefresh,
-              icon: loading
-                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                  : const MurmurIcon(Glyph.refresh),
-            ),
+      return Card(
+        child: Padding(
+          padding: const EdgeInsetsDirectional.fromSTEB(16, 8, 8, 8),
+          child: Row(children: [
+            MurmurIcon(Glyph.fee, size: 20, color: scheme.primary),
+            const SizedBox(width: 10),
+            Expanded(child: Text(l.checkingFees, style: theme.textTheme.bodyMedium)),
+            refresh,
           ]),
-          for (final line in lines) Text(line, style: theme.textTheme.bodySmall),
-        ]),
-      ),
+        ),
+      );
+    }
+    final suggested = info.suggested(weight);
+    final status = StatusColors.of(context);
+    final statusColor = info.congested ? status.pending : status.success;
+
+    // One of the bars the suggestion comes from: a small label, a bold value.
+    Widget bar(String label, int value) => Padding(
+          padding: const EdgeInsetsDirectional.only(end: 20),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(label, style: muted),
+            Text(formatAmount(context, value), style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
+          ]),
+        );
+
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Padding(
+          padding: const EdgeInsetsDirectional.fromSTEB(16, 10, 8, 0),
+          child: Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+            MurmurIcon(Glyph.fee, size: 24, color: scheme.primary),
+            const SizedBox(width: 12),
+            // The number that matters, big and in copper.
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(l.feeSuggestedLabel, style: muted),
+                Wrap(crossAxisAlignment: WrapCrossAlignment.end, spacing: 6, children: [
+                  Text(formatAmount(context, suggested),
+                      style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700, color: scheme.primary)),
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Text(l.feeForBytes(weight), style: theme.textTheme.bodySmall),
+                  ),
+                ]),
+              ]),
+            ),
+            TextButton(onPressed: () => onUse(suggested), child: Text(l.use)),
+            refresh,
+          ]),
+        ),
+        Padding(
+          padding: const EdgeInsetsDirectional.fromSTEB(52, 8, 16, 4),
+          child: Wrap(runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
+            // Whether blocks have room.
+            Padding(
+              padding: const EdgeInsetsDirectional.only(end: 20),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: statusColor.withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  MurmurIcon(Glyph.blocks, size: 14, color: statusColor),
+                  const SizedBox(width: 6),
+                  Text(info.congested ? l.feeFull : l.feeRoom,
+                      style: theme.textTheme.labelMedium?.copyWith(color: statusColor, fontWeight: FontWeight.w600)),
+                ]),
+              ),
+            ),
+            bar(l.feeNextBlock, info.nextBlockFee(weight)),
+            bar(l.feePoolEntry, info.poolEntryFee(weight)),
+            bar(l.feeMinimum, minFee),
+          ]),
+        ),
+        // Why: folded away, for whoever wants it.
+        Theme(
+          data: theme.copyWith(dividerColor: Colors.transparent),
+          child: ExpansionTile(
+            dense: true,
+            tilePadding: const EdgeInsetsDirectional.fromSTEB(52, 0, 16, 0),
+            childrenPadding: const EdgeInsetsDirectional.fromSTEB(16, 0, 16, 12),
+            title: Text(l.feeWhy, style: theme.textTheme.labelLarge?.copyWith(color: scheme.primary)),
+            children: [
+              InfoPoint(Glyph.fee, l.feePerBytePoint(txBaseBytes)),
+              InfoPoint(
+                Glyph.blocks,
+                info.recentLowest != null
+                    ? l.feeRecentPoint(info.recentLowest!, info.recentMedian!)
+                    : l.feeRecentNonePoint,
+              ),
+              InfoPoint(Glyph.node, info.source == FeeSource.node ? l.feeFromNode(info.pending) : l.feeLocal(info.pending),
+                  style: theme.textTheme.bodySmall),
+            ],
+          ),
+        ),
+      ]),
     );
   }
 }

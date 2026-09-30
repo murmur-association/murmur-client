@@ -17,12 +17,13 @@ sealed class _Part {
   const _Part();
 }
 
-/// A polyline through (x, y) pairs.
+/// A polyline through (x, y) pairs. A closed one that is `fillable` (the
+/// star) fills when the icon is.
 class _Line extends _Part {
-  const _Line(this.points, {this.closed = false});
+  const _Line(this.points, {this.closed = false, this.fillable = false});
 
   final List<double> points;
-  final bool closed;
+  final bool closed, fillable;
 }
 
 /// A node: an open ring, filled when the icon is.
@@ -117,9 +118,10 @@ enum Glyph {
     _Dot(26, 86, 8),
   ]),
 
-  /// A star: five points around a node, which fills when starred.
+  /// A star: five points around a node. Starred, it fills whole, so it reads
+  /// at a glance.
   star([
-    _Line([50, 10, 60, 38, 88, 40, 66, 58, 74, 86, 50, 70, 26, 86, 34, 58, 12, 40, 40, 38], closed: true),
+    _Line([50, 10, 60, 38, 88, 40, 66, 58, 74, 86, 50, 70, 26, 86, 34, 58, 12, 40, 40, 38], closed: true, fillable: true),
     _Ring(50, 52),
   ]),
 
@@ -384,12 +386,13 @@ class _GlyphPainter extends CustomPainter {
 
     for (final part in glyph._parts) {
       switch (part) {
-        case _Line(:final points, :final closed):
+        case _Line(:final points, :final closed, :final fillable):
           final path = Path()..moveTo(points[0], points[1]);
           for (var i = 2; i < points.length; i += 2) {
             path.lineTo(points[i], points[i + 1]);
           }
           if (closed) path.close();
+          if (filled && closed && fillable) canvas.drawPath(path, fill);
           canvas.drawPath(path, stroke);
         case _Ring(:final x, :final y):
           canvas.drawCircle(
