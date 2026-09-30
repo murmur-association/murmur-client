@@ -320,10 +320,10 @@ class _ThreadTile extends StatelessWidget {
       // The author's picture: threads read as people talking.
       leading: Opacity(opacity: root.confirmed ? 1 : 0.5, child: AddressAvatar(root.tx.fromAddress)),
       title: Text(text, maxLines: 2, overflow: TextOverflow.ellipsis),
-      subtitle: Text(
-          withdrawn ? l.threadWithdrawnMine : '${nameOf(context, root.tx.fromAddress)} · $activity',
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis),
+      // Who started it, in copper, then when.
+      subtitle: withdrawn
+          ? Text(l.threadWithdrawnMine, maxLines: 1, overflow: TextOverflow.ellipsis)
+          : PersonLine(nameOf(context, root.tx.fromAddress), activity),
       trailing: CountBadges(replies: thread.replies, flags: thread.flags),
       onTap: () => Navigator.of(context).push(MaterialPageRoute(
         builder: (_) => ThreadPage(rootTxid: root.tx.id),

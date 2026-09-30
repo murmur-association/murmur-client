@@ -104,11 +104,13 @@ class _BlockTile extends StatelessWidget {
     return ListTile(
       leading: CircleAvatar(child: Text('${height % 1000}', style: const TextStyle(fontSize: 12))),
       title: Text(l.blockTitle(height)),
-      subtitle: Text(
+      // The miner's name in copper.
+      subtitle: Emphasized(
         '${formatAgo(context, b.header.timestamp)} · ${l.txShortCount(b.transactions.length)} · '
-        '${l.minerIs(nameOf(context, toHex(b.header.miner)))}',
+        '${l.minerIs(Emphasized.mark(nameOf(context, toHex(b.header.miner))))}',
+        style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
         maxLines: 1,
-        overflow: TextOverflow.ellipsis,
+        weight: FontWeight.w600,
       ),
       trailing: Text(shortHex(b.header.id, head: 6, tail: 4),
           style: mono.copyWith(fontSize: 12), textDirection: TextDirection.ltr),

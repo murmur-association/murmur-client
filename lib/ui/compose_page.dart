@@ -274,9 +274,10 @@ class _ComposePageState extends State<ComposePage> {
                     overflow: TextOverflow.ellipsis,
                   ),
                   // Flagging one's own message withdraws it (see the Threads tab).
-                  subtitle: Text(widget.flagTarget!.tx.fromAddress == wallet.addressHex
-                      ? l.flagOwnInfo
-                      : l.flaggingInfo(nameOf(context, widget.flagTarget!.tx.fromAddress))),
+                  subtitle: widget.flagTarget!.tx.fromAddress == wallet.addressHex
+                      ? Text(l.flagOwnInfo)
+                      : Emphasized(l.flaggingInfo(Emphasized.mark(nameOf(context, widget.flagTarget!.tx.fromAddress))),
+                          style: Theme.of(context).textTheme.bodyMedium, weight: FontWeight.w600),
                 ),
               )
             else if (_isReply)
@@ -288,7 +289,8 @@ class _ComposePageState extends State<ComposePage> {
                     maxLines: 3,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  subtitle: Text(l.replyingTo(nameOf(context, widget.replyTo!.tx.fromAddress))),
+                  subtitle: Emphasized(l.replyingTo(Emphasized.mark(nameOf(context, widget.replyTo!.tx.fromAddress))),
+                      style: Theme.of(context).textTheme.bodyMedium, weight: FontWeight.w600),
                 ),
               )
             else if (widget.alias != null)

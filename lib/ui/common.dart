@@ -164,15 +164,24 @@ String? liveMessageText(BuildContext context, TxView view) =>
 /// what matters, so they read at a glance. The markers live in the ARB
 /// strings, so each language chooses its own key words.
 class Emphasized extends StatelessWidget {
-  const Emphasized(this.text, {super.key, this.style});
+  const Emphasized(this.text, {super.key, this.style, this.maxLines, this.weight = FontWeight.w700});
 
   final String text;
   final TextStyle? style;
+  final int? maxLines;
+  final FontWeight weight;
+
+  /// `value` (a name, say) with its own `**` made harmless, to put between
+  /// markers: a zero-width space splits them.
+  static String safe(String value) => value.replaceAll('**', '*​*');
+
+  /// `value` marked for emphasis.
+  static String mark(String value) => '**${safe(value)}**';
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final strong = TextStyle(fontWeight: FontWeight.w700, color: theme.colorScheme.primary);
+    final strong = TextStyle(fontWeight: weight, color: theme.colorScheme.primary);
     final parts = text.split('**');
     return Text.rich(
       TextSpan(children: [
@@ -181,8 +190,30 @@ class Emphasized extends StatelessWidget {
           if (parts[i].isNotEmpty) TextSpan(text: parts[i], style: i.isOdd ? strong : null),
       ]),
       style: style ?? theme.textTheme.bodyMedium,
+      maxLines: maxLines,
+      overflow: maxLines == null ? null : TextOverflow.ellipsis,
     );
   }
+}
+
+/// A list row's subtitle style, for subtitles built as [Emphasized]: what
+/// ListTile gives a plain Text subtitle.
+TextStyle? _subtitleStyle(BuildContext context) {
+  final theme = Theme.of(context);
+  return theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant);
+}
+
+/// A row's subtitle: the person first, in copper, then the rest. For thread
+/// and message lists.
+class PersonLine extends StatelessWidget {
+  const PersonLine(this.name, this.rest, {super.key});
+
+  final String name;
+  final String rest;
+
+  @override
+  Widget build(BuildContext context) => Emphasized('${Emphasized.mark(name)} · ${Emphasized.safe(rest)}',
+      style: _subtitleStyle(context), maxLines: 1, weight: FontWeight.w600);
 }
 
 /// One point of an explanation: an icon, and a short line with its key
@@ -398,9 +429,11 @@ class TxTile extends StatelessWidget {
     final label = tx.kind == TxKind.reply && view.confirmed && !client.isThreadedReply(view)
         ? l.replyNotThreaded
         : kindLabel(context, tx.kind);
+    // Who: the names in copper.
     final route = tx.toAddress == null
-        ? l.routeFrom(nameOf(context, tx.fromAddress))
-        : l.routeFromTo(nameOf(context, tx.fromAddress), nameOf(context, tx.toAddress!));
+        ? l.routeFrom(Emphasized.mark(nameOf(context, tx.fromAddress)))
+        : l.routeFromTo(
+            Emphasized.mark(nameOf(context, tx.fromAddress)), Emphasized.mark(nameOf(context, tx.toAddress!)));
 
     Widget? trailing;
     if (showCounts) {
@@ -440,7 +473,8 @@ class TxTile extends StatelessWidget {
     return ListTile(
       leading: GlyphAvatar(kindIcon(tx.kind), active: view.confirmed),
       title: Text(title, maxLines: 2, overflow: TextOverflow.ellipsis),
-      subtitle: Text('$label · $route · ${whenOf(context, view)}', maxLines: 1, overflow: TextOverflow.ellipsis),
+      subtitle: Emphasized('${Emphasized.safe(label)} · $route · ${whenOf(context, view)}',
+          style: _subtitleStyle(context), maxLines: 1, weight: FontWeight.w600),
       trailing: trailing,
       onTap: () => showCounts ? openMessage(context, view) : openTx(context, tx.id),
     );
