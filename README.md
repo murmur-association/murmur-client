@@ -136,7 +136,7 @@ Without these steps the page still works, but fetches from Google's servers.
 
 ## Deploying the web app (Cloudflare Pages)
 
-The page is served at **app.murmur.info** by Cloudflare Pages, like the project's site. Cloudflare's build machines have no Flutter, so GitLab CI builds the page and uploads it. Two jobs run on the default branch:
+The page is served at **app.murmur.info** by Cloudflare Pages, like the project's site. Cloudflare's build machines have no Flutter, so GitLab CI builds the page and uploads it. Two jobs run when a tag is pushed (a release), not on every commit:
 
 - `build-web-testnet` builds the testnet page as above, with `--base-href /`, and keeps `build/web` as an artifact.
 - `deploy-web` uploads it with `wrangler pages deploy` to the Pages project `murmur-app` (`CF_PAGES_PROJECT` in `.gitlab-ci.yml`).
@@ -151,8 +151,9 @@ One-time setup:
 4. In GitLab, **Settings → CI/CD → Variables**, both with **Protect variable** ticked:
    - `CLOUDFLARE_API_TOKEN`: the token, **Masked and hidden**;
    - `CLOUDFLARE_ACCOUNT_ID`: the account ID from any domain's Overview page, **Masked**.
+5. In GitLab, **Settings → Repository → Protected tags**: protect `v*`, allowed to create for Maintainers. Protected variables reach only protected branches and tags, so an unprotected tag's deploy would have no token.
 
-Every push to the default branch then deploys. The page is built for the root of its domain; to serve it from a subfolder, change `--base-href` to match.
+A release is then a tag: `git tag v0.1.0 && git push origin v0.1.0` builds and deploys it. Commits to the default branch are only checked (analysis, tests, a web build), not deployed. The page is built for the root of its domain; to serve it from a subfolder, change `--base-href` to match.
 
 `test/live_node_test.dart` runs against a live node when `MURMUR_NODE=host:port` is set, for example `MURMUR_NODE=testnet-seed.murmur.info:7878` for the public testnet (read-only). It checks sync, proofs, filters, the local copy against the state root, and the fee report. With `MURMUR_SEED` set to a funded seed, it also posts threads, replies, a transfer and a flag, and checks the threads once they're mined.
 

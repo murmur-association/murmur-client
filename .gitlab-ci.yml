@@ -82,8 +82,9 @@ build-web:
 build-web-testnet:
   extends: .flutter
   stage: build
+  # Only for a pushed tag (a release), not every commit.
   rules:
-  - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  - if: $CI_COMMIT_TAG
   script:
   - >-
     flutter build web --release --no-web-resources-cdn --base-href /
@@ -107,19 +108,20 @@ build-web-testnet:
     - build/web/
     expire_in: 1 week
 
-# Uploads the testnet page to the Cloudflare Pages project. Needs the
-# protected CI/CD variables CLOUDFLARE_API_TOKEN (a token with Account >
-# Cloudflare Pages > Edit) and CLOUDFLARE_ACCOUNT_ID.
+# Uploads the testnet page to the Cloudflare Pages project, for a pushed
+# tag. Needs the protected CI/CD variables CLOUDFLARE_API_TOKEN (a token with
+# Account > Cloudflare Pages > Edit) and CLOUDFLARE_ACCOUNT_ID; protected
+# variables reach only protected tags, so the tags must be protected too.
 deploy-web:
   image: node:22-slim
   stage: deploy
   needs: [build-web-testnet]
   rules:
-  - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  - if: $CI_COMMIT_TAG
   variables:
     CF_PAGES_PROJECT: murmur-app
   script:
   - >-
     npx --yes wrangler@4 pages deploy build/web
     --project-name "$CF_PAGES_PROJECT" --branch "$CI_DEFAULT_BRANCH"
-    --commit-hash "$CI_COMMIT_SHA" --commit-message "$CI_COMMIT_TITLE" --commit-dirty=true
+    --commit-hash "$CI_COMMIT_SHA" --commit-message "$CI_COMMIT_TAG: $CI_COMMIT_TITLE" --commit-dirty=true
