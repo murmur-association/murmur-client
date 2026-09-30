@@ -10,6 +10,7 @@ import 'package:murmur_client/protocol/models.dart';
 import 'package:murmur_client/services/activity.dart';
 import 'package:murmur_client/services/node_client.dart';
 import 'package:murmur_client/services/storage.dart';
+import 'package:murmur_client/ui/address_page.dart';
 import 'package:murmur_client/ui/chain_tab.dart';
 import 'package:murmur_client/ui/common.dart';
 import 'package:murmur_client/ui/invitations_page.dart';
@@ -198,6 +199,23 @@ void main() {
     await tester.pump();
     expect(prefs.starred, isEmpty);
     expect(find.byTooltip(l.star), findsOneWidget, reason: 'still listed, to star again');
+  });
+
+  testWidgets('a copper name in a row opens its address', (tester) async {
+    final address = 'ab' * 32;
+    await tester.pumpWidget(AppScope(
+      client: MurmurClient(),
+      wallets: WalletController(),
+      prefs: Preferences(),
+      child: MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Scaffold(body: Center(child: PersonLine(address, '5 min ago'))),
+      ),
+    ));
+    await tester.tapOnText(find.textRange.ofSubstring(shortHex(address)));
+    await tester.pumpAndSettle();
+    expect(find.byType(AddressPage), findsOneWidget);
   });
 
   testWidgets('cancelling a card funded by another wallet asks where its tokens go', (tester) async {

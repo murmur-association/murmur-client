@@ -107,7 +107,8 @@ class _BlockTile extends StatelessWidget {
       // The miner's name in copper.
       subtitle: Emphasized(
         '${formatAgo(context, b.header.timestamp)} · ${l.txShortCount(b.transactions.length)} · '
-        '${l.minerIs(Emphasized.mark(nameOf(context, toHex(b.header.miner))))}',
+        '${l.minerIs(Emphasized.link(nameOf(context, toHex(b.header.miner)), 0))}',
+        links: [toHex(b.header.miner)],
         style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
         maxLines: 1,
         weight: FontWeight.w600,

@@ -323,7 +323,7 @@ class _ThreadTile extends StatelessWidget {
       // Who started it, in copper, then when.
       subtitle: withdrawn
           ? Text(l.threadWithdrawnMine, maxLines: 1, overflow: TextOverflow.ellipsis)
-          : PersonLine(nameOf(context, root.tx.fromAddress), activity),
+          : PersonLine(root.tx.fromAddress, activity),
       trailing: CountBadges(replies: thread.replies, flags: thread.flags),
       onTap: () => Navigator.of(context).push(MaterialPageRoute(
         builder: (_) => ThreadPage(rootTxid: root.tx.id),

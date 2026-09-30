@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/gestures.dart' show TapGestureRecognizer;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -163,13 +164,22 @@ String? liveMessageText(BuildContext context, TxView view) =>
 /// Text whose `**key words**` show in bold copper: how explanations mark
 /// what matters, so they read at a glance. The markers live in the ARB
 /// strings, so each language chooses its own key words.
-class Emphasized extends StatelessWidget {
-  const Emphasized(this.text, {super.key, this.style, this.maxLines, this.weight = FontWeight.w700});
+///
+/// A marked piece can also be a link: [link] marks a name with the index of
+/// an address in `links`, and tapping it opens that address's page. The
+/// index travels inside the marker, so a translation may put names in any
+/// order.
+class Emphasized extends StatefulWidget {
+  const Emphasized(this.text,
+      {super.key, this.style, this.maxLines, this.weight = FontWeight.w700, this.links = const []});
 
   final String text;
   final TextStyle? style;
   final int? maxLines;
   final FontWeight weight;
+
+  /// Addresses the [link]ed pieces open, by index.
+  final List<String> links;
 
   /// `value` (a name, say) with its own `**` made harmless, to put between
   /// markers: a zero-width space splits them.
@@ -178,20 +188,63 @@ class Emphasized extends StatelessWidget {
   /// `value` marked for emphasis.
   static String mark(String value) => '**${safe(value)}**';
 
+  /// `value` marked for emphasis, and as a link to `links[index]`: a
+  /// private-use character carrying the index opens the piece.
+  static String link(String value, int index) => '**${String.fromCharCode(_linkBase + index)}${safe(value)}**';
+
+  static const _linkBase = 0xE000;
+
+  @override
+  State<Emphasized> createState() => _EmphasizedState();
+}
+
+class _EmphasizedState extends State<Emphasized> {
+  final _recognizers = <TapGestureRecognizer>[];
+
+  void _clear() {
+    for (final r in _recognizers) {
+      r.dispose();
+    }
+    _recognizers.clear();
+  }
+
+  @override
+  void dispose() {
+    _clear();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
+    _clear();
     final theme = Theme.of(context);
-    final strong = TextStyle(fontWeight: weight, color: theme.colorScheme.primary);
-    final parts = text.split('**');
+    final strong = TextStyle(fontWeight: widget.weight, color: theme.colorScheme.primary);
+    final parts = widget.text.split('**');
+    final spans = <InlineSpan>[];
+    for (var i = 0; i < parts.length; i++) {
+      var piece = parts[i];
+      if (piece.isEmpty) continue;
+      // Odd pieces sit between markers.
+      if (i.isEven) {
+        spans.add(TextSpan(text: piece));
+        continue;
+      }
+      final index = piece.codeUnitAt(0) - Emphasized._linkBase;
+      if (index >= 0 && index < widget.links.length) {
+        piece = piece.substring(1);
+        final address = widget.links[index];
+        final tap = TapGestureRecognizer()..onTap = () => openAddress(context, address);
+        _recognizers.add(tap);
+        spans.add(TextSpan(text: piece, style: strong, recognizer: tap, mouseCursor: SystemMouseCursors.click));
+      } else {
+        spans.add(TextSpan(text: piece, style: strong));
+      }
+    }
     return Text.rich(
-      TextSpan(children: [
-        // Odd pieces sit between markers.
-        for (var i = 0; i < parts.length; i++)
-          if (parts[i].isNotEmpty) TextSpan(text: parts[i], style: i.isOdd ? strong : null),
-      ]),
-      style: style ?? theme.textTheme.bodyMedium,
-      maxLines: maxLines,
-      overflow: maxLines == null ? null : TextOverflow.ellipsis,
+      TextSpan(children: spans),
+      style: widget.style ?? theme.textTheme.bodyMedium,
+      maxLines: widget.maxLines,
+      overflow: widget.maxLines == null ? null : TextOverflow.ellipsis,
     );
   }
 }
@@ -203,17 +256,22 @@ TextStyle? _subtitleStyle(BuildContext context) {
   return theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant);
 }
 
-/// A row's subtitle: the person first, in copper, then the rest. For thread
-/// and message lists.
+/// A row's subtitle: the person first, in copper and linking to their
+/// address, then the rest. For thread and message lists.
 class PersonLine extends StatelessWidget {
-  const PersonLine(this.name, this.rest, {super.key});
+  const PersonLine(this.address, this.rest, {super.key});
 
-  final String name;
+  final String address;
   final String rest;
 
   @override
-  Widget build(BuildContext context) => Emphasized('${Emphasized.mark(name)} · ${Emphasized.safe(rest)}',
-      style: _subtitleStyle(context), maxLines: 1, weight: FontWeight.w600);
+  Widget build(BuildContext context) => Emphasized(
+        '${Emphasized.link(nameOf(context, address), 0)} · ${Emphasized.safe(rest)}',
+        links: [address],
+        style: _subtitleStyle(context),
+        maxLines: 1,
+        weight: FontWeight.w600,
+      );
 }
 
 /// One point of an explanation: an icon, and a short line with its key
@@ -430,10 +488,12 @@ class TxTile extends StatelessWidget {
         ? l.replyNotThreaded
         : kindLabel(context, tx.kind);
     // Who: the names in copper.
+    // Who: the names in copper, each a link to its address.
+    final people = [tx.fromAddress, if (tx.toAddress != null) tx.toAddress!];
     final route = tx.toAddress == null
-        ? l.routeFrom(Emphasized.mark(nameOf(context, tx.fromAddress)))
+        ? l.routeFrom(Emphasized.link(nameOf(context, tx.fromAddress), 0))
         : l.routeFromTo(
-            Emphasized.mark(nameOf(context, tx.fromAddress)), Emphasized.mark(nameOf(context, tx.toAddress!)));
+            Emphasized.link(nameOf(context, tx.fromAddress), 0), Emphasized.link(nameOf(context, tx.toAddress!), 1));
 
     Widget? trailing;
     if (showCounts) {
@@ -474,7 +534,7 @@ class TxTile extends StatelessWidget {
       leading: GlyphAvatar(kindIcon(tx.kind), active: view.confirmed),
       title: Text(title, maxLines: 2, overflow: TextOverflow.ellipsis),
       subtitle: Emphasized('${Emphasized.safe(label)} · $route · ${whenOf(context, view)}',
-          style: _subtitleStyle(context), maxLines: 1, weight: FontWeight.w600),
+          links: people, style: _subtitleStyle(context), maxLines: 1, weight: FontWeight.w600),
       trailing: trailing,
       onTap: () => showCounts ? openMessage(context, view) : openTx(context, tx.id),
     );

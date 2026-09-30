@@ -79,7 +79,7 @@ class _StarredTile extends StatelessWidget {
     return ListTile(
       leading: Opacity(opacity: view.confirmed ? 1 : 0.5, child: AddressAvatar(tx.fromAddress)),
       title: Text(text, maxLines: 2, overflow: TextOverflow.ellipsis),
-      subtitle: PersonLine(nameOf(context, tx.fromAddress), '$kind · ${whenOf(context, view)}'),
+      subtitle: PersonLine(tx.fromAddress, '$kind · ${whenOf(context, view)}'),
       trailing: Row(mainAxisSize: MainAxisSize.min, children: [
         if (isRoot) CountBadges(replies: client.replyCountOf(view), flags: client.flagCountOf(view)),
         StarButton(txid),
