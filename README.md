@@ -134,22 +134,25 @@ Nothing in the page can work around this without a third party, such as a DNS-ov
 
 Without these steps the page still works, but fetches from Google's servers.
 
-## Deploying the web app (GitLab Pages)
+## Deploying the web app (Cloudflare Pages)
 
-The `pages` job in `.gitlab-ci.yml` runs on the default branch. It builds the testnet page as above, with `--base-href /`, and publishes it. To serve it at **app.murmur.info**:
+The page is served at **app.murmur.info** by Cloudflare Pages, like the project's site. Cloudflare's build machines have no Flutter, so GitLab CI builds the page and uploads it. Two jobs run on the default branch:
 
-1. In GitLab, **Deploy → Pages → New domain**: enter `app.murmur.info`, and keep "Automatic certificate management using Let's Encrypt" on.
-2. GitLab shows two DNS records. Add both in Cloudflare (murmur.info's DNS), with the proxy status **DNS only** (grey cloud). GitLab issues and renews the TLS certificate itself, which fails behind Cloudflare's proxy.
+- `build-web-testnet` builds the testnet page as above, with `--base-href /`, and keeps `build/web` as an artifact.
+- `deploy-web` uploads it with `wrangler pages deploy` to the Pages project `murmur-app` (`CF_PAGES_PROJECT` in `.gitlab-ci.yml`).
 
-   | Type | Name | Content |
-   |---|---|---|
-   | `CNAME` | `app` | `elc4no.gitlab.io` |
-   | `TXT` | `_gitlab-pages-verification-code.app` | `gitlab-pages-verification-code=<code GitLab shows>` |
+`web/_headers`, copied into the build, sets the response headers: a Content-Security-Policy that allows only the page's own files and `wss://` connections (to any node, since users can pick theirs), plus `no-referrer`, `nosniff` and HSTS. The engine needs `'wasm-unsafe-eval'` for CanvasKit and `'unsafe-inline'` styles.
 
-3. Back in GitLab, press **Verify**. The certificate follows within about an hour.
-4. Optional: tick **Force HTTPS** under Deploy → Pages.
+One-time setup:
 
-To serve the page from the root of a different domain, change only the domain; the base href stays `/`. GitLab's default URL (`elc4no.gitlab.io/murmur-client/`) is a subfolder, so it would need `--base-href /murmur-client/` instead.
+1. In Cloudflare, **Workers & Pages → Create → Pages → Direct Upload**, named `murmur-app`. It needs a first upload; any placeholder folder will do, and the first CI deploy replaces it.
+2. In the project, **Custom domains → Set up a custom domain**: `app.murmur.info`. The DNS record is created for you.
+3. **My Profile → API Tokens → Create Token → Custom token**, with only **Account → Cloudflare Pages → Edit**.
+4. In GitLab, **Settings → CI/CD → Variables**, both with **Protect variable** ticked:
+   - `CLOUDFLARE_API_TOKEN`: the token, **Masked and hidden**;
+   - `CLOUDFLARE_ACCOUNT_ID`: the account ID from any domain's Overview page, **Masked**.
+
+Every push to the default branch then deploys. The page is built for the root of its domain; to serve it from a subfolder, change `--base-href` to match.
 
 `test/live_node_test.dart` runs against a live node when `MURMUR_NODE=host:port` is set, for example `MURMUR_NODE=testnet-seed.murmur.info:7878` for the public testnet (read-only). It checks sync, proofs, filters, the local copy against the state root, and the fee report. With `MURMUR_SEED` set to a funded seed, it also posts threads, replies, a transfer and a flag, and checks the threads once they're mined.
 

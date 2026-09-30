@@ -16,7 +16,7 @@ CI (`.gitlab-ci.yml`) runs `flutter gen-l10n` with a clean-diff check, `flutter 
 flutter pub get                       # also regenerates lib/l10n/app_localizations*.dart from the ARB files
 flutter analyze                       # must report no issues
 flutter test test/protocol_test.dart test/threads_test.dart test/ui_test.dart   # offline, a few seconds
-flutter build web --release --no-web-resources-cdn --pwa-strategy=none   # CanvasKit served locally; no service worker
+flutter build web --release --no-web-resources-cdn   # CanvasKit served locally
 dart run tool/fetch_fallback_fonts.dart   # copies the engine's fallback fonts next to the page (rule 2)
 dart run tool/serve_web.dart          # serves build/web on http://localhost:8080
 dart run tool/ws_bridge.dart --node 127.0.0.1:7878   # only for nodes without --ws-port

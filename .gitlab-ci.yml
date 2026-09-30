@@ -74,13 +74,14 @@ build-web:
     - build/web/
     expire_in: 1 week
 
-# The public testnet page (GitLab Pages, custom domain app.murmur.info; see
-# README "Deploying the web app"). It connects to wss://node.murmur.info by
+# The public testnet page, app.murmur.info on Cloudflare Pages (see README
+# "Deploying the web app"). It connects to wss://node.murmur.info by
 # default and loads nothing from other origins: CanvasKit is served locally
-# and the fallback fonts are copied next to the page.
-pages:
+# and the fallback fonts are copied next to the page. web/_headers sets its
+# response headers.
+build-web-testnet:
   extends: .flutter
-  stage: deploy
+  stage: build
   rules:
   - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
   script:
@@ -88,8 +89,7 @@ pages:
     flutter build web --release --no-web-resources-cdn --base-href /
     --dart-define=MURMUR_NODE_HOST=node.murmur.info --dart-define=MURMUR_NODE_PORT=443
   - dart run tool/fetch_fallback_fonts.dart --cache .font-cache
-  - rm -rf public
-  - mv build/web public
+  - test -f build/web/_headers
   cache:
   - key: flutter-sdk-$FLUTTER_VERSION
     paths:
@@ -104,4 +104,22 @@ pages:
     - .font-cache/
   artifacts:
     paths:
-    - public
+    - build/web/
+    expire_in: 1 week
+
+# Uploads the testnet page to the Cloudflare Pages project. Needs the
+# protected CI/CD variables CLOUDFLARE_API_TOKEN (a token with Account >
+# Cloudflare Pages > Edit) and CLOUDFLARE_ACCOUNT_ID.
+deploy-web:
+  image: node:22-slim
+  stage: deploy
+  needs: [build-web-testnet]
+  rules:
+  - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  variables:
+    CF_PAGES_PROJECT: murmur-app
+  script:
+  - >-
+    npx --yes wrangler@4 pages deploy build/web
+    --project-name "$CF_PAGES_PROJECT" --branch "$CI_DEFAULT_BRANCH"
+    --commit-hash "$CI_COMMIT_SHA" --commit-message "$CI_COMMIT_TITLE" --commit-dirty=true

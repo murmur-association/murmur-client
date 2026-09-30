@@ -1,0 +1,14 @@
+# Response headers for Cloudflare Pages (app.murmur.info; see README
+# "Deploying the web app"). flutter build web copies this file into
+# build/web. The page loads nothing from other origins; its only other
+# connection is the node the user chose, over wss://.
+# - 'wasm-unsafe-eval': CanvasKit is WebAssembly.
+# - style-src 'unsafe-inline': the engine sets inline styles on its elements.
+# - connect-src wss:: any node the user picks, not only node.murmur.info.
+# Permissions-Policy leaves publickey-credentials alone: passkeys use them.
+/*
+  Content-Security-Policy: default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' wss:; worker-src 'self' blob:; manifest-src 'self'; base-uri 'self'; form-action 'none'; frame-ancestors 'none'
+  Referrer-Policy: no-referrer
+  X-Content-Type-Options: nosniff
+  Permissions-Policy: interest-cohort=(), camera=(), microphone=(), geolocation=()
+  Strict-Transport-Security: max-age=31536000
