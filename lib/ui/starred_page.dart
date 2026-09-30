@@ -73,12 +73,12 @@ class _StarredTile extends StatelessWidget {
       );
     }
     final tx = view.tx;
-    final text = messageOrUnavailable(context, view).replaceAll('\n', ' ');
+    final text = firstLine(messageOrUnavailable(context, view));
     final kind = tx.kind == TxKind.orphan ? l.kindThread : l.kindReply;
     final isRoot = tx.kind == TxKind.orphan;
     return ListTile(
       leading: Opacity(opacity: view.confirmed ? 1 : 0.5, child: AddressAvatar(tx.fromAddress)),
-      title: Text(text, maxLines: 2, overflow: TextOverflow.ellipsis),
+      title: Text(text, maxLines: 1, overflow: TextOverflow.ellipsis),
       subtitle: PersonLine(tx.fromAddress, '$kind · ${whenOf(context, view)}'),
       trailing: Row(mainAxisSize: MainAxisSize.min, children: [
         if (isRoot) CountBadges(replies: client.replyCountOf(view), flags: client.flagCountOf(view)),

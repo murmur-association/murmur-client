@@ -309,7 +309,8 @@ class _ThreadTile extends StatelessWidget {
     final root = thread.root;
     // The snapshot fixes the order and counts; the text is read live, since
     // content arrives after the chain is synced.
-    final text = messageOrUnavailable(context, root).replaceAll('\n', ' ');
+    // Only the first line: a thread reads as its header.
+    final text = firstLine(messageOrUnavailable(context, root));
     final activity = thread.replies == 0
         ? l.threadStarted(whenOf(context, root))
         : l.threadLastReply(formatAgo(context, thread.lastActivity));
@@ -319,7 +320,7 @@ class _ThreadTile extends StatelessWidget {
     final tile = ListTile(
       // The author's picture: threads read as people talking.
       leading: Opacity(opacity: root.confirmed ? 1 : 0.5, child: AddressAvatar(root.tx.fromAddress)),
-      title: Text(text, maxLines: 2, overflow: TextOverflow.ellipsis),
+      title: Text(text, maxLines: 1, overflow: TextOverflow.ellipsis),
       // Who started it, in copper, then when.
       subtitle: withdrawn
           ? Text(l.threadWithdrawnMine, maxLines: 1, overflow: TextOverflow.ellipsis)

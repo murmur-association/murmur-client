@@ -218,6 +218,13 @@ void main() {
     expect(find.byType(AddressPage), findsOneWidget);
   });
 
+  test('a thread row shows its first line of text', () {
+    expect(firstLine('Title\nand the rest'), 'Title');
+    expect(firstLine('\n  \n  Title after blanks  \nmore'), 'Title after blanks');
+    expect(firstLine('One line only'), 'One line only');
+    expect(firstLine(''), '');
+  });
+
   testWidgets('cancelling a card funded by another wallet asks where its tokens go', (tester) async {
     final records = [InviteRecord(code: 'C1', amount: 5, serial: 1, batch: 1, funder: 'ab' * 32)];
     ReturnTo? to;

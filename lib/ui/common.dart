@@ -157,6 +157,10 @@ String messageOrUnavailable(BuildContext context, TxView view) {
       (client.contentExpected(view.tx) ? l.contentLoading : l.contentUnavailable);
 }
 
+/// A message's first line that has any text: what a list shows of a thread,
+/// its header.
+String firstLine(String text) => text.split('\n').map((s) => s.trim()).firstWhere((s) => s.isNotEmpty, orElse: () => '');
+
 /// A message's text as the client holds it now, or null while it's missing.
 String? liveMessageText(BuildContext context, TxView view) =>
     messageText(context, AppScope.of(context).client.liveContent(view));
