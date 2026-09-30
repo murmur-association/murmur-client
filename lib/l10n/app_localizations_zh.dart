@@ -1585,7 +1585,11 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String aliasTooLong(int max) {
-    return '最多 $max 字节';
+    final intl.NumberFormat maxNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String maxString = maxNumberFormat.format(max);
+
+    return '最多 $maxString 字节';
   }
 
   @override
@@ -1607,7 +1611,14 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String explainAlias(int total, int burn) {
-    return '发布你的公开名字。与新话题一样，费用为 $total × 手续费：手续费归矿工，另有 $burn × 手续费被销毁。';
+    final intl.NumberFormat totalNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String totalString = totalNumberFormat.format(total);
+    final intl.NumberFormat burnNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String burnString = burnNumberFormat.format(burn);
+
+    return '发布你的公开名字。与新话题一样，费用为 $totalString × 手续费：手续费归矿工，另有 $burnString × 手续费被销毁。';
   }
 
   @override
@@ -1627,7 +1638,11 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String feeForBytes(int weight) {
-    return '适用于 $weight 字节';
+    final intl.NumberFormat weightNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String weightString = weightNumberFormat.format(weight);
+
+    return '适用于 $weightString 字节';
   }
 
   @override
@@ -1650,12 +1665,23 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String feePerBytePoint(int base) {
-    return '**手续费按字节计算**：$base 字节加上你的消息。区块满时，长消息更贵。';
+    final intl.NumberFormat baseNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String baseString = baseNumberFormat.format(base);
+
+    return '**手续费按字节计算**：$baseString 字节加上你的消息。区块满时，长消息更贵。';
   }
 
   @override
   String feeRecentPoint(int lowest, int median) {
-    return '**最近的区块**接受的手续费低至 **$lowest**（中位数 $median）。';
+    final intl.NumberFormat lowestNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String lowestString = lowestNumberFormat.format(lowest);
+    final intl.NumberFormat medianNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String medianString = medianNumberFormat.format(median);
+
+    return '**最近的区块**接受的手续费低至 **$lowestString**（中位数 $medianString）。';
   }
 
   @override

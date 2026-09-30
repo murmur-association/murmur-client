@@ -340,6 +340,7 @@ class _ComposePageState extends State<ComposePage> {
                 Expanded(
                   child: TextFormField(
                     controller: _amount,
+                    autovalidateMode: AutovalidateMode.onUserInteraction,
                     keyboardType: TextInputType.number,
                     decoration: InputDecoration(
                       labelText: _kind == TxKind.reply ? l.payToAuthor : l.amount,
@@ -359,6 +360,7 @@ class _ComposePageState extends State<ComposePage> {
               Expanded(
                 child: TextFormField(
                   controller: _fee,
+                  autovalidateMode: AutovalidateMode.onUserInteraction,
                   keyboardType: TextInputType.number,
                   decoration: InputDecoration(
                     labelText: l.feeToMiner,
@@ -377,6 +379,9 @@ class _ComposePageState extends State<ComposePage> {
             if (_kind != TxKind.raw && !_isFlag && widget.alias == null)
               TextFormField(
                 controller: _message,
+                // Checked as the user types: an error (too long, say) clears as soon as
+                // it's fixed, not only at the next send.
+                autovalidateMode: AutovalidateMode.onUserInteraction,
                 minLines: 4,
                 maxLines: 12,
                 decoration: InputDecoration(

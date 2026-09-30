@@ -1666,7 +1666,11 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String aliasTooLong(int max) {
-    return '$max بايت على الأكثر';
+    final intl.NumberFormat maxNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String maxString = maxNumberFormat.format(max);
+
+    return '$maxString بايت على الأكثر';
   }
 
   @override
@@ -1689,7 +1693,14 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String explainAlias(int total, int burn) {
-    return 'ينشر اسمك العام. مثل موضوع جديد، يكلف $total × الرسوم: تذهب الرسوم إلى المعدِّن ويُحرق $burn × الرسوم.';
+    final intl.NumberFormat totalNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String totalString = totalNumberFormat.format(total);
+    final intl.NumberFormat burnNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String burnString = burnNumberFormat.format(burn);
+
+    return 'ينشر اسمك العام. مثل موضوع جديد، يكلف $totalString × الرسوم: تذهب الرسوم إلى المعدِّن ويُحرق $burnString × الرسوم.';
   }
 
   @override
@@ -1710,7 +1721,11 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String feeForBytes(int weight) {
-    return 'لـ $weight بايت';
+    final intl.NumberFormat weightNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String weightString = weightNumberFormat.format(weight);
+
+    return 'لـ $weightString بايت';
   }
 
   @override
@@ -1733,12 +1748,23 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String feePerBytePoint(int base) {
-    return '**الرسوم لكل بايت**: $base بايت إضافة إلى رسالتك. الرسائل الطويلة تكلف أكثر حين تمتلئ الكتل.';
+    final intl.NumberFormat baseNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String baseString = baseNumberFormat.format(base);
+
+    return '**الرسوم لكل بايت**: $baseString بايت إضافة إلى رسالتك. الرسائل الطويلة تكلف أكثر حين تمتلئ الكتل.';
   }
 
   @override
   String feeRecentPoint(int lowest, int median) {
-    return '**الكتل الأخيرة** قبلت رسومًا لا تتجاوز **$lowest** (الوسيط $median).';
+    final intl.NumberFormat lowestNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String lowestString = lowestNumberFormat.format(lowest);
+    final intl.NumberFormat medianNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String medianString = medianNumberFormat.format(median);
+
+    return '**الكتل الأخيرة** قبلت رسومًا لا تتجاوز **$lowestString** (الوسيط $medianString).';
   }
 
   @override

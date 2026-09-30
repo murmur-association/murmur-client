@@ -1595,7 +1595,11 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String aliasTooLong(int max) {
-    return '最大 $max バイト';
+    final intl.NumberFormat maxNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String maxString = maxNumberFormat.format(max);
+
+    return '最大 $maxString バイト';
   }
 
   @override
@@ -1617,7 +1621,14 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String explainAlias(int total, int burn) {
-    return '公開名を公開します。新しいスレッドと同じく、費用は手数料の $total 倍です。手数料はマイナーに渡り、手数料の $burn 倍が焼却されます。';
+    final intl.NumberFormat totalNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String totalString = totalNumberFormat.format(total);
+    final intl.NumberFormat burnNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String burnString = burnNumberFormat.format(burn);
+
+    return '公開名を公開します。新しいスレッドと同じく、費用は手数料の $totalString 倍です。手数料はマイナーに渡り、手数料の $burnString 倍が焼却されます。';
   }
 
   @override
@@ -1637,7 +1648,11 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String feeForBytes(int weight) {
-    return '$weight バイト分';
+    final intl.NumberFormat weightNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String weightString = weightNumberFormat.format(weight);
+
+    return '$weightString バイト分';
   }
 
   @override
@@ -1660,12 +1675,23 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String feePerBytePoint(int base) {
-    return '**手数料はバイト単位**：$base バイトにメッセージ分が加わります。ブロックが満杯のときは長いメッセージほど高くなります。';
+    final intl.NumberFormat baseNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String baseString = baseNumberFormat.format(base);
+
+    return '**手数料はバイト単位**：$baseString バイトにメッセージ分が加わります。ブロックが満杯のときは長いメッセージほど高くなります。';
   }
 
   @override
   String feeRecentPoint(int lowest, int median) {
-    return '**最近のブロック**は最低 **$lowest** の手数料を受け入れました（中央値 $median）。';
+    final intl.NumberFormat lowestNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String lowestString = lowestNumberFormat.format(lowest);
+    final intl.NumberFormat medianNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String medianString = medianNumberFormat.format(median);
+
+    return '**最近のブロック**は最低 **$lowestString** の手数料を受け入れました（中央値 $medianString）。';
   }
 
   @override

@@ -1631,7 +1631,11 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String aliasTooLong(int max) {
-    return 'At most $max bytes';
+    final intl.NumberFormat maxNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String maxString = maxNumberFormat.format(max);
+
+    return 'At most $maxString bytes';
   }
 
   @override
@@ -1654,7 +1658,14 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String explainAlias(int total, int burn) {
-    return 'Publishes your public name. Like a new thread, it costs $total × the fee: the fee goes to the miner, and $burn × the fee is burned.';
+    final intl.NumberFormat totalNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String totalString = totalNumberFormat.format(total);
+    final intl.NumberFormat burnNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String burnString = burnNumberFormat.format(burn);
+
+    return 'Publishes your public name. Like a new thread, it costs $totalString × the fee: the fee goes to the miner, and $burnString × the fee is burned.';
   }
 
   @override
@@ -1675,7 +1686,11 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String feeForBytes(int weight) {
-    return 'for $weight bytes';
+    final intl.NumberFormat weightNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String weightString = weightNumberFormat.format(weight);
+
+    return 'for $weightString bytes';
   }
 
   @override
@@ -1698,12 +1713,23 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String feePerBytePoint(int base) {
-    return '**Fees are per byte**: $base bytes plus your message. Longer messages cost more when blocks are full.';
+    final intl.NumberFormat baseNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String baseString = baseNumberFormat.format(base);
+
+    return '**Fees are per byte**: $baseString bytes plus your message. Longer messages cost more when blocks are full.';
   }
 
   @override
   String feeRecentPoint(int lowest, int median) {
-    return '**Recent blocks** took fees as low as **$lowest** (median $median).';
+    final intl.NumberFormat lowestNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String lowestString = lowestNumberFormat.format(lowest);
+    final intl.NumberFormat medianNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String medianString = medianNumberFormat.format(median);
+
+    return '**Recent blocks** took fees as low as **$lowestString** (median $medianString).';
   }
 
   @override
