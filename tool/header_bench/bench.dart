@@ -9,6 +9,7 @@ import 'dart:typed_data';
 import 'package:murmur_client/protocol/bytes.dart';
 import 'package:murmur_client/protocol/commitments.dart';
 import 'package:murmur_client/protocol/consensus.dart';
+import 'package:murmur_client/protocol/header_chain.dart';
 import 'package:murmur_client/protocol/models.dart';
 import 'package:murmur_client/protocol/network.dart';
 import 'package:murmur_client/protocol/wire.dart';
@@ -92,4 +93,31 @@ Duration checkChain(List<BlockHeader> chain) {
     history.pushHeader(h);
   }
   return watch.elapsed;
+}
+
+/// Decodes `data` (as [encodeChain] writes it) one Headers message at a
+/// time, checks each header and packs it, as the client keeps them
+/// (HeaderChain). Returns how long that took, decoding included, and the
+/// packed chain: what stays in memory.
+(Duration, HeaderChain) checkPacked(Uint8List data) {
+  const net = benchNetwork;
+  final genesis = net.genesisHeader();
+  final chain = HeaderChain();
+  final history = HistoryPeaks()..pushHeader(genesis);
+  BlockHeader? at(int height) => height == 0 ? genesis : chain[height - 1];
+  final view = ByteData.sublistView(data);
+  final watch = Stopwatch()..start();
+  var offset = 0;
+  while (offset < data.length) {
+    final length = view.getUint32(offset);
+    offset += 4;
+    final headers = (decodeMessage(Uint8List.sublistView(data, offset, offset + length)) as Headers).headers;
+    offset += length;
+    for (final h in headers) {
+      checkHeaderRules(h, at, history, net);
+      chain.add(h);
+      history.pushHeader(h);
+    }
+  }
+  return (watch.elapsed, chain);
 }

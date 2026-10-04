@@ -179,7 +179,8 @@ class BlockHeader {
     required this.target,
     required this.nonce,
     required this.miner,
-  });
+    Uint8List? hash,
+  }) : _hash = hash;
 
   final int height;
   final Uint8List prevHash;
@@ -213,8 +214,11 @@ class BlockHeader {
         .take();
   }
 
-  /// Double SHA-256 of the header preimage.
-  late final Uint8List hash = sha256Bytes(sha256Bytes(_preimage()));
+  /// Double SHA-256 of the header preimage: computed once, or given by
+  /// whoever already has it (a packed header chain keeps each header's hash
+  /// beside it, so the headers it rebuilds don't hash themselves again).
+  Uint8List get hash => _hash ??= sha256Bytes(sha256Bytes(_preimage()));
+  Uint8List? _hash;
   late final String id = toHex(hash);
 
   /// The block's work, `floor((2^128 − 1) / target)` (PROTOCOL.md Section

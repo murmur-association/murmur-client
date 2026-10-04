@@ -3,81 +3,17 @@
 // browsers use the right WebSocket URL.
 
 import 'dart:io';
-import 'dart:typed_data';
 
-import 'package:cryptography/cryptography.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:murmur_client/protocol/network.dart';
 import 'package:murmur_client/protocol/wire.dart';
 import 'package:murmur_client/services/node_client.dart';
-import 'package:murmur_client/services/secure_channel.dart';
 import 'package:murmur_client/services/transport.dart';
 import 'package:murmur_client/services/transport_io.dart';
 import 'package:murmur_client/services/transport_web.dart' show webSocketUrl, isLoopback;
 import 'package:murmur_client/ui/common.dart' show threadInRoute, threadLink;
 
-/// Just enough of a node for a client to go live: the responder's side of
-/// the key exchange, a Hello for the demo network, and an empty answer to
-/// GetHeaders (a chain of genesis only).
-class _FakeNode {
-  _FakeNode._(this.server, this.version);
-
-  static Future<_FakeNode> bind(InternetAddress address, int port, {int version = protocolVersion}) async =>
-      _FakeNode._(await ServerSocket.bind(address, port), version)..server.listen((s) => _FakeNode._serve(s, version));
-
-  final ServerSocket server;
-  final int version;
-
-  int get port => server.port;
-
-  Future<void> close() => server.close();
-
-  static Future<void> _serve(Socket socket, int version) async {
-    final keyPair = await X25519().newKeyPair();
-    final ours = (await keyPair.extractPublicKey()).bytes;
-    socket.add(ours);
-    final buffer = BytesBuilder();
-    TransportKeys? keys;
-    FrameCipher? reader, sender;
-    int? payloadLength;
-    await for (final chunk in socket) {
-      buffer.add(chunk);
-      if (keys == null) {
-        if (buffer.length < 32) continue;
-        final all = buffer.takeBytes();
-        final theirs = all.sublist(0, 32);
-        buffer.add(all.sublist(32));
-        final shared = await X25519()
-            .sharedSecretKey(keyPair: keyPair, remotePublicKey: SimplePublicKey(theirs, type: KeyPairType.x25519));
-        keys = await TransportKeys.forInitiator(
-            sharedSecret: await shared.extractBytes(), initiatorKey: theirs, responderKey: ours);
-        reader = FrameCipher(keys.sending);
-        sender = FrameCipher(keys.receiving);
-        socket.add(sender.sealFrame(encodePayload(Hello(
-          version: version,
-          genesis: NetworkInfo.demo.genesisHeader().hash,
-          nonce: 42,
-          listenPort: 7878,
-          height: 0,
-          work: BigInt.zero,
-        ))));
-      }
-      while (true) {
-        final need = payloadLength == null ? 20 : payloadLength + 16;
-        if (buffer.length < need) break;
-        final all = buffer.takeBytes();
-        buffer.add(all.sublist(need));
-        final plain = reader!.open(Uint8List.fromList(all.sublist(0, need)));
-        if (payloadLength == null) {
-          payloadLength = ByteData.sublistView(plain).getUint32(0);
-          continue;
-        }
-        payloadLength = null;
-        if (decodeMessage(plain) is GetHeaders) socket.add(sender!.sealFrame(encodePayload(const Headers([]))));
-      }
-    }
-  }
-}
+import 'support/fake_node.dart';
 
 /// A node that takes the connection and drops it: up for TCP, broken after.
 Future<(ServerSocket, List<int>)> _brokenNode(InternetAddress address, int port) async {
@@ -103,7 +39,7 @@ void main() {
 
   group('a name standing for several nodes', () {
     test('a node that takes the connection but breaks the handshake is passed over', () async {
-      final good = await _FakeNode.bind(InternetAddress.loopbackIPv4, 0);
+      final good = await FakeNode.bind(InternetAddress.loopbackIPv4, 0);
       addTearDown(good.close);
       final (broken, accepted) = await _brokenNode(InternetAddress('127.0.0.2'), good.port);
       addTearDown(broken.close);
@@ -119,9 +55,9 @@ void main() {
     });
 
     test('so is a node on another protocol version', () async {
-      final good = await _FakeNode.bind(InternetAddress.loopbackIPv4, 0);
+      final good = await FakeNode.bind(InternetAddress.loopbackIPv4, 0);
       addTearDown(good.close);
-      final old = await _FakeNode.bind(InternetAddress('127.0.0.2'), good.port, version: protocolVersion - 1);
+      final old = await FakeNode.bind(InternetAddress('127.0.0.2'), good.port, version: protocolVersion - 1);
       addTearDown(old.close);
       resolveOverride = (_) async => [InternetAddress('127.0.0.2'), InternetAddress.loopbackIPv4];
       final client = MurmurClient();
@@ -131,7 +67,7 @@ void main() {
     });
 
     test('with every node failing, the error says why, and no retry is scheduled for a version mismatch', () async {
-      final old = await _FakeNode.bind(InternetAddress.loopbackIPv4, 0, version: protocolVersion - 1);
+      final old = await FakeNode.bind(InternetAddress.loopbackIPv4, 0, version: protocolVersion - 1);
       addTearDown(old.close);
       final client = MurmurClient();
       addTearDown(client.dispose);
@@ -152,7 +88,7 @@ void main() {
     await _until(() => client.error != null);
     expect(client.error!.kind, LinkErrorKind.unreachable);
     expect(client.retryAt, isNotNull);
-    final node = await _FakeNode.bind(InternetAddress.loopbackIPv4, port);
+    final node = await FakeNode.bind(InternetAddress.loopbackIPv4, port);
     addTearDown(node.close);
     await _until(() => client.state == LinkState.live, timeout: const Duration(seconds: 10));
     expect(client.error, isNull);

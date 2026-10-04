@@ -37,6 +37,7 @@ import '../protocol/alias.dart' as protocol_alias;
 import '../protocol/bytes.dart';
 import '../protocol/commitments.dart';
 import '../protocol/consensus.dart';
+import '../protocol/header_chain.dart';
 import '../protocol/models.dart';
 import '../protocol/network.dart';
 import '../protocol/wire.dart';
@@ -212,8 +213,9 @@ class MurmurClient extends ChangeNotifier {
 
   /// The best chain's headers: `_headers[i]` is at height i + 1. Started
   /// from a checkpoint, those below `_low` aren't known until the background
-  /// check back to genesis has fetched them (null).
-  final List<BlockHeader?> _headers = [];
+  /// check back to genesis has fetched them (null). Packed: long loops read
+  /// fields with `prevHashAt`, `minerAt` and the like, not whole headers.
+  final _headers = HeaderChain();
 
   /// The lowest height whose header is known: 1, or near the checkpoint
   /// until the headers back to genesis are checked.
@@ -230,7 +232,7 @@ class MurmurClient extends ChangeNotifier {
   HistoryPeaks? _checkpointHistory;
 
   /// Headers from genesis up, checked in the background toward `_low`.
-  final List<BlockHeader> _backfill = [];
+  final _backfill = HeaderChain();
   HistoryPeaks? _backfillHistory;
 
   /// Headers from genesis that a previous session back-filled but didn't
@@ -257,6 +259,22 @@ class MurmurClient extends ChangeNotifier {
   /// The header history through the tip (genesis first): the next header's
   /// `history_root` must be its root.
   HistoryPeaks _history = HistoryPeaks();
+
+  /// Copies of `_history` through every 1024th height, so a reorganization
+  /// rebuilds it from the nearest one below the fork instead of from
+  /// genesis: packed headers rebuilt as objects compute their work again,
+  /// a 128-bit division each, slow on the web.
+  /// Only the last few are kept: deeper reorganizations are rare enough to
+  /// rebuild from genesis.
+  final Map<int, HistoryPeaks> _historyMarks = {};
+  static const _markEvery = 1024;
+
+  /// Records `history`, through `height`, if it's a mark's height.
+  void _markHistory(int height, HistoryPeaks history) {
+    if (height % _markEvery != 0) return;
+    _historyMarks[height] = history.copy();
+    _historyMarks.removeWhere((at, _) => at <= height - 16 * _markEvery);
+  }
 
   /// Blocks fetched so far, aligned with `_headers` (null: not fetched).
   final List<Block?> _blocks = [];
@@ -434,7 +452,7 @@ class MurmurClient extends ChangeNotifier {
   /// A header known to be there (at or above `_low`, or genesis).
   BlockHeader _hdr(int h) => h == 0 ? _genesisHeader! : _headers[h - 1]!;
 
-  Uint8List hashAt(int h) => h == 0 ? genesis! : _hdr(h).hash;
+  Uint8List hashAt(int h) => h == 0 ? genesis! : _headers.hashAt(h - 1)!;
 
   /// The header at `h`, if it's known.
   BlockHeader? headerAt(int h) => h >= 1 && h <= height ? _headers[h - 1] : null;
@@ -443,8 +461,10 @@ class MurmurClient extends ChangeNotifier {
   Block? blockAt(int h) => h >= 1 && h <= height ? _blocks[h - 1] : null;
 
   int? heightOfBlock(String hashHex) {
+    if (!RegExp(r'^[0-9a-f]{64}$').hasMatch(hashHex)) return null;
+    final hash = fromHex(hashHex);
     for (var h = height; h >= _low; h--) {
-      if (_hdr(h).id == hashHex) return h;
+      if (_headers.hashIs(h - 1, hash)) return h;
     }
     return null;
   }
@@ -463,7 +483,7 @@ class MurmurClient extends ChangeNotifier {
     final net = network;
     if (net == null || height == 0) return false;
     final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-    return now - _hdr(height).timestamp > 20 * net.targetBlockSecs;
+    return now - _headers.timestampAt(height - 1)! > 20 * net.targetBlockSecs;
   }
 
   // ---- proven state -------------------------------------------------------------
@@ -627,7 +647,7 @@ class MurmurClient extends ChangeNotifier {
     final loose = _loose[txid];
     if (loose != null && loose.height <= height) {
       return TxView(loose.tx,
-          height: loose.height, blockTime: _hdr(loose.height).timestamp, content: _contentOf(loose.tx));
+          height: loose.height, blockTime: _headers.timestampAt(loose.height - 1)!, content: _contentOf(loose.tx));
     }
     final p = _pending[txid];
     if (p != null) return TxView(p.tx, content: p.content, pending: p);
@@ -692,7 +712,7 @@ class MurmurClient extends ChangeNotifier {
   bool? _filterMatch(int h, Uint8List item, String itemHex) {
     final filter = _filters[h];
     if (filter == null) return null;
-    return _filterMatches['$h:$itemHex'] ??= filterMatchesAny(filter, _hdr(h).prevHash, [item]) ?? true;
+    return _filterMatches['$h:$itemHex'] ??= filterMatchesAny(filter, _headers.prevHashAt(h - 1)!, [item]) ?? true;
   }
 
   /// Whether `address`'s history is still being looked for: some block not
@@ -744,7 +764,7 @@ class MurmurClient extends ChangeNotifier {
         if (running != null) {
           // A block the address mined paid it a reward we can't know here.
           for (var m = rewardsCheckedTo; m >= h; m--) {
-            if (bytesEqual(_hdr(m).miner, item)) {
+            if (_headers.minedBy(m - 1, item)) {
               running = null;
               break;
             }
@@ -947,7 +967,7 @@ class MurmurClient extends ChangeNotifier {
     // During a back-fill, the headers checked from genesis so far are kept,
     // so a later session resumes after them instead of starting over.
     final backfillFrom = _low > 1 && _backfill.length > _backfillSaved ? _backfillSaved + 1 : null;
-    final backfill = backfillFrom == null ? null : List.of(_backfill);
+    final backfill = backfillFrom == null ? null : _backfill.snapshot();
     if (backfill != null) _backfillSaved = backfill.length;
     final blocks = List.of(_unsavedBlocks);
     // Storage saving: old content goes to the local copy only if starred.
@@ -961,12 +981,13 @@ class MurmurClient extends ChangeNotifier {
     _onDisk
       ..addAll(contents.keys)
       ..removeAll(removals);
+    final headers = from == null ? null : _headers.snapshot();
     if (from != null) _headersChangedFrom = null;
     _unsavedBlocks.clear();
     _unsavedContents.clear();
     _unsavedRemovals.clear();
     try {
-      if (from != null) await cache.saveHeaders(toHex(g), _headers.cast<BlockHeader>().toList(), from);
+      if (headers != null) await cache.saveHeaders(toHex(g), headers, from!);
       if (backfill != null) await cache.saveHeaders(toHex(g), backfill, backfillFrom!);
       await cache.saveBlocks(blocks);
       await cache.saveContents(contents);
@@ -1004,16 +1025,21 @@ class MurmurClient extends ChangeNotifier {
       }
       headers.add(h);
       history.pushHeader(h);
+      _markHistory(headers.length, history);
     }
     // A copy that doesn't lead to the checkpoint in force (a newer release
     // may ship one) is of another chain: start over from the checkpoint.
     final cp = _checkpoint;
-    if (cp != null && headers.length >= cp.height && headers[cp.height - 1].id != cp.hash) return;
+    if (cp != null && headers.length >= cp.height && headers[cp.height - 1].id != cp.hash) {
+      _historyMarks.clear();
+      return;
+    }
     // A copy that stops short of the checkpoint is a back-fill a previous
     // session didn't finish (or a copy from before the checkpoint shipped).
     // Start from the checkpoint as usual, so lists show at once, and let the
     // back-fill resume after these headers instead of from genesis.
     if (cp != null && headers.length < cp.height) {
+      _historyMarks.clear(); // of a back-fill, not of the chain's history
       if (headers.isNotEmpty) _resumeBackfill = headers;
       cached.contents.forEach((hash, content) {
         if (toHex(sha256Bytes(content)) == hash) _contents[hash] = content;
@@ -1538,6 +1564,7 @@ class MurmurClient extends ChangeNotifier {
     _headers.add(h);
     _blocks.add(null);
     _history.pushHeader(h);
+    _markHistory(height, _history);
   }
 
   /// Checks `h`, the header after `parent`, as a node does (PROTOCOL.md
@@ -1649,6 +1676,7 @@ class MurmurClient extends ChangeNotifier {
       ..clear()
       ..addAll([for (var h = 1; h < cp.height; h++) context[h]])
       ..add(header);
+    _historyMarks.clear();
     _blocks
       ..clear()
       ..addAll(List<Block?>.filled(cp.height, null));
@@ -1674,16 +1702,17 @@ class MurmurClient extends ChangeNotifier {
     final resume = _resumeBackfill;
     if (resume != null && _backfill.isEmpty) {
       _resumeBackfill = null;
-      _backfill.addAll(resume.take(min(resume.length, _low - 1)));
+      final resumed = resume.take(min(resume.length, _low - 1));
+      _backfill.addAll(resumed);
       _backfillHistory = HistoryPeaks()..pushHeader(_genesisHeader!);
-      for (final h in _backfill) {
+      for (final h in resumed) {
         _backfillHistory!.pushHeader(h);
       }
       _backfillSaved = _backfill.length;
       _backfillFromCache = true;
     }
     final history = _backfillHistory ??= HistoryPeaks()..pushHeader(_genesisHeader!);
-    final locator = [_backfill.isEmpty ? genesis! : _backfill.last.hash];
+    final locator = [_backfill.isEmpty ? genesis! : _backfill.hashAt(_backfill.length - 1)!];
     final headers = await _getHeaders(locator);
     if (gen != _generation) throw _Aborted();
     // Headers from the local copy the node doesn't continue: not the chain
@@ -1706,16 +1735,14 @@ class MurmurClient extends ChangeNotifier {
     }
     // Joined: the first known header must follow, and commit to this history.
     final joint = _hdr(_low);
-    if (!bytesEqual(joint.prevHash, _backfill.last.hash) || !bytesEqual(joint.historyRoot, history.root)) {
+    if (!_backfill.hashIs(_backfill.length - 1, joint.prevHash) || !bytesEqual(joint.historyRoot, history.root)) {
       if (_backfillFromCache) {
         _restartBackfill();
         return true;
       }
       throw LinkError(LinkErrorKind.checkpointMismatch, height: _startedFrom?.height ?? 0);
     }
-    for (var h = 1; h < _low; h++) {
-      _headers[h - 1] = _backfill[h - 1];
-    }
+    _headers.copyStart(_backfill, _low - 1);
     _low = 1;
     _backfill.clear();
     _backfillHistory = null;
@@ -1764,7 +1791,7 @@ class MurmurClient extends ChangeNotifier {
   /// or with its transactions.
   void _storeBlock(Block b, List<MessageContent> contents, {bool save = true}) {
     final h = b.header.height;
-    if (h < 1 || h > height || !bytesEqual(b.header.hash, _hdr(h).hash)) {
+    if (h < 1 || h > height || !_headers.hashIs(h - 1, b.header.hash)) {
       throw FormatException('block $h is not on our chain');
     }
     if (_blocks[h - 1] != null) return;
@@ -1905,7 +1932,7 @@ class MurmurClient extends ChangeNotifier {
     }
     if (_burnPool > 0) entries[toHex(poolKey)] = u64le(_burnPool);
     if (_issued > 0) entries[toHex(issuedKey)] = u64le(_issued);
-    if (!bytesEqual(stateRootOf(entries), _hdr(height).stateRoot)) {
+    if (!bytesEqual(stateRootOf(entries), _headers.stateRootAt(height - 1)!)) {
       error = LinkError(LinkErrorKind.stateMismatch, height: height);
     }
   }
@@ -1985,12 +2012,20 @@ class MurmurClient extends ChangeNotifier {
       if (loose.height > h) unmine(loose.tx);
     }
     _settling.clear();
-    _headers.removeRange(h, _headers.length);
+    _headers.truncate(h);
     _blocks.removeRange(h, _blocks.length);
-    // The history through the new tip: from genesis, or (before the headers
-    // below the checkpoint are in) from the checkpoint's.
+    // The history through the new tip: from the nearest mark below it, from
+    // genesis, or (before the headers below the checkpoint are in) from the
+    // checkpoint's.
+    _historyMarks.removeWhere((at, _) => at > h);
+    final mark = _historyMarks.keys.fold(0, max);
     final base = _checkpointHistory;
-    if (_low > 1 && base != null) {
+    if (mark > 0) {
+      _history = _historyMarks[mark]!.copy();
+      for (var at = mark + 1; at <= h; at++) {
+        _history.pushHeader(_hdr(at));
+      }
+    } else if (_low > 1 && base != null) {
       _history = base.copy();
       for (var at = _startedFrom!.height + 1; at <= h; at++) {
         _history.pushHeader(_hdr(at));
@@ -2035,6 +2070,7 @@ class MurmurClient extends ChangeNotifier {
   void _resetChain() {
     _headers.clear();
     _history = HistoryPeaks();
+    _historyMarks.clear();
     _genesisHeader = null;
     _low = 1;
     _startedFrom = null;
@@ -2102,7 +2138,7 @@ class MurmurClient extends ChangeNotifier {
     // The tip may have moved on (or been reorganized) meanwhile.
     if (!reply.available || at > height || !bytesEqual(hashAt(at), reply.block)) return true;
     final h = at;
-    final root = _hdr(h).stateRoot;
+    final root = _headers.stateRootAt(h - 1)!;
     for (final (key, proof) in reply.proofs) {
       final hex = toHex(key);
       if (!_watchedKeys.containsKey(hex)) continue;
@@ -2128,7 +2164,7 @@ class MurmurClient extends ChangeNotifier {
         for (final (item, start) in _watchedItems.values)
           if (start <= h) item,
       ];
-      if (items.isNotEmpty && (filterMatchesAny(_filters[h]!, _hdr(h).prevHash, items) ?? true)) {
+      if (items.isNotEmpty && (filterMatchesAny(_filters[h]!, _headers.prevHashAt(h - 1)!, items) ?? true)) {
         queued |= _wantedHeights.add(h);
       }
     }
@@ -2148,7 +2184,7 @@ class MurmurClient extends ChangeNotifier {
     for (var i = 0; i < reply.filters.length; i++) {
       final h = start + i;
       if (h > height) break;
-      if (!bytesEqual(sha256Bytes(reply.filters[i]), _hdr(h).filterHash)) {
+      if (!bytesEqual(sha256Bytes(reply.filters[i]), _headers.filterHashAt(h - 1)!)) {
         throw FormatException('the filter of block $h does not match its header');
       }
       _filters[h] = reply.filters[i];

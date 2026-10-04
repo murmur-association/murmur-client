@@ -95,6 +95,7 @@ set TMP=%TEMP%
 lib/
   protocol/   pure Dart, no Flutter: bytes, models (tx, header, block), wire codec (tags 0–23),
               commitments (state tree, block filter, header-history MMR), consensus (MTP, LWMA retarget),
+              header_chain (headers packed in memory),
               network parameters and checkpoints, alias messages (Section 7.8), invitation codes
   crypto/     Ed25519 wallet; address = SHA-256(public key)
   services/   node_client (everything stateful), secure_channel (X25519 + HKDF + ChaCha20-Poly1305),
@@ -105,7 +106,8 @@ lib/
   l10n/       app_<lang>.arb (source) and the generated app_localizations*.dart (committed; CI checks
               they match the ARB files, so run `flutter gen-l10n` or `flutter pub get` after editing an ARB)
 test/         protocol vectors, network (checkpoint form, address fallback, WebSocket URL), thread rules,
-              aliases (Section 7.8 vector, validation, resolving), widget tests, live-node tests
+              aliases (Section 7.8 vector, validation, resolving), widget tests, live-node tests,
+              sync against a fake node (support/fake_node.dart: a generated demo chain)
 tool/         ws_bridge (WebSocket to TCP relay), serve_web, fetch_fallback_fonts (+ the fonts' OFL), render_brand
 web/          index.html, flutter_bootstrap.js (loader config: local fallback fonts), manifest, icons
 ```
@@ -136,7 +138,7 @@ It's a `ChangeNotifier` that the UI rebuilds from (`AppBuilder`). The client han
 When nothing is left, it waits. `_wake()` resumes it: views call things like `requestOlder`, `requestTx`, `requestBlock`, `watchAddress` and `account(...)`, which only record what they want and wake the worker. **Views never await the network.** Each request type has a single waiter (`_headersWaiter`, `_stateWaiter`, and so on), so two concurrent requests of the same type would clash. `feeInfo()` is the only request made from outside the worker, and it shares one in-flight future for that reason.
 
 **Heights and indexes:**
-- `_headers[i]` is height `i + 1`.
+- `_headers[i]` is height `i + 1`. It's packed (`HeaderChain`): `_headers[i]` rebuilds a `BlockHeader`, so loops over many heights read fields instead (`_headers.prevHashAt(h - 1)`, `minedBy`, `hashIs`).
 - `_low` is the lowest known header: 1, or near the checkpoint until back-filled. Below it, entries are null. Use `_hdr(h)` only for `h >= _low`, and `headerAt(h)` otherwise.
 - `_blocks` is aligned with `_headers`; null means not fetched.
 - `_top..height` is the fetched newest stretch.
@@ -313,13 +315,13 @@ A TxStatus of invalid or refused takes the transaction out of nonce and balance 
    - A web client can't get past such a node by itself. Measured: 72 retries against `node.murmur.info` all went to the same broken address, while the native client reached all three nodes. `node.murmur.info` includes broken nodes on purpose, to test this.
    - **Rejected workarounds:** DNS over HTTPS (a third party), connecting by IP (TLS rejects it), per-node names (the network keeps one name). Don't reintroduce them unasked.
 3. **The testnet checkpoint ages.** v0.2.1 ships block 16,000. A first session checks every header after it before lists show (about 3,000 a second in a browser), and the gap grows by 2,880 a day, so refresh it with every release (Recipes). Checkpoints come only with releases; users choose nodes, never checkpoints, and a client never takes one from a node.
-4. **Every header stays in memory, at several times its size.** Measured with `tool/header_bench.dart` on 100,000 valid testnet headers (2026-10-04):
-   - **Checking:** about 160 µs a header in the Dart VM, and about 325 µs in a browser (headless Edge), so roughly 3,000 a second on the web.
-   - **Memory:** about 700 bytes a header in the VM. In the browser it's about 1,200 bytes decoded, and 1,500 once checked (cached hash and id), against 232 on the wire.
-   - **Over time:** a year of testnet (about 1.05 million headers) would need roughly 1.5 GB in a browser, likely too much for a phone. A checkpoint cuts the wait before lists show, but the back-fill still ends with every header held.
-   - **The fix:** keep headers packed in one byte array (232 bytes each) and build `BlockHeader` objects only when needed (the retarget window, pages that show them), plus the history peaks. That's a change to `MurmurClient`'s core (`_headers` is used throughout).
+4. **Headers in memory: packed, except while loading the local copy.** `_headers` and `_backfill` are `HeaderChain`s (`lib/protocol/header_chain.dart`): 264 bytes a header (wire bytes plus hash) in one byte array, with the last 1,024 used kept as objects. Long loops read fields from the bytes (`prevHashAt`, `minerAt`, `hashIs`…). Measured with `tool/header_bench.dart` on 100,000 valid testnet headers (2026-10-04, `check` against `packed`):
+   - **Memory in a browser** (headless Edge): about 376 bytes a header packed, spare capacity included, against 1,500 as objects. A year of testnet (about 1.05 million headers) is about 400 MB rather than 1.5 GB.
+   - **Checking:** about 360 µs a header in a browser and 165 µs in the Dart VM, decoding included (11 to 17% slower than checking objects already decoded).
+   - **Rollbacks** rebuild the header history from a copy kept every 1,024 heights (`_historyMarks`, the last 16), not from genesis: rebuilt headers compute their work again.
+   - **Still to do:** `ChainCache.load` decodes the whole stored chain into objects before `_loadCache` packs it, so a session that starts from the local copy briefly holds it at the old size. Loading it packed (the stored bytes are already the wire encoding) would fix that. The per-height filter maps (`_filters`, `_filterTested`) aren't packed either.
 5. **Flags received aren't found.** An address's history is found through filters, which index `from`, `to` and `reference`. Flags against the address's messages reference the message's txid, not the address. They show only if the flagged messages are watched: a thread page is open, or the chain is counted.
-6. **Only a minimal fake node.** `network_test.dart`'s `_FakeNode` does the handshake and serves an empty chain: enough for connecting and reconnecting. Reorgs, nonces and checkpoints are still only covered by `live_node_test.dart`. Growing the fake node to mine a demo chain would make them testable in CI; every commitment and the retarget are already in `lib/protocol`.
+6. **The fake node serves headers, not transactions.** `test/support/fake_node.dart` generates a valid demo chain of empty blocks (`demoChain`, about a second for 2,600 headers, with forks) and serves it over the real encrypted transport: headers, blocks, header proofs and filters, plus `switchTo` for a reorganization. `sync_test.dart` covers the checkpoint start, the back-fill (stored batch by batch, resumed, restarted) and reorganizations through the history marks. Sending, nonces, state proofs (it answers GetState as unavailable) and content are still only covered by `live_node_test.dart`.
 7. **Native storage path.** `chain_cache_io.dart` uses `APPDATA`, `XDG_DATA_HOME` or `HOME` from the environment. On Android and iOS it falls back to the temp directory. `path_provider` would be the proper fix.
 8. **Transaction signatures in blocks aren't checked.** Merkle roots, filters and PoW are. A block's validity rests on the proof-of-work majority.
 9. **The app's own node, not yet tried in a built desktop app.** It's tested through `LocalNode` directly, not in a packaged Windows, Linux or macOS build. To check there: whether Windows shows a console window for the node, and whether stopping on exit works when the window is closed. There's no published macOS node binary yet (`tool/bundle_node.dart --from` a self-built one).
