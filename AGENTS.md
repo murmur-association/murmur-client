@@ -275,6 +275,12 @@ A TxStatus of invalid or refused takes the transaction out of nonce and balance 
 - **New wire message:** add the class and its encoder and decoder in `wire.dart`, and enforce its limits while decoding. Add a round trip to `protocol_test.dart`'s "messages have the node layout". Handle it in `MurmurClient._handle`: every tag must appear there, since the switch is exhaustive over a sealed class.
 - **Every release refreshes the checkpoint** of each public network (not the demo network, whose chains are all different). A first session checks every header after the checkpoint before showing anything: a two-month-old checkpoint on the testnet means about 170,000 headers. The checkpoint must come from the release, never from a node or the user: a node could hand the client a fake chain's block, and the user only chooses nodes. A newer release's checkpoint that isn't in a user's local copy makes the client drop the copy and start over from it.
 - **Shipping a checkpoint:** once the chain is a few thousand blocks deep, run `murmur-node ctl checkpoint <height>` on a node you trust (for the testnet, node 1). Then uncomment the `checkpoint:` line on that network in `network.dart` and fill it in. `network_test.dart` checks the checkpoint's form and that it lies above the retarget window. Never invent one. Test it live with `live_node_test.dart`'s checkpoint test.
+- **Making a release** (the user asked for it to work like the node's):
+  1. Raise `version:` in `pubspec.yaml`.
+  2. Move CHANGELOG.md's "Unreleased" notes under `## vX.Y.Z: <summary> (<date>)`.
+  3. Commit, then push the tag `vX.Y.Z`.
+
+  The pipeline (`.on-release-tag` in `.gitlab-ci.yml`) refuses a tag that doesn't match the version, then packages the testnet page with `SHA256SUMS` to the package registry, deploys it to Cloudflare Pages, and creates the GitLab Release. Commits never deploy. `v*` tags must stay protected, since the Cloudflare variables are protected. Keep CHANGELOG.md up to date with every change users notice, except the topics the user keeps out of the docs.
 - **New language:**
   1. Copy `app_en.arb` to `app_<code>.arb` and translate the values; keep the placeholders and ICU plural forms.
   2. Add the code to `languageNames` in `lib/ui/l10n.dart`.
