@@ -1406,8 +1406,17 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
-  String get cancelInviteBody =>
-      'Os seus tokens voltam para a sua carteira, e quem tiver o cartão deixa de o poder resgatar.';
+  String cancelInviteBody(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          'Os seus tokens voltam para a sua carteira, e quem tiver os cartões deixa de os poder resgatar.',
+      one:
+          'Os seus tokens voltam para a sua carteira, e quem tiver o cartão deixa de o poder resgatar.',
+    );
+    return '$_temp0';
+  }
 
   @override
   String get keepInvitation => 'Manter';

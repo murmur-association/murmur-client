@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../protocol/alias.dart';
 import '../protocol/bytes.dart';
 import '../protocol/models.dart';
 import '../services/node_client.dart';
@@ -33,6 +34,11 @@ class TxPage extends StatelessWidget {
       final theme = Theme.of(context);
       final text = liveMessageText(context, view);
       final isMessage = tx.kind == TxKind.orphan || tx.kind == TxKind.reply;
+      // A public name (PROTOCOL.md Section 7.8) is an Orphan underneath,
+      // but no thread: called what it is, and not starred.
+      final content = client.liveContent(view);
+      final isAlias = tx.kind == TxKind.orphan && content != null && aliasOf(messageOf(content)) != null;
+      final kind = isAlias ? l.publicName : kindLabel(context, tx.kind);
       final canAct = wallets.wallet != null && isMessage;
       final alreadyFlagged = canAct && client.hasFlagged(wallets.wallet!.addressHex, tx.id);
       // What a Reply answers or a Flag reports.
@@ -41,7 +47,7 @@ class TxPage extends StatelessWidget {
       String n(int v) => formatAmount(context, v);
 
       return Scaffold(
-        appBar: AppBar(title: Text(kindLabel(context, tx.kind)), actions: [if (isMessage) StarButton(tx.id)]),
+        appBar: AppBar(title: Text(kind), actions: [if (isMessage && !client.isNonText(view)) StarButton(tx.id)]),
         body: ListView(padding: const EdgeInsets.all(16), children: [
           _StatusCard(view: view, client: client),
           if (tx.referenceId != null)
@@ -105,7 +111,7 @@ class TxPage extends StatelessWidget {
             ),
           const SizedBox(height: 8),
           InfoRow(l.transactionId, HashText(tx.id)),
-          InfoRow(l.type, Text(kindLabel(context, tx.kind))),
+          InfoRow(l.type, Text(kind)),
           InfoRow(l.from, HashText(tx.fromAddress, onTap: () => openAddress(context, tx.fromAddress))),
           if (tx.toAddress != null)
             InfoRow(l.to, HashText(tx.toAddress!, onTap: () => openAddress(context, tx.toAddress!))),

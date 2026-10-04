@@ -5,6 +5,8 @@ Newest first. Each release is a `vX.Y.Z` tag matching `version` in `pubspec.yaml
 ## Unreleased
 
 - **Added: a release pipeline**, like the node's. A `vX.Y.Z` tag that matches the version in `pubspec.yaml` builds the testnet page, publishes it as `murmur-web-vX.Y.Z.zip` with `SHA256SUMS` to the project's package registry, deploys it to app.murmur.info, and creates a GitLab Release. Other tags, and commits, are only checked.
+- **Fixed:** a public name's own page called it a thread and offered a star; it now says "Public name".
+- **Fixed:** cancelling several invitations asked "Cancel 2 invitations?" above a text about a single card.
 
 ## v0.1.0: first public testnet release (2026-09-30)
 

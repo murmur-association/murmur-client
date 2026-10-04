@@ -1374,7 +1374,14 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
-  String get cancelInviteBody => 'トークンはあなたのウォレットに戻り、カードを持っている人は受け取れなくなります。';
+  String cancelInviteBody(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'トークンはあなたのウォレットに戻り、カードを持っている人は受け取れなくなります。',
+    );
+    return '$_temp0';
+  }
 
   @override
   String get keepInvitation => '残す';

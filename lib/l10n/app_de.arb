@@ -308,7 +308,7 @@
   "cancelInvitation": "Einladung stornieren",
   "inviteCancelled": "Storniert",
   "cancelInviteTitle": "{count, plural, =1{Diese Einladung stornieren?} other{{count} Einladungen stornieren?}}",
-  "cancelInviteBody": "Ihre Token kommen in deine Wallet zurück, und wer die Karte hat, kann sie nicht mehr einlösen.",
+  "cancelInviteBody": "{count, plural, =1{Ihre Token kommen in deine Wallet zurück, und wer die Karte hat, kann sie nicht mehr einlösen.} other{Ihre Token kommen in deine Wallet zurück, und wer die Karten hat, kann sie nicht mehr einlösen.}}",
   "keepInvitation": "Behalten",
   "printOne": "Drucken",
   "inviteDoneSection": "Eingelöst oder storniert ({count})",

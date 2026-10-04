@@ -308,7 +308,7 @@
   "cancelInvitation": "招待をキャンセル",
   "inviteCancelled": "キャンセル済み",
   "cancelInviteTitle": "{count, plural, other{{count} 件の招待をキャンセルしますか？}}",
-  "cancelInviteBody": "トークンはあなたのウォレットに戻り、カードを持っている人は受け取れなくなります。",
+  "cancelInviteBody": "{count, plural, other{トークンはあなたのウォレットに戻り、カードを持っている人は受け取れなくなります。}}",
   "keepInvitation": "残す",
   "printOne": "印刷",
   "inviteDoneSection": "受け取り済み・キャンセル済み（{count}）",

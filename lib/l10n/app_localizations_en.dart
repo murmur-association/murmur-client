@@ -1404,8 +1404,17 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get cancelInviteBody =>
-      'Its tokens come back to your wallet, and whoever has the card can no longer claim it.';
+  String cancelInviteBody(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          'Their tokens come back to your wallet, and whoever has the cards can no longer claim them.',
+      one:
+          'Its tokens come back to your wallet, and whoever has the card can no longer claim it.',
+    );
+    return '$_temp0';
+  }
 
   @override
   String get keepInvitation => 'Keep it';

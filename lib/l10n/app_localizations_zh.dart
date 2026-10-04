@@ -1367,7 +1367,14 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get cancelInviteBody => '其代币会退回你的钱包，持有卡片的人将无法再领取。';
+  String cancelInviteBody(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '其代币会退回你的钱包，持有卡片的人将无法再领取。',
+    );
+    return '$_temp0';
+  }
 
   @override
   String get keepInvitation => '保留';

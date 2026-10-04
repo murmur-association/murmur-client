@@ -263,7 +263,7 @@ class _CancelDialogState extends State<_CancelDialog> {
         content: SizedBox(
           width: 460,
           child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(l.cancelInviteBody),
+            Text(l.cancelInviteBody(widget.records.length)),
             if (ask) ...[
               const SizedBox(height: 16),
               Text(l.cancelReturnTo, style: Theme.of(context).textTheme.titleSmall),

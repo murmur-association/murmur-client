@@ -308,7 +308,7 @@
   "cancelInvitation": "إلغاء الدعوة",
   "inviteCancelled": "ملغاة",
   "cancelInviteTitle": "{count, plural, =1{إلغاء هذه الدعوة؟} =2{إلغاء دعوتين؟} few{إلغاء {count} دعوات؟} many{إلغاء {count} دعوة؟} other{إلغاء {count} دعوة؟}}",
-  "cancelInviteBody": "تعود رموزها إلى محفظتك، ولن يتمكن من يحمل البطاقة من استلامها.",
+  "cancelInviteBody": "{count, plural, =1{تعود رموزها إلى محفظتك، ولن يتمكن من يحمل البطاقة من استلامها.} other{تعود رموزها إلى محفظتك، ولن يتمكن من يحمل البطاقات من استلامها.}}",
   "keepInvitation": "الإبقاء عليها",
   "printOne": "طباعة",
   "inviteDoneSection": "مستلمة أو ملغاة ({count})",

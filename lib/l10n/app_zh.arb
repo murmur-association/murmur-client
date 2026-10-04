@@ -308,7 +308,7 @@
   "cancelInvitation": "取消邀请",
   "inviteCancelled": "已取消",
   "cancelInviteTitle": "{count, plural, other{取消 {count} 份邀请？}}",
-  "cancelInviteBody": "其代币会退回你的钱包，持有卡片的人将无法再领取。",
+  "cancelInviteBody": "{count, plural, other{其代币会退回你的钱包，持有卡片的人将无法再领取。}}",
   "keepInvitation": "保留",
   "printOne": "打印",
   "inviteDoneSection": "已领取或已取消（{count}）",

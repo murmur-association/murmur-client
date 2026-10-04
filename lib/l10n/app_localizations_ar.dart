@@ -1441,8 +1441,15 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
-  String get cancelInviteBody =>
-      'تعود رموزها إلى محفظتك، ولن يتمكن من يحمل البطاقة من استلامها.';
+  String cancelInviteBody(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'تعود رموزها إلى محفظتك، ولن يتمكن من يحمل البطاقات من استلامها.',
+      one: 'تعود رموزها إلى محفظتك، ولن يتمكن من يحمل البطاقة من استلامها.',
+    );
+    return '$_temp0';
+  }
 
   @override
   String get keepInvitation => 'الإبقاء عليها';

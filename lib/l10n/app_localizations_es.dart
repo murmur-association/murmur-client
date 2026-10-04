@@ -1409,8 +1409,17 @@ class AppLocalizationsEs extends AppLocalizations {
   }
 
   @override
-  String get cancelInviteBody =>
-      'Sus tokens vuelven a tu cartera, y quien tenga la tarjeta ya no podrá canjearla.';
+  String cancelInviteBody(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          'Sus tokens vuelven a tu cartera, y quien tenga las tarjetas ya no podrá canjearlas.',
+      one:
+          'Sus tokens vuelven a tu cartera, y quien tenga la tarjeta ya no podrá canjearla.',
+    );
+    return '$_temp0';
+  }
 
   @override
   String get keepInvitation => 'Mantenerla';

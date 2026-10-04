@@ -1410,8 +1410,17 @@ class AppLocalizationsIt extends AppLocalizations {
   }
 
   @override
-  String get cancelInviteBody =>
-      'I suoi token tornano nel tuo portafoglio, e chi ha la tessera non potrà più riscattarla.';
+  String cancelInviteBody(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          'I loro token tornano nel tuo portafoglio, e chi ha le tessere non potrà più riscattarle.',
+      one:
+          'I suoi token tornano nel tuo portafoglio, e chi ha la tessera non potrà più riscattarla.',
+    );
+    return '$_temp0';
+  }
 
   @override
   String get keepInvitation => 'Tienilo';

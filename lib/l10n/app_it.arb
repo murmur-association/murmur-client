@@ -308,7 +308,7 @@
   "cancelInvitation": "Annulla invito",
   "inviteCancelled": "Annullato",
   "cancelInviteTitle": "{count, plural, =1{Annullare questo invito?} other{Annullare {count} inviti?}}",
-  "cancelInviteBody": "I suoi token tornano nel tuo portafoglio, e chi ha la tessera non potrà più riscattarla.",
+  "cancelInviteBody": "{count, plural, =1{I suoi token tornano nel tuo portafoglio, e chi ha la tessera non potrà più riscattarla.} other{I loro token tornano nel tuo portafoglio, e chi ha le tessere non potrà più riscattarle.}}",
   "keepInvitation": "Tienilo",
   "printOne": "Stampa",
   "inviteDoneSection": "Riscattati o annullati ({count})",

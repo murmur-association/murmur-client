@@ -308,7 +308,7 @@
   "cancelInvitation": "Cancelar invitación",
   "inviteCancelled": "Cancelada",
   "cancelInviteTitle": "{count, plural, =1{¿Cancelar esta invitación?} other{¿Cancelar {count} invitaciones?}}",
-  "cancelInviteBody": "Sus tokens vuelven a tu cartera, y quien tenga la tarjeta ya no podrá canjearla.",
+  "cancelInviteBody": "{count, plural, =1{Sus tokens vuelven a tu cartera, y quien tenga la tarjeta ya no podrá canjearla.} other{Sus tokens vuelven a tu cartera, y quien tenga las tarjetas ya no podrá canjearlas.}}",
   "keepInvitation": "Mantenerla",
   "printOne": "Imprimir",
   "inviteDoneSection": "Canjeadas o canceladas ({count})",

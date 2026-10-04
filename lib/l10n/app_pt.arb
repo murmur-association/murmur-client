@@ -308,7 +308,7 @@
   "cancelInvitation": "Cancelar convite",
   "inviteCancelled": "Cancelado",
   "cancelInviteTitle": "{count, plural, =1{Cancelar este convite?} other{Cancelar {count} convites?}}",
-  "cancelInviteBody": "Os seus tokens voltam para a sua carteira, e quem tiver o cartão deixa de o poder resgatar.",
+  "cancelInviteBody": "{count, plural, =1{Os seus tokens voltam para a sua carteira, e quem tiver o cartão deixa de o poder resgatar.} other{Os seus tokens voltam para a sua carteira, e quem tiver os cartões deixa de os poder resgatar.}}",
   "keepInvitation": "Manter",
   "printOne": "Imprimir",
   "inviteDoneSection": "Resgatados ou cancelados ({count})",

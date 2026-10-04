@@ -1963,8 +1963,8 @@ abstract class AppLocalizations {
   /// No description provided for @cancelInviteBody.
   ///
   /// In en, this message translates to:
-  /// **'Its tokens come back to your wallet, and whoever has the card can no longer claim it.'**
-  String get cancelInviteBody;
+  /// **'{count, plural, =1{Its tokens come back to your wallet, and whoever has the card can no longer claim it.} other{Their tokens come back to your wallet, and whoever has the cards can no longer claim them.}}'**
+  String cancelInviteBody(int count);
 
   /// No description provided for @keepInvitation.
   ///

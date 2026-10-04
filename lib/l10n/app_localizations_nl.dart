@@ -1407,8 +1407,17 @@ class AppLocalizationsNl extends AppLocalizations {
   }
 
   @override
-  String get cancelInviteBody =>
-      'De tokens komen terug in je wallet, en wie de kaart heeft kan hem niet meer innen.';
+  String cancelInviteBody(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          'De tokens komen terug in je wallet, en wie de kaarten heeft kan ze niet meer innen.',
+      one:
+          'De tokens komen terug in je wallet, en wie de kaart heeft kan hem niet meer innen.',
+    );
+    return '$_temp0';
+  }
 
   @override
   String get keepInvitation => 'Behouden';
