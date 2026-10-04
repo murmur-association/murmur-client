@@ -2,6 +2,10 @@
 
 Newest first. Each release is a `vX.Y.Z` tag matching `version` in `pubspec.yaml`; see [README](README.md#releases-and-deployment). Entries marked **Breaking** need action from users.
 
+## Unreleased
+
+- **Added: a testnet checkpoint** at block 16,000. A first visit lists threads after checking only the headers above it (about 2.4 seconds against the testnet today, instead of every header since genesis), and checks the rest back to genesis in the background.
+
 ## v0.2.0: protocol 10 (2026-10-04)
 
 **Breaking: protocol 10.** The client needs nodes on protocol 10 (node v0.10.0 or later), and protocol 9 nodes refuse it. The networks (`murmur-testnet-9`, `murmur-demo-9`), their chains and the local copy are unchanged.

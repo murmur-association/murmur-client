@@ -87,10 +87,10 @@ class NetworkInfo {
     maxBlockBytes: 2000000,
     burnPayoutBlocks: 2880,
     lwmaWindow: 90,
-    // None yet. Once the public chain is a few thousand blocks deep, run
-    // `murmur-node ctl checkpoint <height>` on a node you trust and add its
-    // output here, as one line (test/protocol_test.dart checks its form):
-    // checkpoint: Checkpoint(<height>, '<block hash>'),
+    // From `murmur-node ctl checkpoint 16000` on a testnet node the project
+    // trusts, shipped with v0.2.1. Refresh it with every release (AGENTS.md,
+    // Recipes); test/network_test.dart checks its form.
+    checkpoint: Checkpoint(16000, '000000984d06b2a64a16889417e96cb29e53dbb10935d5d2aaa613194a7ffd26'),
   );
 
   static const demo = NetworkInfo(

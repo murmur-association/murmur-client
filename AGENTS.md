@@ -153,7 +153,7 @@ When nothing is left, it waits. `_wake()` resumes it: views call things like `re
 4. Check every header after it fully.
 5. `_backfillHeaders` checks from genesis up in the background, and must join `_low` exactly; otherwise `checkpointMismatch` stops the client. With a local copy, each batch it checks is stored (`_flushCache`, as a header chain from genesis that stops short of the checkpoint), so a later session starts from the checkpoint again and resumes the back-fill after those headers (`_resumeBackfill`). Stored headers that don't lead to the checkpoint are dropped and the back-fill starts over from genesis (`_restartBackfill`), rather than blaming the checkpoint.
 
-A branch that would replace the checkpoint's block is refused. A cached chain that doesn't contain the checkpoint is ignored. Neither network ships a checkpoint yet (`network.dart`).
+A branch that would replace the checkpoint's block is refused. A cached chain that doesn't contain the checkpoint is ignored. The testnet ships one (`network.dart`, block 16,000 since v0.2.1); the demo network can't, since every demo chain is different.
 
 **Sending.** `checkTransaction` applies consensus rules, the proven balance and Section 2.4's rules. `submit`:
 1. salts the content;
@@ -312,7 +312,7 @@ A TxStatus of invalid or refused takes the transaction out of nonce and balance 
    - **Web limit, accepted:** in a browser, page code can't see a name's addresses or choose among them. The browser resolves the name, caches the answer, and reuses the same address. It moves on from an address that refuses or doesn't answer, but not from one that accepts the connection and then fails TLS.
    - A web client can't get past such a node by itself. Measured: 72 retries against `node.murmur.info` all went to the same broken address, while the native client reached all three nodes. `node.murmur.info` includes broken nodes on purpose, to test this.
    - **Rejected workarounds:** DNS over HTTPS (a third party), connecting by IP (TLS rejects it), per-node names (the network keeps one name). Don't reintroduce them unasked.
-3. **No testnet checkpoint shipped yet.** Until one is, every first session (and every session without the local copy) checks all headers from genesis, which grows by 2,880 a day on the testnet. Checkpoints come only with releases (see Recipes); users choose nodes, never checkpoints, and a client never takes one from a node.
+3. **The testnet checkpoint ages.** v0.2.1 ships block 16,000. A first session checks every header after it before lists show (about 3,000 a second in a browser), and the gap grows by 2,880 a day, so refresh it with every release (Recipes). Checkpoints come only with releases; users choose nodes, never checkpoints, and a client never takes one from a node.
 4. **Every header stays in memory, at several times its size.** Measured with `tool/header_bench.dart` on 100,000 valid testnet headers (2026-10-04):
    - **Checking:** about 160 µs a header in the Dart VM, and about 325 µs in a browser (headless Edge), so roughly 3,000 a second on the web.
    - **Memory:** about 700 bytes a header in the VM. In the browser it's about 1,200 bytes decoded, and 1,500 once checked (cached hash and id), against 232 on the wire.
