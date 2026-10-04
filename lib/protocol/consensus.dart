@@ -4,6 +4,8 @@
 // without the blocks. Mirrors murmur core's difficulty.rs, in integer
 // arithmetic (BigInt here, u128 there): every node computes the same target.
 
+import 'bytes.dart';
+import 'commitments.dart';
 import 'models.dart';
 import 'network.dart';
 
@@ -57,4 +59,43 @@ BigInt nextTarget(List<BlockHeader> window, NetworkInfo net) {
 int medianTimePast(List<BlockHeader> lastUpTo11) {
   final times = [for (final h in lastUpTo11) h.timestamp]..sort();
   return times[times.length ~/ 2];
+}
+
+/// Checks header `h` as a node does (PROTOCOL.md Section 7.2): it links to
+/// its parent, meets its target, is later than the median of the last 11
+/// timestamps, carries the retarget's target, and commits to the header
+/// history through its parent (`history`). `at` looks up earlier headers
+/// (genesis included). Throws [FormatException] naming the broken rule.
+///
+/// The client runs this on every header it accepts; `tool/header_bench.dart`
+/// times it.
+void checkHeaderRules(BlockHeader h, BlockHeader? Function(int height) at, HistoryPeaks history, NetworkInfo net) {
+  final parent = at(h.height - 1);
+  if (parent == null || !bytesEqual(h.prevHash, parent.hash)) {
+    throw FormatException('header ${h.height} does not link to its parent');
+  }
+  if (!h.meetsTarget) throw FormatException('header ${h.height} does not meet its proof-of-work target');
+  // The window of earlier headers: the parent back through lwma_window + 1.
+  final window = <BlockHeader>[];
+  for (var i = h.height - 1; i >= 0 && i >= h.height - 1 - net.lwmaWindow; i--) {
+    final header = at(i);
+    if (header == null) break;
+    window.insert(0, header);
+  }
+  final complete = window.first.height == (h.height - 1 - net.lwmaWindow < 0 ? 0 : h.height - 1 - net.lwmaWindow);
+  // Just after a checkpoint the window is the checkpoint's context (90
+  // headers), enough for both rules.
+  if (complete) {
+    final last11 = window.length > 11 ? window.sublist(window.length - 11) : window;
+    if (h.timestamp <= medianTimePast(last11)) {
+      throw FormatException('header ${h.height} is not later than the median of the last 11');
+    }
+    // An unrecognized network's retarget parameters aren't known.
+    if (net.known && h.target != nextTarget(window, net)) {
+      throw FormatException('header ${h.height} does not carry the retarget\'s target');
+    }
+  }
+  if (!bytesEqual(h.historyRoot, history.root)) {
+    throw FormatException('header ${h.height} commits to a different header history');
+  }
 }

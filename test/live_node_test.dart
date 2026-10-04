@@ -18,6 +18,7 @@ import 'package:murmur_client/protocol/bytes.dart';
 import 'package:murmur_client/protocol/models.dart';
 import 'package:murmur_client/protocol/network.dart';
 import 'package:murmur_client/protocol/invite.dart';
+import 'package:murmur_client/services/chain_cache.dart';
 import 'package:murmur_client/services/chain_cache_io.dart';
 import 'package:murmur_client/services/invitations.dart';
 import 'package:murmur_client/services/node_client.dart';
@@ -100,6 +101,44 @@ void main() {
     }
     final kind = wrong.error?.kind == LinkErrorKind.syncFailed ? wrong.error?.cause?.kind : wrong.error?.kind;
     expect(kind, LinkErrorKind.checkpointMismatch);
+  }, skip: _node == null || Platform.environment['MURMUR_CTL'] == null ? 'set MURMUR_NODE and MURMUR_CTL to run' : false,
+      timeout: const Timeout(Duration(minutes: 2)));
+
+  test('a back-fill keeps its progress in the local copy, and a later session resumes after it', () async {
+    final probe = await _connected();
+    final height = probe.height;
+    probe.dispose();
+    expect(height, greaterThan(700), reason: 'the back-fill must reach past the stored headers');
+    final cp = await _checkpointAt(height - 30);
+
+    // A first session back-fills from a checkpoint and stores the chain.
+    // (Each batch of up to 2,000 headers is stored as it's checked; this
+    // chain needs one, so it's stored once joined.)
+    final first = _MemoryCache();
+    final one = MurmurClient(checkpoint: cp)..useCache(first);
+    addTearDown(one.dispose);
+    await _connected(client: one);
+    await _until(one, () => one.checkingFromCheckpoint == null);
+    expect(first.headers.length, greaterThanOrEqualTo(cp.height));
+
+    // A later session finds only the first 500 headers, as an interrupted
+    // back-fill leaves them. It starts from the checkpoint, lists at once,
+    // and resumes the back-fill after them: headers 1 to 500 are the very
+    // ones from the local copy, not fetched again.
+    final stored = first.headers.take(500).toList();
+    final second = _MemoryCache(stored);
+    final two = MurmurClient(checkpoint: cp)..useCache(second);
+    addTearDown(two.dispose);
+    var fromCheckpoint = false;
+    two.addListener(() => fromCheckpoint |= two.checkingFromCheckpoint != null);
+    await _connected(client: two);
+    expect(two.headerAt(cp.height)!.id, cp.hash);
+    await _until(two, () => two.checkingFromCheckpoint == null);
+    expect(fromCheckpoint, isTrue, reason: 'started from the checkpoint, not from the stored headers');
+    expect(identical(two.headerAt(1), stored.first) && identical(two.headerAt(500), stored.last), isTrue,
+        reason: 'resumed after the stored headers');
+    expect(two.headerAt(501)!.id, first.headers[500].id);
+    expect(second.headers.length, greaterThanOrEqualTo(cp.height), reason: 'the joined chain is stored');
   }, skip: _node == null || Platform.environment['MURMUR_CTL'] == null ? 'set MURMUR_NODE and MURMUR_CTL to run' : false,
       timeout: const Timeout(Duration(minutes: 2)));
 
@@ -261,4 +300,37 @@ void main() {
         '${costs.perCard - costs.claimFee} = five threads');
   }, skip: _node == null || _seed == null ? 'set MURMUR_NODE and MURMUR_SEED to run' : false,
       timeout: const Timeout(Duration(minutes: 3)));
+}
+
+/// A local copy in memory that records the header saves the client makes:
+/// (changed from height, number of headers).
+class _MemoryCache implements ChainCache {
+  _MemoryCache([List<BlockHeader>? headers]) : headers = headers ?? [];
+
+  List<BlockHeader> headers;
+  final saves = <(int, int)>[];
+
+  @override
+  Future<CachedChain?> load(String genesis) async => headers.isEmpty ? null : CachedChain(List.of(headers), {}, {});
+
+  @override
+  Future<void> saveHeaders(String genesis, List<BlockHeader> headers, int changedFrom) async {
+    saves.add((changedFrom, headers.length));
+    this.headers = List.of(headers);
+  }
+
+  @override
+  Future<void> saveBlocks(List<Block> blocks) async {}
+
+  @override
+  Future<void> saveContents(Map<String, Uint8List> contents) async {}
+
+  @override
+  Future<void> removeContents(Set<String> hashes) async {}
+
+  @override
+  Future<void> dropBlocksAbove(int height) async {}
+
+  @override
+  Future<void> clear() async => headers = [];
 }

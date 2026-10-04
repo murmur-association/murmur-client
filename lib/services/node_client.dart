@@ -233,6 +233,18 @@ class MurmurClient extends ChangeNotifier {
   final List<BlockHeader> _backfill = [];
   HistoryPeaks? _backfillHistory;
 
+  /// Headers from genesis that a previous session back-filled but didn't
+  /// finish (from the local copy): the back-fill resumes after them.
+  List<BlockHeader>? _resumeBackfill;
+
+  /// Whether `_backfill` began with headers from the local copy. If they
+  /// turn out not to lead to the checkpoint (another chain's, after a deep
+  /// reorganization), they're dropped and the back-fill starts over.
+  bool _backfillFromCache = false;
+
+  /// How many back-filled headers are in the local copy already.
+  int _backfillSaved = 0;
+
   /// A checkpoint to start from instead of the network's own (tests, or a
   /// release that ships one elsewhere).
   final Checkpoint? checkpoint;
@@ -932,6 +944,11 @@ class MurmurClient extends ChangeNotifier {
     final g = genesis;
     if (cache == null || g == null) return;
     final from = _low == 1 ? _headersChangedFrom : null;
+    // During a back-fill, the headers checked from genesis so far are kept,
+    // so a later session resumes after them instead of starting over.
+    final backfillFrom = _low > 1 && _backfill.length > _backfillSaved ? _backfillSaved + 1 : null;
+    final backfill = backfillFrom == null ? null : List.of(_backfill);
+    if (backfill != null) _backfillSaved = backfill.length;
     final blocks = List.of(_unsavedBlocks);
     // Storage saving: old content goes to the local copy only if starred.
     final contents = Map.of(_unsavedContents)..removeWhere((key, _) => !_keepOnDisk(key));
@@ -950,6 +967,7 @@ class MurmurClient extends ChangeNotifier {
     _unsavedRemovals.clear();
     try {
       if (from != null) await cache.saveHeaders(toHex(g), _headers.cast<BlockHeader>().toList(), from);
+      if (backfill != null) await cache.saveHeaders(toHex(g), backfill, backfillFrom!);
       await cache.saveBlocks(blocks);
       await cache.saveContents(contents);
       await cache.removeContents(removals);
@@ -991,6 +1009,18 @@ class MurmurClient extends ChangeNotifier {
     // may ship one) is of another chain: start over from the checkpoint.
     final cp = _checkpoint;
     if (cp != null && headers.length >= cp.height && headers[cp.height - 1].id != cp.hash) return;
+    // A copy that stops short of the checkpoint is a back-fill a previous
+    // session didn't finish (or a copy from before the checkpoint shipped).
+    // Start from the checkpoint as usual, so lists show at once, and let the
+    // back-fill resume after these headers instead of from genesis.
+    if (cp != null && headers.length < cp.height) {
+      if (headers.isNotEmpty) _resumeBackfill = headers;
+      cached.contents.forEach((hash, content) {
+        if (toHex(sha256Bytes(content)) == hash) _contents[hash] = content;
+      });
+      _onDisk.addAll(cached.contents.keys);
+      return;
+    }
     _headers.addAll(headers);
     _blocks.addAll(List<Block?>.filled(headers.length, null));
     _history = history;
@@ -1511,35 +1541,7 @@ class MurmurClient extends ChangeNotifier {
   /// and commits to the header history through its parent (`history`).
   /// `at` looks up the earlier headers (genesis included).
   void _checkHeader(BlockHeader h, BlockHeader? Function(int height) at, HistoryPeaks history) {
-    final parent = at(h.height - 1);
-    if (parent == null || !bytesEqual(h.prevHash, parent.hash)) {
-      throw FormatException('header ${h.height} does not link to its parent');
-    }
-    if (!h.meetsTarget) throw FormatException('header ${h.height} does not meet its proof-of-work target');
-    final net = network!;
-    // The window of earlier headers: the parent back through lwma_window + 1.
-    final window = <BlockHeader>[];
-    for (var i = h.height - 1; i >= 0 && i >= h.height - 1 - net.lwmaWindow; i--) {
-      final header = at(i);
-      if (header == null) break;
-      window.insert(0, header);
-    }
-    final complete = window.first.height == max(0, h.height - 1 - net.lwmaWindow);
-    // Just after a checkpoint the window is the checkpoint's context (90
-    // headers), enough for both rules.
-    if (complete) {
-      final last11 = window.length > 11 ? window.sublist(window.length - 11) : window;
-      if (h.timestamp <= medianTimePast(last11)) {
-        throw FormatException('header ${h.height} is not later than the median of the last 11');
-      }
-      // An unrecognized network's retarget parameters aren't known.
-      if (net.known && h.target != nextTarget(window, net)) {
-        throw FormatException('header ${h.height} does not carry the retarget\'s target');
-      }
-    }
-    if (!bytesEqual(h.historyRoot, history.root)) {
-      throw FormatException('header ${h.height} commits to a different header history');
-    }
+    checkHeaderRules(h, at, history, network!);
     // Reaching the checkpoint's height (from a local copy that stopped
     // short of it), the chain must hold the checkpoint.
     final cp = _checkpoint;
@@ -1662,10 +1664,29 @@ class MurmurClient extends ChangeNotifier {
   /// every node reached is wrong: the client stops and says so.
   Future<bool> _backfillHeaders(int gen) async {
     if (_low <= 1) return false;
+    // A previous session's unfinished back-fill, from the local copy: resume
+    // after it (up to the checkpoint's context, where it joins).
+    final resume = _resumeBackfill;
+    if (resume != null && _backfill.isEmpty) {
+      _resumeBackfill = null;
+      _backfill.addAll(resume.take(min(resume.length, _low - 1)));
+      _backfillHistory = HistoryPeaks()..pushHeader(_genesisHeader!);
+      for (final h in _backfill) {
+        _backfillHistory!.pushHeader(h);
+      }
+      _backfillSaved = _backfill.length;
+      _backfillFromCache = true;
+    }
     final history = _backfillHistory ??= HistoryPeaks()..pushHeader(_genesisHeader!);
     final locator = [_backfill.isEmpty ? genesis! : _backfill.last.hash];
     final headers = await _getHeaders(locator);
     if (gen != _generation) throw _Aborted();
+    // Headers from the local copy the node doesn't continue: not the chain
+    // anymore. Start over from genesis rather than blame the checkpoint.
+    if (_backfillFromCache && headers.isNotEmpty && headers.first.height != _backfill.length + 1 && headers.first.height < _low) {
+      _restartBackfill();
+      return true;
+    }
     BlockHeader? at(int h) => h == 0 ? _genesisHeader : (h <= _backfill.length ? _backfill[h - 1] : null);
     for (final h in headers) {
       if (h.height >= _low) break;
@@ -1681,6 +1702,10 @@ class MurmurClient extends ChangeNotifier {
     // Joined: the first known header must follow, and commit to this history.
     final joint = _hdr(_low);
     if (!bytesEqual(joint.prevHash, _backfill.last.hash) || !bytesEqual(joint.historyRoot, history.root)) {
+      if (_backfillFromCache) {
+        _restartBackfill();
+        return true;
+      }
       throw LinkError(LinkErrorKind.checkpointMismatch, height: _startedFrom?.height ?? 0);
     }
     for (var h = 1; h < _low; h++) {
@@ -1689,12 +1714,23 @@ class MurmurClient extends ChangeNotifier {
     _low = 1;
     _backfill.clear();
     _backfillHistory = null;
+    _backfillFromCache = false;
+    _backfillSaved = 0;
     _checkpointHistory = null;
     _headersChangedFrom = 1; // now the whole chain can be kept
     _wantedTxids.addAll(_deferredTxids);
     _deferredTxids.clear();
     _advance();
     return true;
+  }
+
+  /// Drops a back-fill begun from the local copy (it didn't lead to the
+  /// checkpoint) and starts it again from genesis, checking every header.
+  void _restartBackfill() {
+    _backfill.clear();
+    _backfillHistory = null;
+    _backfillFromCache = false;
+    _backfillSaved = 0;
   }
 
   /// Fetches the blocks at `heights` (≤ 128). A reply may stop early at the
@@ -2000,6 +2036,9 @@ class MurmurClient extends ChangeNotifier {
     _checkpointHistory = null;
     _backfill.clear();
     _backfillHistory = null;
+    _resumeBackfill = null;
+    _backfillFromCache = false;
+    _backfillSaved = 0;
     _blocks.clear();
     _fetched = 0;
     _top = 1;

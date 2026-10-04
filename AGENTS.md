@@ -21,6 +21,8 @@ dart run tool/fetch_fallback_fonts.dart   # copies the engine's fallback fonts n
 dart run tool/serve_web.dart          # serves build/web on http://localhost:8080
 dart run tool/ws_bridge.dart --node 127.0.0.1:7878   # only for nodes without --ws-port
 flutter test tool/render_brand.dart   # regenerates web icons and build/brand_preview.png
+dart run tool/header_bench.dart generate 100000 build/headers.bin   # a valid testnet header chain
+dart run tool/header_bench.dart check build/headers.bin             # times the header checks (also in a browser: header_bench_web.dart)
 ```
 
 Live tests run against a real node and are skipped unless their variables are set:
@@ -149,7 +151,7 @@ When nothing is left, it waits. `_wake()` resumes it: views call things like `re
 2. Fetch the 90 headers before it, with GetHeaderProof, checked by linkage.
 3. Take the history peaks through it.
 4. Check every header after it fully.
-5. `_backfillHeaders` checks from genesis up in the background, and must join `_low` exactly; otherwise `checkpointMismatch` stops the client.
+5. `_backfillHeaders` checks from genesis up in the background, and must join `_low` exactly; otherwise `checkpointMismatch` stops the client. With a local copy, each batch it checks is stored (`_flushCache`, as a header chain from genesis that stops short of the checkpoint), so a later session starts from the checkpoint again and resumes the back-fill after those headers (`_resumeBackfill`). Stored headers that don't lead to the checkpoint are dropped and the back-fill starts over from genesis (`_restartBackfill`), rather than blaming the checkpoint.
 
 A branch that would replace the checkpoint's block is refused. A cached chain that doesn't contain the checkpoint is ignored. Neither network ships a checkpoint yet (`network.dart`).
 
@@ -311,7 +313,11 @@ A TxStatus of invalid or refused takes the transaction out of nonce and balance 
    - A web client can't get past such a node by itself. Measured: 72 retries against `node.murmur.info` all went to the same broken address, while the native client reached all three nodes. `node.murmur.info` includes broken nodes on purpose, to test this.
    - **Rejected workarounds:** DNS over HTTPS (a third party), connecting by IP (TLS rejects it), per-node names (the network keeps one name). Don't reintroduce them unasked.
 3. **No testnet checkpoint shipped yet.** Until one is, every first session (and every session without the local copy) checks all headers from genesis, which grows by 2,880 a day on the testnet. Checkpoints come only with releases (see Recipes); users choose nodes, never checkpoints, and a client never takes one from a node.
-4. **Back-fill doesn't resume.** Headers below a checkpoint are fetched again every session until a cache holds the chain from genesis.
+4. **Every header stays in memory, at several times its size.** Measured with `tool/header_bench.dart` on 100,000 valid testnet headers (2026-10-04):
+   - **Checking:** about 160 µs a header in the Dart VM, and about 325 µs in a browser (headless Edge), so roughly 3,000 a second on the web.
+   - **Memory:** about 700 bytes a header in the VM. In the browser it's about 1,200 bytes decoded, and 1,500 once checked (cached hash and id), against 232 on the wire.
+   - **Over time:** a year of testnet (about 1.05 million headers) would need roughly 1.5 GB in a browser, likely too much for a phone. A checkpoint cuts the wait before lists show, but the back-fill still ends with every header held.
+   - **The fix:** keep headers packed in one byte array (232 bytes each) and build `BlockHeader` objects only when needed (the retarget window, pages that show them), plus the history peaks. That's a change to `MurmurClient`'s core (`_headers` is used throughout).
 5. **Flags received aren't found.** An address's history is found through filters, which index `from`, `to` and `reference`. Flags against the address's messages reference the message's txid, not the address. They show only if the flagged messages are watched: a thread page is open, or the chain is counted.
 6. **Only a minimal fake node.** `network_test.dart`'s `_FakeNode` does the handshake and serves an empty chain: enough for connecting and reconnecting. Reorgs, nonces and checkpoints are still only covered by `live_node_test.dart`. Growing the fake node to mine a demo chain would make them testable in CI; every commitment and the retarget are already in `lib/protocol`.
 7. **Native storage path.** `chain_cache_io.dart` uses `APPDATA`, `XDG_DATA_HOME` or `HOME` from the environment. On Android and iOS it falls back to the temp directory. `path_provider` would be the proper fix.
