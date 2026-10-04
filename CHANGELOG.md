@@ -2,7 +2,9 @@
 
 Newest first. Each release is a `vX.Y.Z` tag matching `version` in `pubspec.yaml`; see [README](README.md#releases-and-deployment). Entries marked **Breaking** need action from users.
 
-## Unreleased
+## v0.1.1: release pipeline, two fixes (2026-10-04)
+
+No protocol or network change.
 
 - **Added: a release pipeline**, like the node's. A `vX.Y.Z` tag that matches the version in `pubspec.yaml` builds the testnet page, publishes it as `murmur-web-vX.Y.Z.zip` with `SHA256SUMS` to the project's package registry, deploys it to app.murmur.info, and creates a GitLab Release. Other tags, and commits, are only checked.
 - **Fixed:** a public name's own page called it a thread and offered a star; it now says "Public name".
