@@ -103,6 +103,35 @@ void main() {
     expect(maxContentSize, 1040);
   });
 
+  test('compact block relay messages have the node layout (Section 7.9)', () async {
+    // The vectors of NODE-PROTOCOL-10.md: SendCompact, and GetBlockTxs for
+    // block 08 x 32, indexes 0 and 4096.
+    expect(encodePayload(const SendCompact()), [0x18]);
+    expect(decodeMessage(Uint8List.fromList([0x18])), isA<SendCompact>());
+    final get = encodePayload(GetBlockTxs(_filled(8), const [0, 4096]));
+    expect(toHex(get), '1a${'08' * 32}000000020000000000001000');
+    final got = decodeMessage(get) as GetBlockTxs;
+    expect(toHex(got.block), '08' * 32);
+    expect(got.indexes, [0, 4096]);
+
+    // CompactBlock: header, found_ms, short ids (the first 8 bytes of txids).
+    final header = NetworkInfo.demo.genesisHeader();
+    final compact =
+        decodeMessage(encodePayload(CompactBlock(header, 1790208000123, [_filled(1, 8), _filled(2, 8)]))) as CompactBlock;
+    expect((compact.header.id, compact.foundMs), (header.id, 1790208000123));
+    expect(compact.shortIds.map(toHex), ['01' * 8, '02' * 8]);
+
+    // BlockTxs: transactions as everywhere else.
+    final w = await MurmurWallet.generate();
+    final tx = await w.sign(kind: TxKind.raw, nonce: 0, to: _filled(7), amount: 5, fee: 1, messageHash: null, timestamp: 1);
+    final txs = decodeMessage(encodePayload(BlockTxs(_filled(9), [tx]))) as BlockTxs;
+    expect((toHex(txs.block), txs.txs.single.id), ('09' * 32, tx.id));
+
+    // Over the limit is malformed, like every other count.
+    final tooMany = Uint8List.fromList([0x1a, ..._filled(8), 0, 0, 0x27, 0x11]); // 10,001
+    expect(() => decodeMessage(tooMany), throwsFormatException);
+  });
+
   test('messages have the node layout', () async {
     final hello = encodePayload(Hello(
       version: protocolVersion,
@@ -114,7 +143,7 @@ void main() {
     ));
     // tag(1) version(4) genesis(32) nonce(8) port(2) height(8) work(16)
     expect(hello.length, 71);
-    expect(hello.sublist(0, 5), [0, 0, 0, 0, 9]);
+    expect(hello.sublist(0, 5), [0, 0, 0, 0, 10]);
 
     final w = await MurmurWallet.generate();
     final flag = await w.sign(

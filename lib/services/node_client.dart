@@ -1362,6 +1362,11 @@ class MurmurClient extends ChangeNotifier {
             GetFilters() ||
             GetHeaderProof():
         break;
+      // Compact block relay is between nodes (Section 7.9): every node sends
+      // SendCompact after its Hello, and the client never asks for compact
+      // blocks, so it keeps receiving NewBlock. Ignored.
+      case SendCompact() || CompactBlock() || GetBlockTxs() || BlockTxs():
+        break;
     }
   }
 

@@ -2,7 +2,7 @@
 // run a node of its own (lib/services/local_node.dart). Run after
 // `flutter build windows|linux|macos`:
 //
-//   dart run tool/bundle_node.dart --version v0.9.0      # a published release
+//   dart run tool/bundle_node.dart --version v0.10.0     # a published release
 //   dart run tool/bundle_node.dart --from <murmur-node>  # a binary at hand
 //   ... [--into <dir>]                                   # another build folder
 //

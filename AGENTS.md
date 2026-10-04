@@ -4,7 +4,7 @@ Working notes for anyone changing this repository, human or agent. [README.md](R
 
 ## What this is
 
-A Flutter light client for the Murmur chain. The node, and the protocol's source of truth, live in the sibling repository [`../murmur`](https://gitlab.com/elc4no/murmur): `PROTOCOL.md` (wire format, consensus, test vectors) and `CHANGELOG.md`. The client speaks **protocol 9** (`murmur-testnet-9`, `murmur-demo-9`). **Where this code and PROTOCOL.md disagree, PROTOCOL.md wins.** Section numbers in comments (for example "Section 3.6") refer to it. Don't edit `../murmur` from here: propose node changes to its owner instead.
+A Flutter light client for the Murmur chain. The node, and the protocol's source of truth, live in the sibling repository [`../murmur`](https://gitlab.com/elc4no/murmur): `PROTOCOL.md` (wire format, consensus, test vectors) and `CHANGELOG.md`. The client speaks **protocol 10** (`murmur-testnet-9`, `murmur-demo-9`: the networks kept their names from protocol 9). Of protocol 10's compact block relay (Section 7.9) it only decodes the four messages and ignores them: it never sends `SendCompact`, so nodes keep sending it whole blocks (`NewBlock`). **Where this code and PROTOCOL.md disagree, PROTOCOL.md wins.** Section numbers in comments (for example "Section 3.6") refer to it. Don't edit `../murmur` from here: propose node changes to its owner instead.
 
 Targets: the web (the main one), plus Windows, Linux, macOS, Android and iOS. Only `web/` is committed; generate the other platform folders with `flutter create` (see README).
 
@@ -113,7 +113,7 @@ web/          index.html, flutter_bootstrap.js (loader config: local fallback fo
 ### `MurmurClient` (lib/services/node_client.dart)
 
 One connection to one node.
-- **Connecting** (`_handshake`): a try counts only once the node is through the key exchange and has sent a Hello for protocol 9. A node that fails anywhere before that is passed over for the name's next address: unreachable, dropping the connection, silent, or on another version. Natively the client picks untried addresses itself. On the web the browser picks, and keeps reusing the same address, so the 3 tries there only help with passing failures (see the web limit under Known gaps).
+- **Connecting** (`_handshake`): a try counts only once the node is through the key exchange and has sent a Hello for this protocol version (`protocolVersion`). A node that fails anywhere before that is passed over for the name's next address: unreachable, dropping the connection, silent, or on another version. Natively the client picks untried addresses itself. On the web the browser picks, and keeps reusing the same address, so the 3 tries there only help with passing failures (see the web limit under Known gaps).
 - **Reconnecting** (`_fail`, `retryAt`): after a failure retrying can fix (unreachable, closed, timeout, a tampered frame), the client connects again by itself, waiting 2 s, then 4, 8… up to a minute. The wait resets once live, and the banner counts it down. Everything fetched and checked is kept. A version mismatch, a checkpoint mismatch or a state-root mismatch is not retried, and neither is anything after the user's Disconnect.
 - **Native** (`transport_io.dart`): the client dials a `host:port`. A name is resolved, and every address it returns is tried in random order (`connectFirst`), so a DNS seed works as the node. `resolveOverride` replaces DNS in tests.
 - **Web** (`transport_web.dart`): the client uses `wss://` on port 443 or on an HTTPS page, and `ws://` otherwise (the local bridge).

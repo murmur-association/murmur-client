@@ -13,7 +13,7 @@ import 'bytes.dart';
 import 'commitments.dart';
 import 'models.dart';
 
-const protocolVersion = 9;
+const protocolVersion = 10;
 
 /// Payloads over this are a protocol violation.
 const maxPayloadBytes = 16 * 1024 * 1024;
@@ -31,6 +31,9 @@ const maxHeaderProofs = 64;
 
 /// Filters per GetFilters.
 const maxFilters = 1000;
+
+/// Transactions in a CompactBlock, GetBlockTxs or BlockTxs (Section 7.9).
+const maxCompactTxs = 10000;
 
 sealed class Message {
   const Message();
@@ -264,6 +267,45 @@ class HeaderProof extends Message {
 
   /// Each requested header, with its sibling nodes inside its peak.
   final List<(BlockHeader, List<HistoryNode>)> entries;
+}
+
+// ---- compact block relay, between nodes (Section 7.9) ---------------------------
+//
+// Nodes announce new blocks to each other by short txids and rebuild them
+// from their pools. A light client keeps no full pool, so it never asks for
+// this (never sends SendCompact) and keeps receiving NewBlock. It still
+// decodes all four, since decoding is strict and every node sends
+// SendCompact right after its Hello.
+
+/// "Announce new blocks to me as CompactBlock." Sent by nodes, ignored here.
+class SendCompact extends Message {
+  const SendCompact();
+}
+
+/// A new block by its transactions' short ids (the first 8 bytes of each
+/// txid), in block order.
+class CompactBlock extends Message {
+  const CompactBlock(this.header, this.foundMs, this.shortIds);
+
+  final BlockHeader header;
+  final int foundMs;
+  final List<Uint8List> shortIds;
+}
+
+/// Transactions of a CompactBlock's block, asked for by position.
+class GetBlockTxs extends Message {
+  const GetBlockTxs(this.block, this.indexes);
+
+  final Uint8List block;
+  final List<int> indexes;
+}
+
+/// The transactions asked for with GetBlockTxs, in that order.
+class BlockTxs extends Message {
+  const BlockTxs(this.block, this.txs);
+
+  final Uint8List block;
+  final List<Transaction> txs;
 }
 
 // ---- transactions and blocks ------------------------------------------------
@@ -687,6 +729,33 @@ Uint8List encodePayload(Message message) {
         _encodeHeader(w, header);
         _encodeHistoryNodes(w, siblings);
       }
+    case SendCompact():
+      w.u8(24);
+    case final CompactBlock msg:
+      w.u8(25);
+      _encodeHeader(w, msg.header);
+      w
+        ..u64(msg.foundMs)
+        ..u32(msg.shortIds.length);
+      for (final id in msg.shortIds) {
+        w.bytes(id);
+      }
+    case final GetBlockTxs msg:
+      w
+        ..u8(26)
+        ..bytes(msg.block)
+        ..u32(msg.indexes.length);
+      for (final i in msg.indexes) {
+        w.u32(i);
+      }
+    case final BlockTxs msg:
+      w
+        ..u8(27)
+        ..bytes(msg.block)
+        ..u32(msg.txs.length);
+      for (final tx in msg.txs) {
+        _encodeTx(w, tx);
+      }
   }
   return w.take();
 }
@@ -806,6 +875,24 @@ Message decodeMessage(Uint8List payload) {
       final n = r.u32();
       if (n > maxHeaderProofs) throw FormatException('$n header proofs exceeds limit');
       msg = HeaderProof(at, available, peaks, [for (var i = 0; i < n; i++) (_decodeHeader(r), _decodeHistoryNodes(r))]);
+    case 24:
+      msg = const SendCompact();
+    case 25:
+      final header = _decodeHeader(r);
+      final foundMs = r.u64();
+      final n = r.u32();
+      if (n > maxCompactTxs) throw FormatException('$n short ids exceeds limit');
+      msg = CompactBlock(header, foundMs, [for (var i = 0; i < n; i++) r.take(8)]);
+    case 26:
+      final block = r.hash32();
+      final n = r.u32();
+      if (n > maxCompactTxs) throw FormatException('$n indexes exceeds limit');
+      msg = GetBlockTxs(block, [for (var i = 0; i < n; i++) r.u32()]);
+    case 27:
+      final block = r.hash32();
+      final n = r.u32();
+      if (n > maxCompactTxs) throw FormatException('$n transactions exceeds limit');
+      msg = BlockTxs(block, [for (var i = 0; i < n; i++) _decodeTx(r)]);
     default:
       throw FormatException('unknown message tag $tag');
   }

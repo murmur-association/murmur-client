@@ -1,4 +1,4 @@
-// Integration tests against a running protocol 9 node. Skipped unless
+// Integration tests against a running node of this protocol version. Skipped unless
 // MURMUR_NODE is set, e.g.:
 //
 //   murmur-node --spec demo --mine-to <address>

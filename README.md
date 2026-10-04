@@ -1,6 +1,6 @@
 # Murmur client
 
-A Flutter light client for the Murmur chain, speaking **protocol 9** (networks `murmur-demo-9` and `murmur-testnet-9`). The node, the whitepaper and the protocol specification live in the [murmur repository](https://gitlab.com/elc4no/murmur); section numbers below refer to its [PROTOCOL.md](https://gitlab.com/elc4no/murmur/-/blob/main/PROTOCOL.md). With the client you can:
+A Flutter light client for the Murmur chain, speaking **protocol 10** (networks `murmur-demo-9` and `murmur-testnet-9`, which keep their names). The node, the whitepaper and the protocol specification live in the [murmur repository](https://gitlab.com/elc4no/murmur); section numbers below refer to its [PROTOCOL.md](https://gitlab.com/elc4no/murmur/-/blob/main/PROTOCOL.md). With the client you can:
 
 - read threads and their replies, newest activity first, with reply and flag counts;
 - browse blocks, transactions and addresses, and search by height, txid, block hash or address;
@@ -52,7 +52,7 @@ Every header is checked as a node checks it (Section 7.2): it links to its paren
 
 If the newest block is old for the network (about 20 block intervals), a banner says the node may be behind or cut off.
 
-What it shows is checked against those headers, because every protocol 9 header commits to its block's transactions, its **filter** and the **state** after it (Section 3.6):
+What it shows is checked against those headers, because every header commits to its block's transactions, its **filter** and the **state** after it (Section 3.6):
 
 - **Balances, nonces, flags, the burn pool and the supply** come as state proofs (`GetState`) against the tip's `state_root`. They're exact at once, without the chain, and a node can't lie about them.
 - **An address's history, and a thread's replies,** are found with block filters (`GetFilters`), each checked against its header's `filter_hash`. Only the blocks that match are fetched, and a node can't hide one. The node never learns which address the client looks for.
@@ -184,7 +184,7 @@ The node is set up to keep the user out of hosting other people's content: it li
 The option appears only when `murmur-node` is next to the app's executable. After `flutter build windows` (or `linux`, `macos`), put it there:
 
 ```
-dart run tool/bundle_node.dart --version v0.9.0      # a published release, checked against SHA256SUMS
+dart run tool/bundle_node.dart --version v0.10.0     # a published release, checked against SHA256SUMS
 dart run tool/bundle_node.dart --from <murmur-node>  # or a binary you built
 ```
 
