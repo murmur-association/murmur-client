@@ -6,6 +6,9 @@ Newest first. Each release is a `vX.Y.Z` tag matching `version` in `pubspec.yaml
 
 - **Added: a testnet checkpoint** at block 16,000. A first visit lists threads after checking only the headers above it (about 2.4 seconds against the testnet today, instead of every header since genesis), and checks the rest back to genesis in the background.
 - **Changed: headers are packed in memory.** The client keeps each checked header as its 232 wire bytes plus its hash, in one byte array, instead of an object of about 1,500 bytes in a browser. Measured on 100,000 testnet headers in headless Edge: about 376 bytes a header, four times less, so a year of testnet takes about 400 MB rather than 1.5 GB. Checking takes 11 to 17% longer per header. A reorganization rebuilds the header history from a copy kept every 1,024 blocks, not from genesis.
+- **Fixed: a reply or transfer sent right after one's own transaction was mined could be refused** ("nonce already used"): the nonce proof lags a new block, and a transaction mined since counted neither as pending nor in the proof. Those transactions now count toward the next nonce and the available balance.
+- **Fixed: the desktop and mobile apps stopped when the node dropped an open connection** (a node restarting, for one) instead of connecting again by themselves. A broken connection is now retried like an unreachable node, on the web too.
+- **Changed: tests against the real node need no setup.** `test/node_test.dart` generates demo chains, starts `murmur-node` on them (`MURMUR_NODE_BIN`) and runs the sync, checkpoint, reorganization, sending and invitation tests in seconds; the node's own validation judges every generated block. `test/live_node_test.dart` keeps only read-only checks of a public node.
 - **Changed: `tool/header_bench.dart packed`** measures headers as the client now keeps them, in the Dart VM and in a browser (`?packed`).
 
 ## v0.2.0: protocol 10 (2026-10-04)

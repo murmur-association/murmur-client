@@ -477,6 +477,12 @@ class MurmurClient extends ChangeNotifier {
   /// Headers checked from genesis so far, toward the checkpoint.
   int get checkedTowardGenesis => _backfill.length;
 
+  /// Headers this session took from the node and checked in full (link,
+  /// work, time, retarget, history). Those reloaded from the local copy
+  /// aren't counted: a back-fill resumed after them fetches only the rest.
+  int get headersFromNode => _headersFromNode;
+  int _headersFromNode = 0;
+
   /// Whether the newest block is old for this network (about 20 block
   /// intervals): this node may be behind, or cut off from the others.
   bool get tipLooksOld {
@@ -552,13 +558,35 @@ class MurmurClient extends ChangeNotifier {
     return code != TxStatusCode.invalid && code != TxStatusCode.refused;
   }
 
-  /// `fee + amount` of `address`'s pending transactions not yet in the
-  /// proven state (their nonce is at or past it).
+  /// `address`'s transactions not yet in its proven state: pending ones that
+  /// may still be mined, and those already mined above the block the proof
+  /// is from (a proof lags a new block until it's asked again). Without the
+  /// latter, a transaction mined a moment ago would count neither as
+  /// pending nor in the proof, and the next one would reuse its nonce.
+  List<Transaction> _notYetProven(String address, AccountState proven) {
+    final txs = <String, Transaction>{
+      for (final p in _pending.values)
+        if (p.tx.fromAddress == address && _inPlay(p) && p.tx.nonce >= proven.nonce) p.tx.id: p.tx,
+      for (var h = proven.height + 1; h <= height; h++)
+        for (final tx in _blocks[h - 1]?.transactions ?? const <Transaction>[])
+          if (tx.fromAddress == address && tx.nonce >= proven.nonce) tx.id: tx,
+      for (final loose in _loose.values)
+        if (loose.height > proven.height && loose.tx.fromAddress == address && loose.tx.nonce >= proven.nonce)
+          loose.tx.id: loose.tx,
+    };
+    return txs.values.toList()..sort((a, b) => a.nonce.compareTo(b.nonce));
+  }
+
+  /// `fee + amount` of `address`'s transactions not yet in the proven state:
+  /// pending, or mined since the proof.
   int pendingDebitOf(String address) {
     final proven = account(address);
-    return _pending.values
-        .where((p) => p.tx.fromAddress == address && _inPlay(p) && (proven == null || p.tx.nonce >= proven.nonce))
-        .fold(0, (sum, p) => sum + p.tx.fee + p.tx.amount);
+    if (proven == null) {
+      return _pending.values
+          .where((p) => p.tx.fromAddress == address && _inPlay(p))
+          .fold(0, (sum, p) => sum + p.tx.fee + p.tx.amount);
+    }
+    return _notYetProven(address, proven).fold(0, (sum, tx) => sum + tx.fee + tx.amount);
   }
 
   /// What `address` can spend now, or null until its balance is proven.
@@ -568,16 +596,15 @@ class MurmurClient extends ChangeNotifier {
   }
 
   /// The nonce `address`'s next transaction must carry: the proven one, or
-  /// past its own pending transactions. Null until proven.
+  /// past its own transactions the proof doesn't count yet (pending, or
+  /// mined since the block it's from). Null until proven.
   int? nextNonce(String address) {
     final proven = account(address);
     if (proven == null) return null;
     var next = proven.nonce;
-    // Pending ones in nonce order, so each one found moves the next along.
-    final own = _pending.values.where((p) => p.tx.fromAddress == address && _inPlay(p)).toList()
-      ..sort((a, b) => a.tx.nonce.compareTo(b.tx.nonce));
-    for (final p in own) {
-      if (p.tx.nonce == next) next++;
+    // In nonce order, so each one found moves the next along.
+    for (final tx in _notYetProven(address, proven)) {
+      if (tx.nonce == next) next++;
     }
     return next;
   }
@@ -1318,6 +1345,7 @@ class MurmurClient extends ChangeNotifier {
         TamperedFrame() => const LinkError(LinkErrorKind.tampered),
         TransportException(bridgeUrl: final String url) => LinkError(LinkErrorKind.bridgeUnreachable, detail: url),
         TransportException(:final detail) => LinkError(LinkErrorKind.unreachable, detail: detail),
+        ConnectionLost(:final detail) => LinkError(LinkErrorKind.connection, detail: detail),
         TimeoutException() => const LinkError(LinkErrorKind.timeout),
         FormatException(:final message) => LinkError(LinkErrorKind.protocol, detail: message),
         _ => LinkError(LinkErrorKind.other, detail: e.toString()),
@@ -1574,6 +1602,7 @@ class MurmurClient extends ChangeNotifier {
   /// `at` looks up the earlier headers (genesis included).
   void _checkHeader(BlockHeader h, BlockHeader? Function(int height) at, HistoryPeaks history) {
     checkHeaderRules(h, at, history, network!);
+    _headersFromNode++;
     // Reaching the checkpoint's height (from a local copy that stopped
     // short of it), the chain must hold the checkpoint.
     final cp = _checkpoint;

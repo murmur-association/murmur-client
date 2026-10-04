@@ -32,6 +32,18 @@ class TransportException implements Exception {
   String toString() => bridgeUrl == null ? 'could not reach the node: $detail' : 'could not reach $bridgeUrl';
 }
 
+/// An open connection broke (reset, or a write the other end no longer
+/// takes), as when the node restarts: worth connecting again. `detail` is
+/// the system's own error text.
+class ConnectionLost implements Exception {
+  ConnectionLost(this.detail);
+
+  final String detail;
+
+  @override
+  String toString() => 'connection lost: $detail';
+}
+
 /// True when this build connects through the WebSocket bridge.
 const viaBridge = impl.viaBridge;
 

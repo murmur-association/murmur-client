@@ -40,13 +40,16 @@ class _WebSocketTransport implements Transport {
   @override
   final String peer;
 
+  // A channel error after connecting means the link broke, not bad data.
   @override
-  Stream<Uint8List> get incoming => _channel.stream.map((data) => switch (data) {
-        Uint8List b => b,
-        List<int> b => Uint8List.fromList(b),
-        ByteBuffer b => b.asUint8List(),
-        _ => throw const FormatException('the node sent a text message'),
-      });
+  Stream<Uint8List> get incoming => _channel.stream
+      .handleError((Object e) => throw ConnectionLost('$e'), test: (e) => e is WebSocketChannelException)
+      .map((data) => switch (data) {
+            Uint8List b => b,
+            List<int> b => Uint8List.fromList(b),
+            ByteBuffer b => b.asUint8List(),
+            _ => throw const FormatException('the node sent a text message'),
+          });
 
   @override
   void add(Uint8List bytes) => _channel.sink.add(bytes);

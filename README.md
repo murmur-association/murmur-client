@@ -163,7 +163,7 @@ One-time setup:
 
 The page is built for the root of its domain; to serve it from a subfolder, change `--base-href` to match.
 
-`test/live_node_test.dart` runs against a live node when `MURMUR_NODE=host:port` is set, for example `MURMUR_NODE=testnet-seed.murmur.info:7878` for the public testnet (read-only). It checks sync, proofs, filters, the local copy against the state root, and the fee report. With `MURMUR_SEED` set to a funded seed, it also posts threads, replies, a transfer and a flag, and checks the threads once they're mined.
+With `MURMUR_NODE_BIN` set to a `murmur-node` binary, `flutter test` also runs `test/node_test.dart`: it generates demo chains, starts the node on them, and checks sync, checkpoints, reorganizations, proofs, filters, the local copy against the state root, sending, threads, flags and invitations, with nothing to set up first. `test/live_node_test.dart` runs the read-only checks against a public node when `MURMUR_NODE=host:port` is set, for example `MURMUR_NODE=testnet-seed.murmur.info:7878`.
 
 ## Trying it locally
 

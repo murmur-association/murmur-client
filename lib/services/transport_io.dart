@@ -69,15 +69,22 @@ Future<Socket> connectFirst(List<InternetAddress> addresses, int port, Duration 
 }
 
 class _TcpTransport implements Transport {
-  _TcpTransport(this._socket, this.peer);
+  _TcpTransport(this._socket, this.peer) {
+    // A write the node no longer takes fails here, out of reach of any
+    // caller; the incoming stream reports the same broken link.
+    unawaited(_socket.done.then<void>((_) {}, onError: (Object _) {}));
+  }
 
   final Socket _socket;
 
   @override
   final String peer;
 
+  // A socket error after connecting means the link broke, not bad data.
   @override
-  Stream<Uint8List> get incoming => _socket;
+  Stream<Uint8List> get incoming => _socket.handleError(
+      (Object e) => throw ConnectionLost((e as SocketException).osError?.message ?? e.message),
+      test: (e) => e is SocketException);
 
   @override
   void add(Uint8List bytes) => _socket.add(bytes);

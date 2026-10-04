@@ -25,18 +25,17 @@ dart run tool/header_bench.dart generate 100000 build/headers.bin   # a valid te
 dart run tool/header_bench.dart check build/headers.bin             # times the header checks (also in a browser: header_bench_web.dart)
 ```
 
-Live tests run against a real node and are skipped unless their variables are set:
+Tests against the node need a `murmur-node` binary of this protocol version, built from `../murmur` (the node's specification is its code, so the tests use the node itself rather than restating its rules). They're skipped without it:
 
 ```
-cargo run --release -p murmur-node -- --spec demo --mine-to <address> --no-dns-seed   # in ../murmur
-MURMUR_NODE=127.0.0.1:7878 MURMUR_CTL=127.0.0.1:7879 MURMUR_SEED=<hex seed of the mining key> \
-  flutter test test/live_node_test.dart
+cargo build --release -p murmur-node          # in ../murmur
+MURMUR_NODE_BIN=../murmur/target/release/murmur-node flutter test   # node_test.dart and local_node_test.dart run too
 ```
 
-- Read-only against the public testnet: `MURMUR_NODE=testnet-seed.murmur.info:7878 flutter test test/live_node_test.dart`. Never send testnet transactions from tests without the user asking.
-- `MURMUR_CTL` enables the checkpoint test.
-- `MURMUR_SEED` enables sending. Let the node mine about 60 blocks first.
-- Never print or log the seed.
+- **Nothing to set up or wait for.** `node_test.dart` generates the demo chains it needs (`test/support/demo_chain.dart`, with the client's own protocol code), writes them as the node's block log, and starts the node on them (`test/support/test_node.dart`, through the app's `ProcessLocalNode`). The node replays the log through full validation, so a chain it doesn't accept fails the test: what the client is tested against is a chain the reference implementation accepted.
+- **What it covers:** checkpoint start, back-fill (stored, resumed, restarted), reorganizations (the node restarts on a heavier fork, and the client reconnects), state proofs and filters, the local copy and its state-root check, sending with proven nonces, threads and flags, invitations. The node mines to the generated chain's wallet, at 1% of a core (a node mining flat out at the easy demo target races ahead of its clock and stalls).
+- **Read-only against a public node:** `MURMUR_NODE=testnet-seed.murmur.info:7878 flutter test test/live_node_test.dart` runs the same read-only checks (`test/support/client_checks.dart`) on the real network. It sends nothing; never send testnet transactions from tests without the user asking.
+- `test/support/fake_node.dart` remains for what a real node can't be made to do: answer on another protocol version, or on an address a test picks.
 
 **Paths with an apostrophe** (for example `C:\Users\o'brien`) break `flutter test` and web builds, because Flutter pastes the path into generated Dart code. Map a drive letter to the parent folder and work from it:
 
@@ -49,7 +48,7 @@ set TMP=%TEMP%
 
 ## Rules the code must keep
 
-1. **Never use the node's control port** (`--rpc-port`, 7879) from `lib/`. The client talks only to the P2P port, or to `--ws-port`. Tests may use the control port, as `live_node_test.dart` does to ask for a checkpoint.
+1. **Never use the node's control port** (`--rpc-port`, 7879) from `lib/`. The client talks only to the P2P port, or to `--ws-port`. Tests may use the control port.
 2. **Nothing goes to third parties.** No analytics, remote fonts, CDNs or crash reporters. The only network peer is the node the user chose, or the local bridge. Flutter web fetches from Google by default, so two settings stop it:
    - `--no-web-resources-cdn` serves CanvasKit from the page;
    - `web/flutter_bootstrap.js` sets `fontFallbackBaseUrl` to `fallback-fonts/`, which `tool/fetch_fallback_fonts.dart` fills after every web build. Pages built without that step fetch fallback fonts from fonts.gstatic.com, or lose glyphs.
@@ -106,8 +105,8 @@ lib/
   l10n/       app_<lang>.arb (source) and the generated app_localizations*.dart (committed; CI checks
               they match the ARB files, so run `flutter gen-l10n` or `flutter pub get` after editing an ARB)
 test/         protocol vectors, network (checkpoint form, address fallback, WebSocket URL), thread rules,
-              aliases (Section 7.8 vector, validation, resolving), widget tests, live-node tests,
-              sync against a fake node (support/fake_node.dart: a generated demo chain)
+              aliases (Section 7.8 vector, validation, resolving), widget tests, node tests (the real node on
+              generated demo chains, support/), read-only checks of a public node
 tool/         ws_bridge (WebSocket to TCP relay), serve_web, fetch_fallback_fonts (+ the fonts' OFL), render_brand
 web/          index.html, flutter_bootstrap.js (loader config: local fallback fonts), manifest, icons
 ```
@@ -159,7 +158,7 @@ A branch that would replace the checkpoint's block is refused. A cached chain th
 
 **Sending.** `checkTransaction` applies consensus rules, the proven balance and Section 2.4's rules. `submit`:
 1. salts the content;
-2. signs with `nextNonce`: the proven nonce, plus own pending transactions in contiguous nonce order;
+2. signs with `nextNonce`: the proven nonce, plus own transactions the proof doesn't count yet, in contiguous nonce order: pending ones, and those mined above the block the proof is from (`_notYetProven`; a proof lags a new block, and without them a reply sent right after one's thread is mined would reuse its nonce);
 3. sends SubmitTx;
 4. keeps the transaction in `_pending` (mine: true).
 
@@ -275,10 +274,10 @@ A TxStatus of invalid or refused takes the transaction out of nonce and balance 
   1. Update `protocolVersion` and the codec in `wire.dart`.
   2. Update the models, and the network ids and genesis parameters in `network.dart` (genesis hashes are pinned in `protocol_test.dart`).
   3. Add PROTOCOL.md's vectors to `protocol_test.dart`.
-  4. Rebuild a demo node from `../murmur`, and run the live tests.
+  4. Build `murmur-node` from `../murmur`, and run the tests with `MURMUR_NODE_BIN` (Commands).
 - **New wire message:** add the class and its encoder and decoder in `wire.dart`, and enforce its limits while decoding. Add a round trip to `protocol_test.dart`'s "messages have the node layout". Handle it in `MurmurClient._handle`: every tag must appear there, since the switch is exhaustive over a sealed class.
 - **Every release refreshes the checkpoint** of each public network (not the demo network, whose chains are all different). A first session checks every header after the checkpoint before showing anything: a two-month-old checkpoint on the testnet means about 170,000 headers. The checkpoint must come from the release, never from a node or the user: a node could hand the client a fake chain's block, and the user only chooses nodes. A newer release's checkpoint that isn't in a user's local copy makes the client drop the copy and start over from it.
-- **Shipping a checkpoint:** once the chain is a few thousand blocks deep, run `murmur-node ctl checkpoint <height>` on a node you trust (for the testnet, node 1). Then uncomment the `checkpoint:` line on that network in `network.dart` and fill it in. `network_test.dart` checks the checkpoint's form and that it lies above the retarget window. Never invent one. Test it live with `live_node_test.dart`'s checkpoint test.
+- **Shipping a checkpoint:** once the chain is a few thousand blocks deep, run `murmur-node ctl checkpoint <height>` on a node you trust (for the testnet, node 1). Then uncomment the `checkpoint:` line on that network in `network.dart` and fill it in. `network_test.dart` checks the checkpoint's form and that it lies above the retarget window. Never invent one. `live_node_test.dart` against a testnet node then starts from it (its read-only checks use the network's checkpoint).
 - **Making a release** (the user asked for it to work like the node's):
   1. Raise `version:` in `pubspec.yaml`.
   2. Move CHANGELOG.md's "Unreleased" notes under `## vX.Y.Z: <summary> (<date>)`.
@@ -321,7 +320,7 @@ A TxStatus of invalid or refused takes the transaction out of nonce and balance 
    - **Rollbacks** rebuild the header history from a copy kept every 1,024 heights (`_historyMarks`, the last 16), not from genesis: rebuilt headers compute their work again.
    - **Still to do:** `ChainCache.load` decodes the whole stored chain into objects before `_loadCache` packs it, so a session that starts from the local copy briefly holds it at the old size. Loading it packed (the stored bytes are already the wire encoding) would fix that. The per-height filter maps (`_filters`, `_filterTested`) aren't packed either.
 5. **Flags received aren't found.** An address's history is found through filters, which index `from`, `to` and `reference`. Flags against the address's messages reference the message's txid, not the address. They show only if the flagged messages are watched: a thread page is open, or the chain is counted.
-6. **The fake node serves headers, not transactions.** `test/support/fake_node.dart` generates a valid demo chain of empty blocks (`demoChain`, about a second for 2,600 headers, with forks) and serves it over the real encrypted transport: headers, blocks, header proofs and filters, plus `switchTo` for a reorganization. `sync_test.dart` covers the checkpoint start, the back-fill (stored batch by batch, resumed, restarted) and reorganizations through the history marks. Sending, nonces, state proofs (it answers GetState as unavailable) and content are still only covered by `live_node_test.dart`.
+6. **CI doesn't run the node tests yet.** `node_test.dart` needs a protocol-10 `murmur-node` (`MURMUR_NODE_BIN`), and the node repository has no protocol-10 release to download yet (its latest tag is v0.9.5). Until CI gets one, built from `../murmur` or downloaded from the node's package registry once tagged, those tests are skipped there and must be run locally before committing changes to `MurmurClient`.
 7. **Native storage path.** `chain_cache_io.dart` uses `APPDATA`, `XDG_DATA_HOME` or `HOME` from the environment. On Android and iOS it falls back to the temp directory. `path_provider` would be the proper fix.
 8. **Transaction signatures in blocks aren't checked.** Merkle roots, filters and PoW are. A block's validity rests on the proof-of-work majority.
 9. **The app's own node, not yet tried in a built desktop app.** It's tested through `LocalNode` directly, not in a packaged Windows, Linux or macOS build. To check there: whether Windows shows a console window for the node, and whether stopping on exit works when the window is closed. There's no published macOS node binary yet (`tool/bundle_node.dart --from` a self-built one).
