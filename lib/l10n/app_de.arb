@@ -308,7 +308,7 @@
   "cancelInvitation": "Einladung stornieren",
   "inviteCancelled": "Storniert",
   "cancelInviteTitle": "{count, plural, =1{Diese Einladung stornieren?} other{{count} Einladungen stornieren?}}",
-  "cancelInviteBody": "{count, plural, =1{Ihre Token kommen in deine Wallet zurück, und wer die Karte hat, kann sie nicht mehr einlösen.} other{Ihre Token kommen in deine Wallet zurück, und wer die Karten hat, kann sie nicht mehr einlösen.}}",
+  "cancelInviteBody": "{count, plural, =1{Ihre Token kommen zurück, und wer die Karte hat, kann sie nicht mehr einlösen.} other{Ihre Token kommen zurück, und wer die Karten hat, kann sie nicht mehr einlösen.}}",
   "keepInvitation": "Behalten",
   "printOne": "Drucken",
   "inviteDoneSection": "Eingelöst oder storniert ({count})",
@@ -415,5 +415,6 @@
   "passkeyNoPrfTry": "**Versuche einen anderen Manager**, etwa Apple Passwörter oder den Google Passwortmanager, oder schütze die Wallet mit einer **Passphrase**.",
   "passkeyNoPrfLeftover": "Der eben gespeicherte Passkey (**Murmur wallet**) entsperrt nichts: Du kannst ihn in diesem Manager löschen.",
   "passkeyTryAnother": "Anderen Passkey-Manager versuchen",
-  "passkeyUsePassphrase": "Passphrase verwenden"
+  "passkeyUsePassphrase": "Passphrase verwenden",
+  "inviteDetailCancelledTo": "Storniert: Die Token gingen an {name}"
 }

@@ -627,8 +627,14 @@ class _InviteDetails extends StatelessWidget {
                   if (funding != null) row(l.inviteDetailFunded, funding),
                   if (out != null) ...[
                     const Divider(),
-                    if (cancelled)
+                    // Cancelled: back here, or (after a change of wallet) to
+                    // the wallet the user chose, named and linked.
+                    if (cancelled && (claimer == null || claimer == wallets.wallet?.addressHex))
                       row(l.inviteDetailReturned, out, who: Text(l.inviteDetailCancelled, style: caption))
+                    else if (cancelled)
+                      row(l.inviteDetailReturned, out,
+                          who: Emphasized(l.inviteDetailCancelledTo(Emphasized.link(nameOf(context, claimer!), 0)),
+                              links: [claimer], style: caption, weight: FontWeight.w600))
                     else
                       row(
                         l.inviteDetailClaimedBy,

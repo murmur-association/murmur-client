@@ -1371,7 +1371,7 @@ class AppLocalizationsZh extends AppLocalizations {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
-      other: '其代币会退回你的钱包，持有卡片的人将无法再领取。',
+      other: '其代币会退回，持有卡片的人将无法再领取。',
     );
     return '$_temp0';
   }
@@ -1750,4 +1750,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get passkeyUsePassphrase => '使用密码短语';
+
+  @override
+  String inviteDetailCancelledTo(String name) {
+    return '已取消：代币已转给 $name';
+  }
 }

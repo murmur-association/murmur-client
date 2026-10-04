@@ -308,7 +308,7 @@
   "cancelInvitation": "招待をキャンセル",
   "inviteCancelled": "キャンセル済み",
   "cancelInviteTitle": "{count, plural, other{{count} 件の招待をキャンセルしますか？}}",
-  "cancelInviteBody": "{count, plural, other{トークンはあなたのウォレットに戻り、カードを持っている人は受け取れなくなります。}}",
+  "cancelInviteBody": "{count, plural, other{トークンは戻り、カードを持っている人は受け取れなくなります。}}",
   "keepInvitation": "残す",
   "printOne": "印刷",
   "inviteDoneSection": "受け取り済み・キャンセル済み（{count}）",
@@ -415,5 +415,6 @@
   "passkeyNoPrfTry": "**別の管理アプリを試す**（Apple のパスワードや Google パスワード マネージャーなど）か、**パスフレーズ**でウォレットを保護してください。",
   "passkeyNoPrfLeftover": "いま保存されたパスキー（**Murmur wallet**）は何も解除できません。その管理アプリから削除して構いません。",
   "passkeyTryAnother": "別のパスキー管理アプリを試す",
-  "passkeyUsePassphrase": "パスフレーズを使う"
+  "passkeyUsePassphrase": "パスフレーズを使う",
+  "inviteDetailCancelledTo": "取り消し済み：トークンは {name} に送られました"
 }

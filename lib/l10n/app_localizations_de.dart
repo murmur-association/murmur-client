@@ -1417,9 +1417,9 @@ class AppLocalizationsDe extends AppLocalizations {
       count,
       locale: localeName,
       other:
-          'Ihre Token kommen in deine Wallet zurück, und wer die Karten hat, kann sie nicht mehr einlösen.',
+          'Ihre Token kommen zurück, und wer die Karten hat, kann sie nicht mehr einlösen.',
       one:
-          'Ihre Token kommen in deine Wallet zurück, und wer die Karte hat, kann sie nicht mehr einlösen.',
+          'Ihre Token kommen zurück, und wer die Karte hat, kann sie nicht mehr einlösen.',
     );
     return '$_temp0';
   }
@@ -1829,4 +1829,9 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get passkeyUsePassphrase => 'Passphrase verwenden';
+
+  @override
+  String inviteDetailCancelledTo(String name) {
+    return 'Storniert: Die Token gingen an $name';
+  }
 }

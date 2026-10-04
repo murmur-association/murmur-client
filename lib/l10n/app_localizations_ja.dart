@@ -1378,7 +1378,7 @@ class AppLocalizationsJa extends AppLocalizations {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
-      other: 'トークンはあなたのウォレットに戻り、カードを持っている人は受け取れなくなります。',
+      other: 'トークンは戻り、カードを持っている人は受け取れなくなります。',
     );
     return '$_temp0';
   }
@@ -1762,4 +1762,9 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get passkeyUsePassphrase => 'パスフレーズを使う';
+
+  @override
+  String inviteDetailCancelledTo(String name) {
+    return '取り消し済み：トークンは $name に送られました';
+  }
 }

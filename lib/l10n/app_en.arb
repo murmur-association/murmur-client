@@ -392,7 +392,7 @@
   "cancelInvitation": "Cancel invitation",
   "inviteCancelled": "Cancelled",
   "cancelInviteTitle": "{count, plural, =1{Cancel this invitation?} other{Cancel {count} invitations?}}",
-  "cancelInviteBody": "{count, plural, =1{Its tokens come back to your wallet, and whoever has the card can no longer claim it.} other{Their tokens come back to your wallet, and whoever has the cards can no longer claim them.}}",
+  "cancelInviteBody": "{count, plural, =1{Its tokens come back, and whoever has the card can no longer claim it.} other{Their tokens come back, and whoever has the cards can no longer claim them.}}",
   "keepInvitation": "Keep it",
   "printOne": "Print",
   "inviteDoneSection": "Claimed or cancelled ({count})",
@@ -574,5 +574,7 @@
   "@passkeyTryAnother": {"description":"Browser: the chosen passkey manager lacks WebAuthn PRF. Words between ** show in bold copper"},
   "passkeyUsePassphrase": "Use a passphrase",
   "@passkeyUsePassphrase": {"description":"Browser: the chosen passkey manager lacks WebAuthn PRF. Words between ** show in bold copper"},
-  "@cancelInviteBody": {"placeholders":{"count":{"type":"int"}}}
+  "@cancelInviteBody": {"placeholders":{"count":{"type":"int"}}},
+  "inviteDetailCancelledTo": "Cancelled: the tokens went to {name}",
+  "@inviteDetailCancelledTo": {"description":"A cancelled card whose tokens went to another wallet than this one (name is marked for Emphasized)","placeholders":{"name":{"type":"String"}}}
 }

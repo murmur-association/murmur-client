@@ -308,7 +308,7 @@
   "cancelInvitation": "取消邀请",
   "inviteCancelled": "已取消",
   "cancelInviteTitle": "{count, plural, other{取消 {count} 份邀请？}}",
-  "cancelInviteBody": "{count, plural, other{其代币会退回你的钱包，持有卡片的人将无法再领取。}}",
+  "cancelInviteBody": "{count, plural, other{其代币会退回，持有卡片的人将无法再领取。}}",
   "keepInvitation": "保留",
   "printOne": "打印",
   "inviteDoneSection": "已领取或已取消（{count}）",
@@ -415,5 +415,6 @@
   "passkeyNoPrfTry": "**换一个管理器试试**，例如 Apple 密码或 Google 密码管理器，或用**密码短语**保护钱包。",
   "passkeyNoPrfLeftover": "它刚保存的通行密钥（**Murmur wallet**）解锁不了任何东西：你可以在那个管理器里删除它。",
   "passkeyTryAnother": "换一个通行密钥管理器",
-  "passkeyUsePassphrase": "使用密码短语"
+  "passkeyUsePassphrase": "使用密码短语",
+  "inviteDetailCancelledTo": "已取消：代币已转给 {name}"
 }

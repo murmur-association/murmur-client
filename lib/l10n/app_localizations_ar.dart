@@ -1445,8 +1445,8 @@ class AppLocalizationsAr extends AppLocalizations {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
-      other: 'تعود رموزها إلى محفظتك، ولن يتمكن من يحمل البطاقات من استلامها.',
-      one: 'تعود رموزها إلى محفظتك، ولن يتمكن من يحمل البطاقة من استلامها.',
+      other: 'تعود رموزها، ولن يتمكن من يحمل البطاقات من استلامها.',
+      one: 'تعود رموزها، ولن يتمكن من يحمل البطاقة من استلامها.',
     );
     return '$_temp0';
   }
@@ -1841,4 +1841,9 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get passkeyUsePassphrase => 'استخدم عبارة مرور';
+
+  @override
+  String inviteDetailCancelledTo(String name) {
+    return 'أُلغيت: ذهبت الرموز إلى $name';
+  }
 }

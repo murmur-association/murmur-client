@@ -1411,9 +1411,9 @@ class AppLocalizationsPt extends AppLocalizations {
       count,
       locale: localeName,
       other:
-          'Os seus tokens voltam para a sua carteira, e quem tiver os cartões deixa de os poder resgatar.',
+          'Os seus tokens voltam, e quem tiver os cartões deixa de os poder resgatar.',
       one:
-          'Os seus tokens voltam para a sua carteira, e quem tiver o cartão deixa de o poder resgatar.',
+          'Os seus tokens voltam, e quem tiver o cartão deixa de o poder resgatar.',
     );
     return '$_temp0';
   }
@@ -1820,4 +1820,9 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get passkeyUsePassphrase => 'Usar uma frase-passe';
+
+  @override
+  String inviteDetailCancelledTo(String name) {
+    return 'Cancelado: os tokens foram para $name';
+  }
 }

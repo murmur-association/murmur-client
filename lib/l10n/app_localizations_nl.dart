@@ -1412,9 +1412,9 @@ class AppLocalizationsNl extends AppLocalizations {
       count,
       locale: localeName,
       other:
-          'De tokens komen terug in je wallet, en wie de kaarten heeft kan ze niet meer innen.',
+          'De tokens komen terug, en wie de kaarten heeft kan ze niet meer innen.',
       one:
-          'De tokens komen terug in je wallet, en wie de kaart heeft kan hem niet meer innen.',
+          'De tokens komen terug, en wie de kaart heeft kan hem niet meer innen.',
     );
     return '$_temp0';
   }
@@ -1821,4 +1821,9 @@ class AppLocalizationsNl extends AppLocalizations {
 
   @override
   String get passkeyUsePassphrase => 'Een wachtzin gebruiken';
+
+  @override
+  String inviteDetailCancelledTo(String name) {
+    return 'Geannuleerd: de tokens gingen naar $name';
+  }
 }

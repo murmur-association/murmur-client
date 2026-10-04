@@ -308,7 +308,7 @@
   "cancelInvitation": "Uitnodiging annuleren",
   "inviteCancelled": "Geannuleerd",
   "cancelInviteTitle": "{count, plural, =1{Deze uitnodiging annuleren?} other{{count} uitnodigingen annuleren?}}",
-  "cancelInviteBody": "{count, plural, =1{De tokens komen terug in je wallet, en wie de kaart heeft kan hem niet meer innen.} other{De tokens komen terug in je wallet, en wie de kaarten heeft kan ze niet meer innen.}}",
+  "cancelInviteBody": "{count, plural, =1{De tokens komen terug, en wie de kaart heeft kan hem niet meer innen.} other{De tokens komen terug, en wie de kaarten heeft kan ze niet meer innen.}}",
   "keepInvitation": "Behouden",
   "printOne": "Afdrukken",
   "inviteDoneSection": "Geïnd of geannuleerd ({count})",
@@ -415,5 +415,6 @@
   "passkeyNoPrfTry": "**Probeer een andere beheerder**, zoals Apple Wachtwoorden of Google Wachtwoordmanager, of bescherm de wallet met een **wachtzin**.",
   "passkeyNoPrfLeftover": "De passkey die hij net bewaarde (**Murmur wallet**) ontgrendelt niets: je kunt hem uit die beheerder verwijderen.",
   "passkeyTryAnother": "Andere passkeybeheerder proberen",
-  "passkeyUsePassphrase": "Een wachtzin gebruiken"
+  "passkeyUsePassphrase": "Een wachtzin gebruiken",
+  "inviteDetailCancelledTo": "Geannuleerd: de tokens gingen naar {name}"
 }

@@ -308,7 +308,7 @@
   "cancelInvitation": "Annulla invito",
   "inviteCancelled": "Annullato",
   "cancelInviteTitle": "{count, plural, =1{Annullare questo invito?} other{Annullare {count} inviti?}}",
-  "cancelInviteBody": "{count, plural, =1{I suoi token tornano nel tuo portafoglio, e chi ha la tessera non potrà più riscattarla.} other{I loro token tornano nel tuo portafoglio, e chi ha le tessere non potrà più riscattarle.}}",
+  "cancelInviteBody": "{count, plural, =1{I suoi token tornano indietro, e chi ha la tessera non potrà più riscattarla.} other{I loro token tornano indietro, e chi ha le tessere non potrà più riscattarle.}}",
   "keepInvitation": "Tienilo",
   "printOne": "Stampa",
   "inviteDoneSection": "Riscattati o annullati ({count})",
@@ -415,5 +415,6 @@
   "passkeyNoPrfTry": "**Prova un altro gestore**, come Password di Apple o Gestore delle password di Google, oppure proteggi il portafoglio con una **passphrase**.",
   "passkeyNoPrfLeftover": "La passkey appena salvata (**Murmur wallet**) non sblocca nulla: puoi eliminarla da quel gestore.",
   "passkeyTryAnother": "Prova un altro gestore",
-  "passkeyUsePassphrase": "Usa una passphrase"
+  "passkeyUsePassphrase": "Usa una passphrase",
+  "inviteDetailCancelledTo": "Annullato: i token sono andati a {name}"
 }

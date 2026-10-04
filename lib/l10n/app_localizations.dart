@@ -1963,7 +1963,7 @@ abstract class AppLocalizations {
   /// No description provided for @cancelInviteBody.
   ///
   /// In en, this message translates to:
-  /// **'{count, plural, =1{Its tokens come back to your wallet, and whoever has the card can no longer claim it.} other{Their tokens come back to your wallet, and whoever has the cards can no longer claim them.}}'**
+  /// **'{count, plural, =1{Its tokens come back, and whoever has the card can no longer claim it.} other{Their tokens come back, and whoever has the cards can no longer claim them.}}'**
   String cancelInviteBody(int count);
 
   /// No description provided for @keepInvitation.
@@ -2607,6 +2607,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Use a passphrase'**
   String get passkeyUsePassphrase;
+
+  /// A cancelled card whose tokens went to another wallet than this one (name is marked for Emphasized)
+  ///
+  /// In en, this message translates to:
+  /// **'Cancelled: the tokens went to {name}'**
+  String inviteDetailCancelledTo(String name);
 }
 
 class _AppLocalizationsDelegate

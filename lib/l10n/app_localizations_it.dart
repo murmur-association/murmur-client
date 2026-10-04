@@ -1415,9 +1415,9 @@ class AppLocalizationsIt extends AppLocalizations {
       count,
       locale: localeName,
       other:
-          'I loro token tornano nel tuo portafoglio, e chi ha le tessere non potrà più riscattarle.',
+          'I loro token tornano indietro, e chi ha le tessere non potrà più riscattarle.',
       one:
-          'I suoi token tornano nel tuo portafoglio, e chi ha la tessera non potrà più riscattarla.',
+          'I suoi token tornano indietro, e chi ha la tessera non potrà più riscattarla.',
     );
     return '$_temp0';
   }
@@ -1827,4 +1827,9 @@ class AppLocalizationsIt extends AppLocalizations {
 
   @override
   String get passkeyUsePassphrase => 'Usa una passphrase';
+
+  @override
+  String inviteDetailCancelledTo(String name) {
+    return 'Annullato: i token sono andati a $name';
+  }
 }

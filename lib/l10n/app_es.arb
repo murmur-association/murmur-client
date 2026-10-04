@@ -308,7 +308,7 @@
   "cancelInvitation": "Cancelar invitación",
   "inviteCancelled": "Cancelada",
   "cancelInviteTitle": "{count, plural, =1{¿Cancelar esta invitación?} other{¿Cancelar {count} invitaciones?}}",
-  "cancelInviteBody": "{count, plural, =1{Sus tokens vuelven a tu cartera, y quien tenga la tarjeta ya no podrá canjearla.} other{Sus tokens vuelven a tu cartera, y quien tenga las tarjetas ya no podrá canjearlas.}}",
+  "cancelInviteBody": "{count, plural, =1{Sus tokens vuelven, y quien tenga la tarjeta ya no podrá canjearla.} other{Sus tokens vuelven, y quien tenga las tarjetas ya no podrá canjearlas.}}",
   "keepInvitation": "Mantenerla",
   "printOne": "Imprimir",
   "inviteDoneSection": "Canjeadas o canceladas ({count})",
@@ -415,5 +415,6 @@
   "passkeyNoPrfTry": "**Prueba otro gestor**, como Contraseñas de Apple o el Gestor de contraseñas de Google, o protege la cartera con una **frase de contraseña**.",
   "passkeyNoPrfLeftover": "La llave de acceso que acaba de guardar (**Murmur wallet**) no desbloquea nada: puedes borrarla de ese gestor.",
   "passkeyTryAnother": "Probar otro gestor",
-  "passkeyUsePassphrase": "Usar una frase de contraseña"
+  "passkeyUsePassphrase": "Usar una frase de contraseña",
+  "inviteDetailCancelledTo": "Cancelada: los tokens fueron a {name}"
 }
