@@ -1,5 +1,7 @@
 # Checks on every push: static analysis, the unit tests, and a web build.
-# A version tag also releases (see "Releases" below).
+# A version tag also releases (see "Releases" below), and a scheduled
+# pipeline makes a release of its own when the testnet checkpoint has aged
+# (see "The scheduled release").
 # The Flutter version is pinned by FLUTTER_VERSION below; raise it
 # deliberately, together with the version used locally.
 stages:
@@ -17,6 +19,19 @@ include:
 
 variables:
   SECRET_DETECTION_ENABLED: 'true'
+
+# No merge request pipelines (pushes are checked as branch pipelines), and a
+# scheduled pipeline holds the scheduled release alone: the scanners are
+# switched off there, and the checks below leave themselves out.
+workflow:
+  rules:
+  - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    when: never
+  - if: $CI_PIPELINE_SOURCE == "schedule"
+    variables:
+      SAST_DISABLED: "true"
+      SECRET_DETECTION_DISABLED: "true"
+  - when: always
 
 sast:
   stage: test
@@ -51,8 +66,18 @@ secret_detection:
     paths:
     - .pub-cache/
 
+# The checks of every push and tag; not of a scheduled pipeline, where the
+# scheduled release runs them itself on what it's about to publish.
+.checks:
+  rules:
+  - if: $CI_PIPELINE_SOURCE == "schedule"
+    when: never
+  - when: on_success
+
 analyze:
-  extends: .flutter
+  extends:
+  - .flutter
+  - .checks
   stage: check
   script:
   # The generated localizations must match the ARB files.
@@ -61,7 +86,9 @@ analyze:
   - flutter analyze
 
 test:
-  extends: .flutter
+  extends:
+  - .flutter
+  - .checks
   stage: test
   variables:
     # The tests against the node must run here, not skip themselves.
@@ -75,7 +102,9 @@ test:
   - flutter test
 
 build-web:
-  extends: .flutter
+  extends:
+  - .flutter
+  - .checks
   stage: build
   script:
   - flutter build web --release
@@ -84,48 +113,68 @@ build-web:
     - build/web/
     expire_in: 1 week
 
-# Proposes a fresh testnet checkpoint, for a person to review: only in a
-# scheduled pipeline, or one started by hand, with REFRESH_CHECKPOINT=1.
-# tool/refresh_checkpoint.dart rewrites the checkpoint line from the live
-# network (every node asked separately, from the checkpoint shipped now,
-# checked back to genesis, all agreeing). If it changed, the line is
-# committed to the branch checkpoint-refresh and a merge request to the
-# default branch is opened, or the open one updated. Nothing reaches the
-# default branch without that review, and no release is made.
-# Needs CHECKPOINT_BOT_TOKEN: a project access token (role Developer, scope
-# write_repository), as a masked and protected CI/CD variable.
-refresh-checkpoint:
+# The scheduled release: a release made by itself when the testnet
+# checkpoint has aged, so first sessions never have many headers to check.
+# It's the only job of a scheduled pipeline, and keeps nothing between
+# runs. Schedule it on the default branch (weekly, say); "Run schedule" in
+# GitLab starts it at once.
+#
+# 1. tool/refresh_checkpoint.dart takes a new checkpoint from the live
+#    network, taking no node's word: every node is asked separately, from
+#    the checkpoint shipped now, checked back to genesis, and all must
+#    agree. With a checkpoint under a day old the job ends here: no release.
+# 2. The same checks as any push run on that change: the generated
+#    localizations, the analyzer and every test, the node's included.
+# 3. tool/prepare_release.dart raises the patch version and gives
+#    CHANGELOG.md its section (with the notes waiting under "Unreleased":
+#    the release holds everything on the default branch).
+# 4. The commit goes to the default branch and its tag `vX.Y.Z` after it.
+#    The tag starts the release pipeline below, which checks everything
+#    again before it builds, deploys and publishes.
+#
+# A failure anywhere leaves nothing pushed. The pushes need
+# RELEASE_BOT_TOKEN: a project access token (role Maintainer, scope
+# write_repository; Maintainers may push to the default branch and create
+# `v*` tags), as a masked, hidden and protected CI/CD variable.
+scheduled-release:
   extends: .flutter
   stage: test
   rules:
-  - if: $REFRESH_CHECKPOINT == "1" && ($CI_PIPELINE_SOURCE == "schedule" || $CI_PIPELINE_SOURCE == "web")
+  - if: $CI_PIPELINE_SOURCE == "schedule" && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  variables:
+    MURMUR_REQUIRE_NODE: "1"
   script:
   - |
-    if [ -z "$CHECKPOINT_BOT_TOKEN" ]; then
-      echo "CHECKPOINT_BOT_TOKEN is not set: see the comment on this job"
+    if [ -z "$RELEASE_BOT_TOKEN" ]; then
+      echo "RELEASE_BOT_TOKEN is not set: see the comment on this job"
       exit 1
     fi
   - flutter test tool/refresh_checkpoint.dart
   - |
     if git diff --quiet -- lib/protocol/network.dart; then
-      echo "the checkpoint is less than a day old: nothing to propose"
+      echo "the checkpoint is less than a day old: no release"
       exit 0
     fi
-    line=$(sed -n "s/.*checkpoint: Checkpoint(\([0-9]*\), '\([0-9a-f]*\)').*/\1 \2/p" lib/protocol/network.dart)
-    height=${line% *}
-    echo "proposing checkpoint $line"
-    git config user.name "Checkpoint refresh (CI)"
+    flutter gen-l10n
+    git diff --exit-code -- lib/l10n
+    flutter analyze
+    dart run tool/bundle_node.dart --for-tests
+    flutter test
+    dart run tool/prepare_release.dart
+    version=$(cat build/release-version)
+    height=$(sed -n "s/.*checkpoint: Checkpoint(\([0-9]*\), '[0-9a-f]*').*/\1/p" lib/protocol/network.dart)
+    echo "releasing v$version with the checkpoint at block $height"
+    git config user.name "Scheduled release (CI)"
     git config user.email "$GITLAB_USER_EMAIL"
-    git checkout -B checkpoint-refresh
-    git commit -m "Refresh the testnet checkpoint to block $height" \
-      -m "Written by tool/refresh_checkpoint.dart in pipeline $CI_PIPELINE_URL: the testnet's nodes agreed on it, on a chain checked from genesis that holds the checkpoint shipped before it." \
-      -- lib/protocol/network.dart
-    git push --force \
-      -o merge_request.create \
-      -o merge_request.target="$CI_DEFAULT_BRANCH" \
-      -o merge_request.title="Refresh the testnet checkpoint to block $height" \
-      -o merge_request.description="From the scheduled checkpoint refresh ($CI_PIPELINE_URL). Check the one changed line in lib/protocol/network.dart, then merge before the next release." \
-      "https://oauth2:${CHECKPOINT_BOT_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git" checkpoint-refresh
+    git commit -m "Release v$version: testnet checkpoint at block $height" \
+      -m "Made by the scheduled release ($CI_PIPELINE_URL): tool/refresh_checkpoint.dart took the checkpoint from the live network (the testnet's nodes agreed on it, on a chain checked from genesis that holds the checkpoint shipped before), and analyze and the tests passed on it." \
+      -- lib/protocol/network.dart pubspec.yaml CHANGELOG.md
+    git tag "v$version"
+    remote="https://oauth2:${RELEASE_BOT_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git"
+    # The branch first, without a pipeline of its own (the tag's checks the
+    # same commit); not forced, so it fails if the branch moved meanwhile.
+    git push -o ci.skip "$remote" "HEAD:refs/heads/$CI_DEFAULT_BRANCH"
+    git push "$remote" "refs/tags/v$version"
 
 # Releases: on a version tag (v0.1.1), matching the version in pubspec.yaml,
 # build the public testnet page, publish it as an archive with SHA256SUMS
