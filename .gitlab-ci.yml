@@ -299,7 +299,9 @@ build-windows:
 # (shown as Murmur, murmur_client), the pinned node beside it and the
 # notices. Before packaging, tool/linux_smoke_test.sh starts it on a virtual
 # display (with a session bus and an unlocked keyring, as a desktop gives
-# it) and checks that its own node starts with it and stops with its window;
+# it) and checks that its own node starts with it and stops with its window,
+# that a node left by a killed app is replaced, and that a wallet is saved
+# through the real keyring (integration_test/wallet_storage_test.dart);
 # that run uses a build whose own node is on the demo network. Allowed to
 # fail, like the Windows build: it must never hold back the page's release.
 build-linux:
@@ -317,7 +319,7 @@ build-linux:
   # First a build whose own node stays off the public network, to try.
   - flutter build linux --release --dart-define=MURMUR_LOCAL_NODE_SPEC=demo
   - dart run tool/bundle_node.dart
-  - tool/linux_smoke_test.sh
+  - tool/linux_smoke_test.sh --wallet-storage
   # Then the one that's released: its default node is the testnet's seed.
   - >-
     flutter build linux --release
