@@ -2,9 +2,11 @@
 
 Newest first. Each release is a `vX.Y.Z` tag matching `version` in `pubspec.yaml`; see [README](README.md#releases-and-deployment). Entries marked **Breaking** need action from users.
 
-## Unreleased
+## v0.2.1: a checkpoint, desktop apps, lighter on memory (2026-10-05)
 
-- **Added: a testnet checkpoint,** now at block 19,000. A first visit lists threads after checking only the headers above it (a few seconds, instead of every header since genesis), and checks the rest back to genesis in the background.
+No protocol or network change. The client needs nodes on protocol 10, as before.
+
+- **Added: a testnet checkpoint,** at block 19,800. A first visit lists threads after checking only the headers above it (a few seconds, instead of every header since genesis), and checks the rest back to genesis in the background.
 - **Added: the checkpoint is refreshed from the live network, and checked before a release.** `tool/refresh_checkpoint.dart` asks every testnet node separately, with a client that starts from the checkpoint shipped before and checks every header back to genesis, and writes a block a day below the tip only if they agree. The release job (`tool/check_checkpoint.dart`) stops a release whose checkpoint isn't on the live chain, or is over a week old.
 - **Added: releases include the Windows and Linux apps** (testnet builds, x64), as `murmur-client-vX.Y.Z-windows-x64.zip` and `murmur-client-vX.Y.Z-linux-x64.tar.gz`, listed in the page's `SHA256SUMS`: unpack one and run `murmur_client`. Each holds the app, its own node (the pinned `murmur-node` release) and the notices; the Windows one also the Visual C++ runtime. The Linux app (shown as Murmur, identifier `info.murmur.client`) keeps the wallet in the desktop's keyring.
 - **Added: the Windows app has its own name and icon.** The `windows/` folder is now part of the repository: the app shows as Murmur (its program file is `murmur_client.exe`), carries the app's icon and keeps its settings under `%APPDATA%\Murmur Association\Murmur`. A release build with the bundled node was tried on Windows 11: the node starts with the app without a console window, and stops with it.
