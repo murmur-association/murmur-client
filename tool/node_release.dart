@@ -3,7 +3,7 @@
 // tests against the node (test/support/test_node.dart). Raise it when the
 // client moves to a newer node; the node's CHANGELOG says what changed.
 
-const nodeRelease = 'v0.10.1';
+const nodeRelease = 'v0.10.3';
 
 /// Where `dart run tool/bundle_node.dart --for-tests` puts the release, from
 /// the project root.

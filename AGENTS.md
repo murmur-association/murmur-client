@@ -25,7 +25,7 @@ dart run tool/header_bench.dart generate 100000 build/headers.bin   # a valid te
 dart run tool/header_bench.dart check build/headers.bin             # times the header checks (also in a browser: header_bench_web.dart)
 ```
 
-Tests against the node use the **pinned node release** (`tool/node_release.dart`, now v0.10.1), downloaded from the node project's package registry and checked against its `SHA256SUMS`. The node's specification is its code, so the tests use the node itself rather than restating its rules. Without the download they're skipped (CI sets `MURMUR_REQUIRE_NODE`, which makes that a failure):
+Tests against the node use the **pinned node release** (`tool/node_release.dart`, now v0.10.3), downloaded from the node project's package registry and checked against its `SHA256SUMS`. The node's specification is its code, so the tests use the node itself rather than restating its rules. Without the download they're skipped (CI sets `MURMUR_REQUIRE_NODE`, which makes that a failure):
 
 ```
 dart run tool/bundle_node.dart --for-tests    # into build/node; again after raising the pinned release
@@ -36,7 +36,7 @@ flutter test                                  # node_test.dart and local_node_te
 
 - **Nothing to set up or wait for.** `node_test.dart` has the node build the demo chains it needs (`murmur-node demo-chain`, through `test/support/test_node.dart`): a chain, an extension, or a heavier branch for a reorganization, built and checked with the node's own rules. It then starts the node on them through the app's `ProcessLocalNode`. Headers a test needs as objects come from syncing a client, never from the node's files.
 - **What it covers:** checkpoint start, back-fill (stored, resumed, restarted), reorganizations (the node restarts on a heavier branch, and the client reconnects), state proofs and filters, the local copy and its state-root check, sending with proven nonces, threads and flags, invitations. The node mines to the chain's wallet, at 1% of a core (a node mining flat out at the easy demo target races ahead of its clock and stalls).
-- **Branches need room:** `demo-chain` spaces new blocks at the 2 s target when there's room, and closer (down to a second) when there isn't. Blocks closer than the target make the retarget raise the difficulty block after block, so a long squeezed branch is slow to mine (120 blocks at about 1 s took a minute). A branch of `n` blocks needs `n × 2 s` after its fork point, so build a chain that will get long branches with an earlier end (`TestNode.build(…, endTime:)`).
+- **Branches need room:** `demo-chain` spaces new blocks 2 s apart, never in the future, so a branch or extension of `n` blocks needs `n × 2 s` after the block it builds on. Without that room it refuses at once, writing nothing, and says how much earlier the chain must end. Build a chain that will get long branches with an earlier end (`TestNode.build(…, endTime:)`).
 - **Read-only against a public node:** `MURMUR_NODE=testnet-seed.murmur.info:7878 flutter test test/live_node_test.dart` runs the same read-only checks (`test/support/client_checks.dart`) on the real network. It sends nothing; never send testnet transactions from tests without the user asking.
 - `test/support/fake_node.dart` remains for what a real node can't be made to do: answer on another protocol version, or on an address a test picks.
 

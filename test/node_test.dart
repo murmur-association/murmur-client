@@ -107,8 +107,8 @@ void main() {
     test('a reorganization rebuilds the header history from the nearest mark', () async {
       // From genesis (the demo network has no checkpoint), past the marks
       // at 1,024 and 2,048. Ending ten minutes ago leaves the branches
-      // room: 120 blocks need four minutes after their fork point at 2 s
-      // each, or they are squeezed closer and slow to mine.
+      // room: demo-chain refuses a branch of n blocks without n × 2 s after
+      // its fork point (120 blocks: four minutes).
       final node = await TestNode.build(2100,
           mineTo: miner.address, endTime: DateTime.now().subtract(const Duration(minutes: 10)));
       await node.start();

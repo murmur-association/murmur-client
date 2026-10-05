@@ -3,7 +3,7 @@
 // against the node look for it. Run after `flutter build windows|linux|macos`:
 //
 //   dart run tool/bundle_node.dart                       # the pinned release (tool/node_release.dart)
-//   dart run tool/bundle_node.dart --version v0.10.1     # another published release
+//   dart run tool/bundle_node.dart --version v0.10.3     # another published release
 //   dart run tool/bundle_node.dart --from <murmur-node>  # a binary at hand
 //   ... [--into <dir>]                                   # another build folder
 //   dart run tool/bundle_node.dart --for-tests           # into build/node, for flutter test
