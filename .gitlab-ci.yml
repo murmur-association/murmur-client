@@ -201,10 +201,13 @@ check-checkpoint:
   - flutter test tool/check_checkpoint.dart
 
 # The client about to be released, against the live testnet, read-only
-# (test/live_node_test.dart sends nothing): state proofs and filters, and
-# the local copy counted and checked against the state root. Only here, so
-# that ordinary pushes never depend on the public network; a failure stops
-# the release before anything is built.
+# (test/live_release_test.dart sends nothing): it syncs from the shipped
+# checkpoint and proves the supply, the burn pool and an account, and reads
+# the fees. A few requests whatever the chain's length, so it can't start
+# failing releases as the chain grows; the checks that do grow with it
+# (test/live_node_test.dart) are run by hand. Only here, so that ordinary
+# pushes never depend on the public network; a failure stops the release
+# before anything is built.
 public-node-tests:
   extends:
   - .flutter
@@ -213,7 +216,7 @@ public-node-tests:
   variables:
     MURMUR_NODE: testnet-seed.murmur.info:7878
   script:
-  - flutter test test/live_node_test.dart
+  - flutter test test/live_release_test.dart
 
 # The public testnet page, app.murmur.info on Cloudflare Pages (see README
 # "Releases and deployment"). It connects to wss://node.murmur.info by

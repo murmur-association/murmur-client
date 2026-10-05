@@ -171,7 +171,7 @@ The page is built for the root of its domain; to serve it from a subfolder, chan
 
 To run it at once, press **Run** on the schedule. To stop automatic releases, deactivate the schedule; releases by hand (`flutter test tool/refresh_checkpoint.dart`, the version, the CHANGELOG, the tag) work as before.
 
-After `dart run tool/bundle_node.dart --for-tests`, which downloads the pinned `murmur-node` release (`tool/node_release.dart`) and checks it against its `SHA256SUMS`, `flutter test` also runs `test/node_test.dart`, as CI does: the node builds demo chains (`murmur-node demo-chain`), the test starts it on them, and checks sync, checkpoints, reorganizations, proofs, filters, the local copy against the state root, sending, threads, flags and invitations, with nothing to set up first. `test/live_node_test.dart` runs the read-only checks against a public node when `MURMUR_NODE=host:port` is set, for example `MURMUR_NODE=testnet-seed.murmur.info:7878`.
+After `dart run tool/bundle_node.dart --for-tests`, which downloads the pinned `murmur-node` release (`tool/node_release.dart`) and checks it against its `SHA256SUMS`, `flutter test` also runs `test/node_test.dart`, as CI does: the node builds demo chains (`murmur-node demo-chain`), the test starts it on them, and checks sync, checkpoints, reorganizations, proofs, filters, the local copy against the state root, sending, threads, flags and invitations, with nothing to set up first. With `MURMUR_NODE=host:port` set (for example `MURMUR_NODE=testnet-seed.murmur.info:7878`), `test/live_release_test.dart` runs a quick read-only check against that public node, as the release pipeline does, and `test/live_node_test.dart` the longer ones, which download and count the whole chain.
 
 ## Trying it locally
 
