@@ -2,4 +2,10 @@ analyzer:
   exclude:
     - build/**
     - web/**
+    # Generated per machine with `flutter create` (README), not committed.
+    - windows/**
+    - linux/**
+    - macos/**
+    - android/**
+    - ios/**
 include: package:flutter_lints/flutter.yaml
