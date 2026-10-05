@@ -72,10 +72,10 @@ class TestNode {
   /// Builds on the chain with `murmur-node demo-chain` (the node must be
   /// stopped): up to height `blocks`, on the tip, or with `forkAt` a
   /// heavier branch from that block, which the node then follows. The new
-  /// tip is at `endTime` (default now). New blocks are at least a second
-  /// apart and never in the future, so a branch needs as many seconds after
-  /// its fork point as it has blocks; demo-chain waits for the clock when
-  /// they don't fit.
+  /// tip is at `endTime` (default now). New blocks are never in the future
+  /// and 2 s apart when there's room; squeezed closer, they raise the
+  /// difficulty block after block and mining a long branch slows to a
+  /// minute. So leave a branch of n blocks n × 2 s after its fork point.
   Future<void> grow(int blocks, {required Uint8List mineTo, int? forkAt, DateTime? endTime}) async {
     final r = await Process.run(nodeBinary!, [
       'demo-chain',
