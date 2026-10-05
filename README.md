@@ -48,7 +48,7 @@ The client connects to a node like a peer that has no blocks, and every connecti
 
 Every header is checked as a node checks it (Section 7.2): it links to its parent, meets its proof of work, is later than the median of the last 11 timestamps, carries the difficulty retarget's target, and commits to the header history before it (a Merkle Mountain Range whose nodes also carry work, times and targets, as in ZIP 221).
 
-**Starting from a checkpoint** (Section 7.7): a network can ship a checkpoint (a height and block hash from `murmur-node ctl checkpoint`) in `lib/protocol/network.dart`. A first session then starts there instead of at genesis: it fetches the checkpoint block, the 90 headers before it (checked by their links back from it, and giving the retarget its context) and the header history through it (checked against its `history_root`), then checks everything after it fully. Usable within a second, whatever the chain's length. In the background it then fetches and checks every header from genesis up; they must lead to the checkpoint, or the client stops and says the release or every node reached is wrong. Neither network ships a checkpoint yet: every demo node mines its own chain, and there is no public testnet chain to take one from.
+**Starting from a checkpoint** (Section 7.7): a network can ship a checkpoint (a height and block hash) in `lib/protocol/network.dart`. A first session then starts there instead of at genesis: it fetches the checkpoint block, the 90 headers before it (checked by their links back from it, and giving the retarget its context) and the header history through it (checked against its `history_root`), then checks everything after it fully. Usable within a second, whatever the chain's length. In the background it then fetches and checks every header from genesis up; they must lead to the checkpoint, or the client stops and says the release or every node reached is wrong. The testnet ships one, refreshed with every release from the live network (`tool/refresh_checkpoint.dart`: every testnet node is asked separately and must agree, on a chain checked from genesis that holds the checkpoint before it) and checked again before the release is built. The demo network can't ship one: every demo node mines its own chain.
 
 If the newest block is old for the network (about 20 block intervals), a banner says the node may be behind or cut off.
 
@@ -203,6 +203,8 @@ For how the code works, the rules it keeps, recipes and known gaps, see [AGENTS.
 | `lib/services/chain_cache*.dart` | The local copy of the chain: IndexedDB in the browser, files natively |
 | `lib/services/local_node*.dart` | The app's own node on desktops: starting `murmur-node`, and keeping it in line with the settings and wallet |
 | `tool/bundle_node.dart` | Puts `murmur-node` next to a built desktop app |
+| `tool/refresh_checkpoint.dart` | Refreshes the testnet checkpoint from the live network, before a release |
+| `tool/check_checkpoint.dart` | Checks the shipped checkpoint against the live network (the release job runs it) |
 | `lib/protocol/commitments.dart` | The state tree, block filter and header history verifiers (PROTOCOL.md Section 3.6) |
 | `lib/protocol/consensus.dart` | The header rules the client checks: median-time-past and the difficulty retarget (Sections 3.5 and 4) |
 | `lib/services/secure_channel.dart` | The encrypted transport: X25519, HKDF, ChaCha20-Poly1305 (Section 7.4) |

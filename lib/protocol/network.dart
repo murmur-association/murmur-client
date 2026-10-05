@@ -87,10 +87,13 @@ class NetworkInfo {
     maxBlockBytes: 2000000,
     burnPayoutBlocks: 2880,
     lwmaWindow: 90,
-    // From `murmur-node ctl checkpoint 16000` on a testnet node the project
-    // trusts, shipped with v0.2.1. Refresh it with every release (AGENTS.md,
-    // Recipes); test/network_test.dart checks its form.
-    checkpoint: Checkpoint(16000, '000000984d06b2a64a16889417e96cb29e53dbb10935d5d2aaa613194a7ffd26'),
+    // Written by tool/refresh_checkpoint.dart: the testnet's nodes, asked
+    // one by one, agreed on it, on a chain checked from genesis that holds
+    // the checkpoint shipped before it (the first, block 16,000, came from
+    // `murmur-node ctl checkpoint` on a node the project trusts). Refresh it
+    // with every release (AGENTS.md, Recipes); the release job checks it
+    // against the live network, and test/network_test.dart its form.
+    checkpoint: Checkpoint(19000, '000001068cdfd2cdb9d2a3eec2085636d0888eed40f1f80501f7fa23b43c2d8c'),
   );
 
   static const demo = NetworkInfo(

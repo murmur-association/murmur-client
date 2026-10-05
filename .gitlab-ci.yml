@@ -94,6 +94,20 @@ build-web:
   rules:
   - if: $CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+$/
 
+# A release ships the testnet checkpoint committed in
+# lib/protocol/network.dart (tool/refresh_checkpoint.dart writes it before
+# the tag). This checks it against the live network, which is never its
+# source: every node behind the seed name must serve a chain that holds it
+# and checks out back to genesis, and it must be under a week old. A failure
+# here stops the release before anything is built.
+check-checkpoint:
+  extends:
+  - .flutter
+  - .on-release-tag
+  stage: test
+  script:
+  - flutter test tool/check_checkpoint.dart
+
 # The public testnet page, app.murmur.info on Cloudflare Pages (see README
 # "Releases and deployment"). It connects to wss://node.murmur.info by
 # default and loads nothing from other origins: CanvasKit is served locally

@@ -21,6 +21,8 @@ dart run tool/fetch_fallback_fonts.dart   # copies the engine's fallback fonts n
 dart run tool/serve_web.dart          # serves build/web on http://localhost:8080
 dart run tool/ws_bridge.dart --node 127.0.0.1:7878   # only for nodes without --ws-port
 flutter test tool/render_brand.dart   # regenerates web icons and build/brand_preview.png
+flutter test tool/refresh_checkpoint.dart   # the testnet checkpoint, from the live network (before a release)
+flutter test tool/check_checkpoint.dart     # what the release job checks: the shipped checkpoint, against the live network
 dart run tool/header_bench.dart generate 100000 build/headers.bin   # a valid testnet header chain
 dart run tool/header_bench.dart check build/headers.bin             # times the header checks (also in a browser: header_bench_web.dart)
 ```
@@ -111,7 +113,8 @@ test/         protocol vectors, network (checkpoint form, address fallback, WebS
               aliases (Section 7.8 vector, validation, resolving), widget tests, node tests (the real node on
               generated demo chains, support/), read-only checks of a public node
 tool/         ws_bridge (WebSocket to TCP relay), serve_web, fetch_fallback_fonts (+ the fonts' OFL), render_brand,
-              bundle_node + node_release (the pinned murmur-node release, for desktop builds and tests)
+              bundle_node + node_release (the pinned murmur-node release, for desktop builds and tests),
+              refresh_checkpoint + check_checkpoint (the testnet checkpoint, from and against the live network)
 web/          index.html, flutter_bootstrap.js (loader config: local fallback fonts), manifest, icons
 ```
 
@@ -158,7 +161,7 @@ When nothing is left, it waits. `_wake()` resumes it: views call things like `re
 4. Check every header after it fully.
 5. `_backfillHeaders` checks from genesis up in the background, and must join `_low` exactly; otherwise `checkpointMismatch` stops the client. With a local copy, each batch it checks is stored (`_flushCache`, as a header chain from genesis that stops short of the checkpoint), so a later session starts from the checkpoint again and resumes the back-fill after those headers (`_resumeBackfill`). Stored headers that don't lead to the checkpoint are dropped and the back-fill starts over from genesis (`_restartBackfill`), rather than blaming the checkpoint.
 
-A branch that would replace the checkpoint's block is refused. A cached chain that doesn't contain the checkpoint is ignored. The testnet ships one (`network.dart`, block 16,000 since v0.2.1); the demo network can't, since every demo chain is different.
+A branch that would replace the checkpoint's block is refused. A cached chain that doesn't contain the checkpoint is ignored. The testnet ships one (`network.dart`, refreshed with every release); the demo network can't, since every demo chain is different.
 
 **Sending.** `checkTransaction` applies consensus rules, the proven balance and Section 2.4's rules. `submit`:
 1. salts the content;
@@ -281,13 +284,14 @@ A TxStatus of invalid or refused takes the transaction out of nonce and balance 
   4. Raise `nodeRelease` in `tool/node_release.dart` to the node release that speaks it, run `dart run tool/bundle_node.dart --for-tests`, and run all the tests (Commands).
 - **New wire message:** add the class and its encoder and decoder in `wire.dart`, and enforce its limits while decoding. Add a round trip to `protocol_test.dart`'s "messages have the node layout". Handle it in `MurmurClient._handle`: every tag must appear there, since the switch is exhaustive over a sealed class.
 - **Every release refreshes the checkpoint** of each public network (not the demo network, whose chains are all different). A first session checks every header after the checkpoint before showing anything: a two-month-old checkpoint on the testnet means about 170,000 headers. The checkpoint must come from the release, never from a node or the user: a node could hand the client a fake chain's block, and the user only chooses nodes. A newer release's checkpoint that isn't in a user's local copy makes the client drop the copy and start over from it.
-- **Shipping a checkpoint:** once the chain is a few thousand blocks deep, run `murmur-node ctl checkpoint <height>` on a node you trust (for the testnet, node 1). Then uncomment the `checkpoint:` line on that network in `network.dart` and fill it in. `network_test.dart` checks the checkpoint's form and that it lies above the retarget window. Never invent one. `live_node_test.dart` against a testnet node then starts from it (its read-only checks use the network's checkpoint).
+- **Shipping a checkpoint:** `flutter test tool/refresh_checkpoint.dart` rewrites the testnet's `checkpoint:` line in `network.dart` from the live network, without taking a node's word (`tool/checkpoint/live.dart`): every address behind `testnet-seed.murmur.info` is asked separately, by a client that starts from the checkpoint shipped now (so the chain must hold it) and checks every header back to genesis, and at least two must answer and all agree. It picks a round height a day below the lowest tip. Review and commit the one-line change; never write a checkpoint by hand, except a network's first, which comes from `murmur-node ctl checkpoint <height>` on a node you trust. The release job runs `tool/check_checkpoint.dart`, which stops a release whose checkpoint isn't on the live chain or is over a week old. `network_test.dart` checks its form and that it lies above the retarget window.
 - **Making a release** (the user asked for it to work like the node's):
-  1. Raise `version:` in `pubspec.yaml`.
-  2. Move CHANGELOG.md's "Unreleased" notes under `## vX.Y.Z: <summary> (<date>)`.
-  3. Commit, then push the tag `vX.Y.Z`.
+  1. Refresh the checkpoint: `flutter test tool/refresh_checkpoint.dart`, and review its one-line change.
+  2. Raise `version:` in `pubspec.yaml`.
+  3. Move CHANGELOG.md's "Unreleased" notes under `## vX.Y.Z: <summary> (<date>)`.
+  4. Commit, then push the tag `vX.Y.Z`.
 
-  The pipeline (`.on-release-tag` in `.gitlab-ci.yml`) refuses a tag that doesn't match the version, then packages the testnet page with `SHA256SUMS` to the package registry, deploys it to Cloudflare Pages, and creates the GitLab Release. Commits never deploy. `v*` tags must stay protected, since the Cloudflare variables are protected. Keep CHANGELOG.md up to date with every change users notice, except the topics the user keeps out of the docs.
+  The pipeline (`.on-release-tag` in `.gitlab-ci.yml`) checks the shipped checkpoint against the live network (`check-checkpoint`), refuses a tag that doesn't match the version, then packages the testnet page with `SHA256SUMS` to the package registry, deploys it to Cloudflare Pages, and creates the GitLab Release. Commits never deploy. `v*` tags must stay protected, since the Cloudflare variables are protected. Keep CHANGELOG.md up to date with every change users notice, except the topics the user keeps out of the docs.
 - **New language:**
   1. Copy `app_en.arb` to `app_<code>.arb` and translate the values; keep the placeholders and ICU plural forms.
   2. Add the code to `languageNames` in `lib/ui/l10n.dart`.
@@ -317,7 +321,7 @@ A TxStatus of invalid or refused takes the transaction out of nonce and balance 
    - **Web limit, accepted:** in a browser, page code can't see a name's addresses or choose among them. The browser resolves the name, caches the answer, and reuses the same address. It moves on from an address that refuses or doesn't answer, but not from one that accepts the connection and then fails TLS.
    - A web client can't get past such a node by itself. Measured: 72 retries against `node.murmur.info` all went to the same broken address, while the native client reached all three nodes. `node.murmur.info` includes broken nodes on purpose, to test this.
    - **Rejected workarounds:** DNS over HTTPS (a third party), connecting by IP (TLS rejects it), per-node names (the network keeps one name). Don't reintroduce them unasked.
-3. **The testnet checkpoint ages.** v0.2.1 ships block 16,000. A first session checks every header after it before lists show (about 3,000 a second in a browser), and the gap grows by 2,880 a day, so refresh it with every release (Recipes). Checkpoints come only with releases; users choose nodes, never checkpoints, and a client never takes one from a node.
+3. **The testnet checkpoint ages.** A first session checks every header after it before lists show (about 3,000 a second in a browser), and the gap grows by 2,880 a day, so every release refreshes it (Recipes), and the release job refuses one over a week old. Its trust rests on the chain of checkpoints back to the first, and on the testnet's nodes agreeing when it's refreshed: they're all behind one name, run by the project. Checkpoints come only with releases; users choose nodes, never checkpoints, and a running client never takes one from a node.
 4. **Headers in memory: packed; the filter maps aren't.** `_headers` and `_backfill` are `HeaderChain`s (`lib/protocol/header_chain.dart`): 264 bytes a header (wire bytes plus hash) in one byte array, with the last 1,024 used kept as objects. Long loops read fields from the bytes (`prevHashAt`, `minerAt`, `hashIs`…). Measured with `tool/header_bench.dart` on 100,000 valid testnet headers (2026-10-04, `check` against `packed`):
    - **Memory in a browser** (headless Edge): about 376 bytes a header packed, spare capacity included, against 1,500 as objects. A year of testnet (about 1.05 million headers) is about 400 MB rather than 1.5 GB.
    - **Checking:** about 360 µs a header in a browser and 165 µs in the Dart VM, decoding included (11 to 17% slower than checking objects already decoded).
