@@ -3,3 +3,5 @@
 * text=auto
 # Generated from the ARB files by `flutter gen-l10n`.
 lib/l10n/app_localizations*.dart linguist-generated=true
+# Shell scripts run on Linux (WSL, CI): always LF, whatever the checkout.
+*.sh text eol=lf

@@ -51,15 +51,15 @@ app.*.map.json
 .widget_preview/
 
 # The other native platform folders: generated with `flutter create .` (see
-# README), not kept in the repository. windows/ is, with the app's name and icon.
+# README), not kept in the repository. windows/ and linux/ are, with the app's
+# name and icon.
 /android/
 /ios/
-/linux/
 /macos/
 
 # Keys and local node data never belong here.
 *.key
 murmur-data/
 
-# Release archives made locally (tool/package_windows.dart).
+# Release archives made locally (tool/package_desktop.dart).
 /dist/

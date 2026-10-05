@@ -5,8 +5,9 @@
 //
 // Writes web/favicon.png, web/icons/Icon-{192,512}.png (the rounded badge),
 // web/icons/Icon-maskable-{192,512}.png (full bleed, logo inside the maskable
-// safe zone), windows/runner/resources/app_icon.ico (the badge, for the
-// Windows app) and build/brand_preview.png.
+// safe zone), windows/runner/resources/app_icon.ico and
+// linux/runner/resources/app_icon.png (the badge, for the desktop apps) and
+// build/brand_preview.png.
 
 import 'dart:io';
 import 'dart:typed_data';
@@ -122,6 +123,7 @@ void main() {
       await _renderIcon('web/icons/Icon-maskable-192.png', 192, maskable: true);
       await _renderIcon('web/icons/Icon-maskable-512.png', 512, maskable: true);
       await _writeIco('windows/runner/resources/app_icon.ico', const [16, 24, 32, 48, 64, 256]);
+      await _writePng(await _badge(256), 'linux/runner/resources/app_icon.png');
     });
   });
 

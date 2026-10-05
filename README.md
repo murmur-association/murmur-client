@@ -76,10 +76,10 @@ A page opened with `?node=host:port` (for example `http://localhost:8080/?node=1
 
 ## Running
 
-The repo holds the Dart code (`lib/`, `test/`, `tool/`), the web shell (`web/`), the Windows app's shell (`windows/`: named Murmur, with the app's icon) and `pubspec.yaml`, but not the other native platform folders. Generate those once:
+The repo holds the Dart code (`lib/`, `test/`, `tool/`), the web shell (`web/`), the Windows and Linux apps' shells (`windows/`, `linux/`: shown as Murmur, with the app's icon) and `pubspec.yaml`, but not the other native platform folders. Generate those once:
 
 ```
-flutter create . --platforms=linux,macos,android,ios --project-name murmur_client
+flutter create . --platforms=macos,android,ios --project-name murmur_client --org info.murmur
 flutter pub get
 flutter test
 flutter run -d windows
@@ -148,7 +148,7 @@ A tag of the form `vX.Y.Z` runs these jobs, in order, after the usual checks (an
 - `check-checkpoint` stops the release if the shipped checkpoint isn't on the live testnet's chain, or is over a week old.
 - `public-node-tests` runs a short read-only test of the client against the live testnet.
 - `build-web-testnet` stops if the tag isn't `v` plus the version in `pubspec.yaml`. Otherwise it builds the testnet page as above, with `--base-href /`.
-- `build-windows` builds the Windows app for the testnet and zips it with its own node, the Visual C++ runtime and the notices, as `murmur-client-vX.Y.Z-windows-x64.zip`. If it fails, the release goes on without a Windows download.
+- `build-windows` and `build-linux` build the desktop apps for the testnet and archive each with its own node and the notices (and on Windows the Visual C++ runtime), as `murmur-client-vX.Y.Z-windows-x64.zip` and `murmur-client-vX.Y.Z-linux-x64.tar.gz`. The Linux job first starts the app on a virtual display and checks its node starts and stops with it (`tool/linux_smoke_test.sh`). If one fails, the release goes on without that download.
 - `package` zips the page with LICENSE and NOTICE as `murmur-web-vX.Y.Z.zip`, writes one `SHA256SUMS` for the page and the Windows app, and uploads them to the project's package registry, so anyone can check the live page or a download against a release, or host the page themselves.
 - `deploy-web` uploads the page with `wrangler pages deploy` to the Pages project `murmur-app` (`CF_PAGES_PROJECT` in `.gitlab-ci.yml`).
 - `release` then creates the GitLab Release "Murmur client vX.Y.Z", linking the archives, `SHA256SUMS` and the live page.
@@ -217,7 +217,8 @@ For how the code works, the rules it keeps, recipes and known gaps, see [AGENTS.
 | `tool/bundle_node.dart` | Puts `murmur-node` next to a built desktop app |
 | `tool/refresh_checkpoint.dart` | Refreshes the testnet checkpoint from the live network, before a release |
 | `tool/check_checkpoint.dart` | Checks the shipped checkpoint against the live network (the release job runs it) |
-| `tool/package_windows.dart` | Zips the built Windows app with its node, the C++ runtime and the notices (the release job runs it) |
+| `tool/package_desktop.dart` | Archives the built Windows or Linux app with its node and the notices (the release jobs run it) |
+| `tool/linux_smoke_test.sh` | Starts the built Linux app without a screen and checks its own node starts and stops with it |
 | `lib/protocol/commitments.dart` | The state tree, block filter and header history verifiers (PROTOCOL.md Section 3.6) |
 | `lib/protocol/consensus.dart` | The header rules the client checks: median-time-past and the difficulty retarget (Sections 3.5 and 4) |
 | `lib/services/secure_channel.dart` | The encrypted transport: X25519, HKDF, ChaCha20-Poly1305 (Section 7.4) |
