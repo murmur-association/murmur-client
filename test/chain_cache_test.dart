@@ -29,4 +29,17 @@ void main() {
     await cache.removeContents({});
     expect((await cache.load(genesis))!.contents.keys, [b]);
   });
+
+  test('the local copy goes to the application data folder, or on a phone the app cache folder', () {
+    String base(Map<String, String> env, {bool phone = false, String? appCache}) =>
+        chainCacheBase(phone: phone, env: env, temp: '/tmp', appCache: appCache);
+    expect(base({'APPDATA': r'C:\Users\a\AppData\Roaming', 'HOME': '/h'}), r'C:\Users\a\AppData\Roaming');
+    expect(base({'XDG_DATA_HOME': '/x', 'HOME': '/h'}), '/x');
+    expect(base({'HOME': '/h'}), '/h/.local/share');
+    expect(base({}), '/tmp');
+    // Phones: never the environment (Android sets HOME to "/"), and never
+    // the temp folder when the app's cache folder is known.
+    expect(base({'HOME': '/'}, phone: true, appCache: '/data/user/0/app/cache'), '/data/user/0/app/cache');
+    expect(base({}, phone: true), '/tmp');
+  });
 }

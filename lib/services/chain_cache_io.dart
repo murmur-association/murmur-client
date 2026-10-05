@@ -9,20 +9,48 @@ import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
 
+import 'package:path_provider/path_provider.dart';
+
 import '../protocol/bytes.dart';
 import '../protocol/models.dart';
 import '../protocol/wire.dart';
 import 'chain_cache.dart';
 
 Future<ChainCache> openChainCache() async {
-  final env = Platform.environment;
-  final base = env['APPDATA'] ??
-      env['XDG_DATA_HOME'] ??
-      (env['HOME'] == null ? null : '${env['HOME']}/.local/share') ??
-      Directory.systemTemp.path;
-  final dir = Directory('$base${Platform.pathSeparator}murmur-client${Platform.pathSeparator}chain');
+  final phone = Platform.isAndroid || Platform.isIOS;
+  final sep = Platform.pathSeparator;
+  final temp = Directory('${Directory.systemTemp.path}${sep}murmur-client${sep}chain');
+  final base = chainCacheBase(
+    phone: phone,
+    env: Platform.environment,
+    temp: Directory.systemTemp.path,
+    appCache: phone ? (await getApplicationCacheDirectory()).path : null,
+  );
+  final dir = Directory('$base${sep}murmur-client${sep}chain');
+  // Earlier versions kept a phone's copy in the temp folder: bring it along.
+  if (phone && dir.path != temp.path && await temp.exists() && !await dir.exists()) {
+    try {
+      await dir.parent.create(recursive: true);
+      await temp.rename(dir.path);
+    } on FileSystemException {
+      // Left behind: the copy is downloaded again.
+    }
+  }
   await dir.create(recursive: true);
   return FileChainCache(dir);
+}
+
+/// The folder the local copy goes under.
+/// - **Desktop:** the user's application data folder, from the environment
+///   (`APPDATA`, `XDG_DATA_HOME`, or `HOME/.local/share`), else `temp`.
+/// - **Phones** have no such variables: the app's cache folder (`appCache`).
+///   Not its support folder, which iOS and Android include in device
+///   backups: the local copy never leaves the device. The system may clear
+///   the cache folder when storage runs short; the copy is then downloaded
+///   again.
+String chainCacheBase({required bool phone, required Map<String, String> env, required String temp, String? appCache}) {
+  if (phone) return appCache ?? temp;
+  return env['APPDATA'] ?? env['XDG_DATA_HOME'] ?? (env['HOME'] == null ? null : '${env['HOME']}/.local/share') ?? temp;
 }
 
 /// The cache in `dir` (public so tests can use a temporary folder).
