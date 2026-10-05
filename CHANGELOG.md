@@ -2,6 +2,10 @@
 
 Newest first. Each release is a `vX.Y.Z` tag matching `version` in `pubspec.yaml`; see [README](README.md#releases-and-deployment). Entries marked **Breaking** need action from users.
 
+## Unreleased
+
+- **Fixed: the Windows app's release build.** v0.2.1 and v0.2.2 have no Windows download: the release runner's Visual Studio lacked a component (ATL) the secure-storage plugin needs, so the app didn't compile there. The job now adds it.
+
 ## v0.2.2: checkpoint refresh (2026-10-06)
 
 No protocol or network change.

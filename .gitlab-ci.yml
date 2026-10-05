@@ -278,10 +278,24 @@ build-windows:
   - |
     if ((Get-Content .flutter-sdk-windows/.ci-version -ErrorAction SilentlyContinue) -ne $env:FLUTTER_VERSION) {
       Remove-Item -Recurse -Force .flutter-sdk-windows -ErrorAction SilentlyContinue
-      git clone --depth 1 --branch $env:FLUTTER_VERSION https://github.com/flutter/flutter.git .flutter-sdk-windows
+      # Long paths: some of the SDK's test files pass Windows' 260 characters.
+      git clone -c core.longpaths=true --depth 1 --branch $env:FLUTTER_VERSION https://github.com/flutter/flutter.git .flutter-sdk-windows
       Set-Content .flutter-sdk-windows/.ci-version $env:FLUTTER_VERSION
     }
   - $env:Path = "$env:CI_PROJECT_DIR\.flutter-sdk-windows\bin;$env:Path"
+  # The runner's Visual Studio Build Tools come without ATL, which the
+  # secure-storage plugin needs (atlstr.h): add it. v0.2.1's Windows build
+  # failed for lack of it.
+  - |
+    $installer = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer"
+    $vs = & "$installer\vswhere.exe" -latest -products * -property installationPath
+    $atl = & "$installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.ATL -property installationPath
+    if (-not $atl) {
+      $p = Start-Process -Wait -PassThru -FilePath "$installer\setup.exe" -ArgumentList "modify --installPath `"$vs`" --add Microsoft.VisualStudio.Component.VC.ATL --quiet --norestart"
+      Write-Output "added ATL to ${vs}: exit code $($p.ExitCode)"
+      # 3010 means done, restart wanted: not needed to compile.
+      if ($p.ExitCode -ne 0 -and $p.ExitCode -ne 3010) { exit 1 }
+    }
   # What the runner has to build with, for when this job fails.
   - flutter doctor -v
   - flutter pub get
