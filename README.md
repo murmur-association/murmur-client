@@ -163,6 +163,14 @@ One-time setup:
 
 The page is built for the root of its domain; to serve it from a subfolder, change `--base-href` to match.
 
+**The checkpoint refresh, scheduled.** A release ships a recent testnet checkpoint, and the release job refuses one over a week old. `flutter test tool/refresh_checkpoint.dart` refreshes it by hand; the `refresh-checkpoint` job does the same on a schedule and proposes the one-line change as a merge request (branch `checkpoint-refresh`), which a person reviews and merges. It never changes the default branch itself, and it releases nothing. One-time setup in GitLab:
+
+1. **Settings → Access tokens:** add a project access token, role **Developer**, scope **write_repository**. A Developer can push branches and open merge requests, but not push to the protected default branch.
+2. **Settings → CI/CD → Variables:** add it as `CHECKPOINT_BOT_TOKEN`, **Masked and hidden** and **Protected**.
+3. **Build → Pipeline schedules:** a new schedule on the default branch, weekly (for example `0 6 * * 1`), with the variable `REFRESH_CHECKPOINT` = `1`.
+
+To run it at once: **Build → Pipelines → New pipeline** on the default branch with `REFRESH_CHECKPOINT` = `1`. Without that variable, scheduled and manual pipelines only run the usual checks.
+
 After `dart run tool/bundle_node.dart --for-tests`, which downloads the pinned `murmur-node` release (`tool/node_release.dart`) and checks it against its `SHA256SUMS`, `flutter test` also runs `test/node_test.dart`, as CI does: the node builds demo chains (`murmur-node demo-chain`), the test starts it on them, and checks sync, checkpoints, reorganizations, proofs, filters, the local copy against the state root, sending, threads, flags and invitations, with nothing to set up first. `test/live_node_test.dart` runs the read-only checks against a public node when `MURMUR_NODE=host:port` is set, for example `MURMUR_NODE=testnet-seed.murmur.info:7878`.
 
 ## Trying it locally

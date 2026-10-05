@@ -84,6 +84,49 @@ build-web:
     - build/web/
     expire_in: 1 week
 
+# Proposes a fresh testnet checkpoint, for a person to review: only in a
+# scheduled pipeline, or one started by hand, with REFRESH_CHECKPOINT=1.
+# tool/refresh_checkpoint.dart rewrites the checkpoint line from the live
+# network (every node asked separately, from the checkpoint shipped now,
+# checked back to genesis, all agreeing). If it changed, the line is
+# committed to the branch checkpoint-refresh and a merge request to the
+# default branch is opened, or the open one updated. Nothing reaches the
+# default branch without that review, and no release is made.
+# Needs CHECKPOINT_BOT_TOKEN: a project access token (role Developer, scope
+# write_repository), as a masked and protected CI/CD variable.
+refresh-checkpoint:
+  extends: .flutter
+  stage: test
+  rules:
+  - if: $REFRESH_CHECKPOINT == "1" && ($CI_PIPELINE_SOURCE == "schedule" || $CI_PIPELINE_SOURCE == "web")
+  script:
+  - |
+    if [ -z "$CHECKPOINT_BOT_TOKEN" ]; then
+      echo "CHECKPOINT_BOT_TOKEN is not set: see the comment on this job"
+      exit 1
+    fi
+  - flutter test tool/refresh_checkpoint.dart
+  - |
+    if git diff --quiet -- lib/protocol/network.dart; then
+      echo "the checkpoint is less than a day old: nothing to propose"
+      exit 0
+    fi
+    line=$(sed -n "s/.*checkpoint: Checkpoint(\([0-9]*\), '\([0-9a-f]*\)').*/\1 \2/p" lib/protocol/network.dart)
+    height=${line% *}
+    echo "proposing checkpoint $line"
+    git config user.name "Checkpoint refresh (CI)"
+    git config user.email "$GITLAB_USER_EMAIL"
+    git checkout -B checkpoint-refresh
+    git commit -m "Refresh the testnet checkpoint to block $height" \
+      -m "Written by tool/refresh_checkpoint.dart in pipeline $CI_PIPELINE_URL: the testnet's nodes agreed on it, on a chain checked from genesis that holds the checkpoint shipped before it." \
+      -- lib/protocol/network.dart
+    git push --force \
+      -o merge_request.create \
+      -o merge_request.target="$CI_DEFAULT_BRANCH" \
+      -o merge_request.title="Refresh the testnet checkpoint to block $height" \
+      -o merge_request.description="From the scheduled checkpoint refresh ($CI_PIPELINE_URL). Check the one changed line in lib/protocol/network.dart, then merge before the next release." \
+      "https://oauth2:${CHECKPOINT_BOT_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git" checkpoint-refresh
+
 # Releases: on a version tag (v0.1.1), matching the version in pubspec.yaml,
 # build the public testnet page, publish it as an archive with SHA256SUMS
 # to the project's package registry, deploy it to app.murmur.info
