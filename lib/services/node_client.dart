@@ -237,7 +237,7 @@ class MurmurClient extends ChangeNotifier {
 
   /// Headers from genesis that a previous session back-filled but didn't
   /// finish (from the local copy): the back-fill resumes after them.
-  List<BlockHeader>? _resumeBackfill;
+  HeaderChain? _resumeBackfill;
 
   /// Whether `_backfill` began with headers from the local copy. If they
   /// turn out not to lead to the checkpoint (another chain's, after a deep
@@ -1041,11 +1041,13 @@ class MurmurClient extends ChangeNotifier {
       return;
     }
     if (cached == null) return;
-    final headers = <BlockHeader>[];
+    // Checked and packed one at a time: the stored chain is never held as
+    // objects.
+    final headers = HeaderChain();
     final history = _history.copy();
     for (final h in cached.headers) {
       if (h.height != headers.length + 1 ||
-          !bytesEqual(h.prevHash, headers.isEmpty ? genesis! : headers.last.hash) ||
+          !(headers.isEmpty ? bytesEqual(h.prevHash, genesis!) : headers.hashIs(headers.length - 1, h.prevHash)) ||
           !h.meetsTarget ||
           !bytesEqual(h.historyRoot, history.root)) {
         break;
@@ -1057,7 +1059,7 @@ class MurmurClient extends ChangeNotifier {
     // A copy that doesn't lead to the checkpoint in force (a newer release
     // may ship one) is of another chain: start over from the checkpoint.
     final cp = _checkpoint;
-    if (cp != null && headers.length >= cp.height && headers[cp.height - 1].id != cp.hash) {
+    if (cp != null && headers.length >= cp.height && !headers.hashIs(cp.height - 1, fromHex(cp.hash))) {
       _historyMarks.clear();
       return;
     }
@@ -1074,8 +1076,9 @@ class MurmurClient extends ChangeNotifier {
       _onDisk.addAll(cached.contents.keys);
       return;
     }
-    _headers.addAll(headers);
-    _blocks.addAll(List<Block?>.filled(headers.length, null));
+    final loaded = headers.length;
+    _headers.takeFrom(headers);
+    _blocks.addAll(List<Block?>.filled(loaded, null));
     _history = history;
     _top = height + 1;
     cached.contents.forEach((hash, content) {
@@ -1731,12 +1734,10 @@ class MurmurClient extends ChangeNotifier {
     final resume = _resumeBackfill;
     if (resume != null && _backfill.isEmpty) {
       _resumeBackfill = null;
-      final resumed = resume.take(min(resume.length, _low - 1));
-      _backfill.addAll(resumed);
+      resume.truncate(_low - 1);
+      _backfill.takeFrom(resume);
       _backfillHistory = HistoryPeaks()..pushHeader(_genesisHeader!);
-      for (final h in resumed) {
-        _backfillHistory!.pushHeader(h);
-      }
+      _backfill.snapshot().forEach(_backfillHistory!.pushHeader);
       _backfillSaved = _backfill.length;
       _backfillFromCache = true;
     }

@@ -40,13 +40,7 @@ class FileChainCache implements ChainCache {
   @override
   Future<CachedChain?> load(String genesis) async {
     if (await _genesis() != genesis) return null;
-    final headers = <BlockHeader>[];
-    if (await _headersFile.exists()) {
-      final all = await _headersFile.readAsBytes();
-      for (var i = 0; i + headerBytes <= all.length; i += headerBytes) {
-        headers.add(decodeHeader(Uint8List.sublistView(all, i, i + headerBytes)));
-      }
-    }
+    final headers = storedHeaders(await _headersFile.exists() ? await _headersFile.readAsBytes() : Uint8List(0));
     final blocks = <int, Block>{};
     if (await _blocksFile.exists()) {
       final r = ByteReader(await _blocksFile.readAsBytes());

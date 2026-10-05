@@ -11,13 +11,15 @@
 import 'dart:typed_data';
 
 import '../protocol/models.dart';
+import '../protocol/wire.dart';
 import 'chain_cache_io.dart' if (dart.library.js_interop) 'chain_cache_web.dart' as impl;
 
 class CachedChain {
   CachedChain(this.headers, this.blocks, this.contents);
 
-  /// Headers from height 1 up.
-  final List<BlockHeader> headers;
+  /// Headers from height 1 up, read once: the stores decode them as they
+  /// are read, so a long chain is never held as objects.
+  final Iterable<BlockHeader> headers;
 
   /// Downloaded blocks by height (not necessarily all of them).
   final Map<int, Block> blocks;
@@ -58,4 +60,12 @@ abstract class ChainCache {
 
   /// Deletes everything.
   Future<void> clear();
+}
+
+/// The headers in `stored` (their wire encodings, one after another),
+/// decoded one at a time as they're read. A cut-short last one is left out.
+Iterable<BlockHeader> storedHeaders(Uint8List stored) sync* {
+  for (var i = 0; i + headerBytes <= stored.length; i += headerBytes) {
+    yield decodeHeader(Uint8List.sublistView(stored, i, i + headerBytes));
+  }
 }

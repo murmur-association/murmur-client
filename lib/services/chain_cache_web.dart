@@ -106,12 +106,7 @@ class _WebChainCache implements ChainCache {
       }),
       _each(t.objectStore('contents'), (k, v) => contents[(k as JSString).toDart] = _bytes(v)),
     ]);
-    final all = headerChunks.takeBytes();
-    final headers = [
-      for (var i = 0; i + headerBytes <= all.length; i += headerBytes)
-        decodeHeader(Uint8List.sublistView(all, i, i + headerBytes)),
-    ];
-    return CachedChain(headers, blocks, contents);
+    return CachedChain(storedHeaders(headerChunks.takeBytes()), blocks, contents);
   }
 
   @override

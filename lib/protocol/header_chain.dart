@@ -177,6 +177,18 @@ class HeaderChain {
     _recent.removeWhere((i, _) => i >= _length);
   }
 
+  /// Becomes `other`, taking its packed bytes rather than copying them, and
+  /// leaves `other` empty (a chain loaded and checked apart, then adopted).
+  void takeFrom(HeaderChain other) {
+    _bytes = other._bytes;
+    _known = other._known;
+    _length = other._length;
+    _recent
+      ..clear()
+      ..addAll(other._recent);
+    other.clear();
+  }
+
   void clear() {
     _bytes = Uint8List(0);
     _known = Uint8List(0);

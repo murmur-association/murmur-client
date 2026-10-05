@@ -98,4 +98,19 @@ void main() {
     expect(chain.isEmpty, isTrue);
     expect(snapshot[0].id, _header(1).id);
   });
+
+  test('a chain loaded apart is adopted whole, and the other left empty', () {
+    final loaded = HeaderChain()..addAll([for (var h = 1; h <= 2000; h++) _header(h)]);
+    final chain = HeaderChain()..add(_header(77));
+    chain.takeFrom(loaded);
+    expect(chain.length, 2000);
+    expect(chain[0]!.id, _header(1).id);
+    expect(chain[1999]!.id, _header(2000).id);
+    expect(loaded.isEmpty, isTrue);
+    // Each grows on its own from here.
+    loaded.add(_header(5));
+    chain.add(_header(2001));
+    expect(chain[0]!.id, _header(1).id);
+    expect(chain.length, 2001);
+  });
 }
