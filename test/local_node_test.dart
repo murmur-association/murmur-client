@@ -1,5 +1,5 @@
 // The app's own node: the options it's started with, reading the port it
-// reports, and (with MURMUR_NODE_BIN set to a murmur-node binary) running a
+// reports, and (with the pinned murmur-node release, see support/test_node.dart) running a
 // real one and syncing a client from it.
 
 // ignore_for_file: avoid_print
@@ -11,6 +11,8 @@ import 'package:murmur_client/crypto/wallet.dart';
 import 'package:murmur_client/services/local_node.dart';
 import 'package:murmur_client/services/local_node_io.dart';
 import 'package:murmur_client/services/node_client.dart';
+
+import 'support/test_node.dart';
 
 void main() {
   test('options: short-retention, local-only, and the wallet kept and paid only when given', () {
@@ -37,7 +39,6 @@ void main() {
     expect(listeningPort('[rpc] control interface on 127.0.0.1:49273'), isNull);
   });
 
-  final bin = Platform.environment['MURMUR_NODE_BIN'];
   test('runs a real node, syncs a client from it, and stops it', () async {
     final dir = await Directory.systemTemp.createTemp('murmur-local-node');
     addTearDown(() async {
@@ -47,7 +48,7 @@ void main() {
         // Windows may still hold a file for a moment.
       }
     });
-    final node = ProcessLocalNode(binary: bin, dataDir: dir.path);
+    final node = ProcessLocalNode(binary: nodeBinary, dataDir: dir.path);
     final wallet = await MurmurWallet.generate();
     await node.start(localNodeArgs(dataDir: dir.path, spec: 'demo', address: wallet.addressHex, mine: true, cpuPct: 50));
     addTearDown(node.stop);
@@ -74,6 +75,6 @@ void main() {
     await node.stop();
     expect(node.state, LocalNodeState.stopped);
     expect(node.port, isNull);
-  }, skip: bin == null ? 'set MURMUR_NODE_BIN to a murmur-node binary to run' : false,
+  }, skip: nodeSkip,
       timeout: const Timeout(Duration(minutes: 2)));
 }

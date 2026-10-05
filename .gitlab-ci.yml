@@ -63,8 +63,15 @@ analyze:
 test:
   extends: .flutter
   stage: test
+  variables:
+    # The tests against the node must run here, not skip themselves.
+    MURMUR_REQUIRE_NODE: "1"
   script:
-  # The live-node tests skip themselves without MURMUR_NODE.
+  # The pinned murmur-node release (tool/node_release.dart), checked
+  # against its SHA256SUMS, for the tests that start nodes on chains it
+  # builds (test/node_test.dart). The public-node tests skip themselves
+  # without MURMUR_NODE.
+  - dart run tool/bundle_node.dart --for-tests
   - flutter test
 
 build-web:

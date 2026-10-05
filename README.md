@@ -163,7 +163,7 @@ One-time setup:
 
 The page is built for the root of its domain; to serve it from a subfolder, change `--base-href` to match.
 
-With `MURMUR_NODE_BIN` set to a `murmur-node` binary, `flutter test` also runs `test/node_test.dart`: it generates demo chains, starts the node on them, and checks sync, checkpoints, reorganizations, proofs, filters, the local copy against the state root, sending, threads, flags and invitations, with nothing to set up first. `test/live_node_test.dart` runs the read-only checks against a public node when `MURMUR_NODE=host:port` is set, for example `MURMUR_NODE=testnet-seed.murmur.info:7878`.
+After `dart run tool/bundle_node.dart --for-tests`, which downloads the pinned `murmur-node` release (`tool/node_release.dart`) and checks it against its `SHA256SUMS`, `flutter test` also runs `test/node_test.dart`, as CI does: the node builds demo chains (`murmur-node demo-chain`), the test starts it on them, and checks sync, checkpoints, reorganizations, proofs, filters, the local copy against the state root, sending, threads, flags and invitations, with nothing to set up first. `test/live_node_test.dart` runs the read-only checks against a public node when `MURMUR_NODE=host:port` is set, for example `MURMUR_NODE=testnet-seed.murmur.info:7878`.
 
 ## Trying it locally
 
@@ -184,7 +184,7 @@ The node is set up to keep the user out of hosting other people's content: it li
 The option appears only when `murmur-node` is next to the app's executable. After `flutter build windows` (or `linux`, `macos`), put it there:
 
 ```
-dart run tool/bundle_node.dart --version v0.10.0     # a published release, checked against SHA256SUMS
+dart run tool/bundle_node.dart                       # the pinned release (tool/node_release.dart), checked against SHA256SUMS
 dart run tool/bundle_node.dart --from <murmur-node>  # or a binary you built
 ```
 

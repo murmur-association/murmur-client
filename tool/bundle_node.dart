@@ -1,24 +1,30 @@
 // Puts the murmur-node program next to a built desktop app, so the app can
-// run a node of its own (lib/services/local_node.dart). Run after
-// `flutter build windows|linux|macos`:
+// run a node of its own (lib/services/local_node.dart), or where the tests
+// against the node look for it. Run after `flutter build windows|linux|macos`:
 //
-//   dart run tool/bundle_node.dart --version v0.10.0     # a published release
+//   dart run tool/bundle_node.dart                       # the pinned release (tool/node_release.dart)
+//   dart run tool/bundle_node.dart --version v0.10.1     # another published release
 //   dart run tool/bundle_node.dart --from <murmur-node>  # a binary at hand
 //   ... [--into <dir>]                                   # another build folder
+//   dart run tool/bundle_node.dart --for-tests           # into build/node, for flutter test
 //
 // A release is downloaded from the node project's package registry and
 // checked against its SHA256SUMS before anything is copied; its license
-// notices go next to the binary too. This is a build step: the app itself
-// never downloads anything.
+// notices go next to the binary too, and its version into
+// murmur-node.version. This is a build step: the app itself never downloads
+// anything.
 
 import 'dart:io';
 
 import 'package:crypto/crypto.dart';
 
+import 'node_release.dart';
+
 const _releases = 'https://gitlab.com/api/v4/projects/elc4no%2Fmurmur/packages/generic/murmur-node';
 
 Future<void> main(List<String> args) async {
   String? version, from, into;
+  var forTests = false;
   for (var i = 0; i < args.length; i++) {
     switch (args[i]) {
       case '--version':
@@ -27,17 +33,28 @@ Future<void> main(List<String> args) async {
         from = args[++i];
       case '--into':
         into = args[++i];
+      case '--for-tests':
+        forTests = true;
       default:
         _usage('unknown option ${args[i]}');
     }
   }
-  if ((version == null) == (from == null)) _usage('give either --version or --from');
+  if (version != null && from != null) _usage('give --version or --from, not both');
+  if (from == null) version ??= nodeRelease;
+  if (forTests) {
+    into ??= testNodeDir;
+    await Directory(into).create(recursive: true);
+  }
   final target = Directory(into ?? _buildDir());
   if (!await target.exists()) _usage('no build at ${target.path}: run flutter build first, or give --into');
   final name = Platform.isWindows ? 'murmur-node.exe' : 'murmur-node';
 
+  // Which release is there (none for a binary at hand), so the tests can
+  // tell a stale download from the pinned one.
+  final versionFile = File('${target.path}/murmur-node.version');
   if (from != null) {
     await File(from).copy('${target.path}/$name');
+    if (await versionFile.exists()) await versionFile.delete();
   } else {
     final triple = _triple();
     final archive = 'murmur-node-$version-$triple.${Platform.isWindows ? 'zip' : 'tar.gz'}';
@@ -62,6 +79,7 @@ Future<void> main(List<String> args) async {
         final dest = f == name ? name : 'murmur-node-$f';
         await File('${tmp.path}/$f').copy('${target.path}/$dest');
       }
+      await versionFile.writeAsString('$version\n');
     } finally {
       await tmp.delete(recursive: true);
     }
@@ -106,6 +124,6 @@ Future<List<int>> _get(String url) async {
 
 Never _usage(String problem) {
   stderr.writeln('$problem\n'
-      'usage: dart run tool/bundle_node.dart (--version <tag> | --from <murmur-node>) [--into <build dir>]');
+      'usage: dart run tool/bundle_node.dart [--version <tag> | --from <murmur-node>] [--into <build dir> | --for-tests]');
   exit(2);
 }

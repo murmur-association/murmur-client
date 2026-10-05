@@ -1,6 +1,7 @@
-// The client against the real node (MURMUR_NODE_BIN), on demo chains each
-// test generates (support/demo_chain.dart) and the node checks with its own
-// rules as it loads them (support/test_node.dart). Nothing to set up and
+// The client against the real node: the pinned murmur-node release
+// (tool/node_release.dart, fetched with `dart run tool/bundle_node.dart
+// --for-tests`), on demo chains the node builds itself (`murmur-node
+// demo-chain`, through support/test_node.dart). Nothing to set up and
 // nothing to wait for: no running node, no mining before the tests.
 
 // ignore_for_file: avoid_print
@@ -9,6 +10,7 @@ import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:murmur_client/crypto/wallet.dart';
+import 'package:murmur_client/protocol/bytes.dart';
 import 'package:murmur_client/protocol/invite.dart';
 import 'package:murmur_client/protocol/models.dart';
 import 'package:murmur_client/protocol/network.dart';
@@ -17,30 +19,38 @@ import 'package:murmur_client/services/node_client.dart';
 import 'package:murmur_client/services/storage.dart' show InviteRecord;
 
 import 'support/client_checks.dart';
-import 'support/demo_chain.dart';
 import 'support/memory_cache.dart';
 import 'support/test_node.dart';
 
 void main() {
-  // The wallet every generated block pays, so it has tokens to send.
+  // The wallet every built block pays, so it has tokens to send.
   late final MurmurWallet miner;
+  setUpAll(() async => miner = await MurmurWallet.generate());
+
+  Future<Uint8List> someoneElse() async => (await MurmurWallet.generate()).address;
+
   // Long enough for two back-fill batches (2,000 headers each) below the
-  // checkpoint.
-  late final List<Block> chain;
-  late final Checkpoint cp;
-  // Short, ending now, for what doesn't need many blocks (and for a node
-  // that mines on it).
-  late final List<Block> short;
-  setUpAll(() async {
-    miner = await MurmurWallet.generate();
-    chain = demoChain(2600, miner: miner.address);
-    cp = Checkpoint(2570, chain[2569].header.id);
-    short = demoChain(300, miner: miner.address);
-  });
+  // checkpoint at 2,570.
+  Future<TestNode> long() async {
+    final node = await TestNode.build(2600, mineTo: miner.address);
+    await node.start();
+    return node;
+  }
+
+  Checkpoint checkpointOf(TestNode node) => Checkpoint(2570, node.hashAt(2570));
+
+  /// The headers a client stores from `node` (from genesis, no checkpoint).
+  Future<List<BlockHeader>> headersOf(TestNode node) async {
+    final cache = MemoryCache();
+    final c = await node.connect(MurmurClient()..useCache(cache));
+    await until(c, () => cache.headers.length == node.height);
+    return cache.headers;
+  }
 
   group('sync', () {
     test('starts from a checkpoint, checks back to genesis, and stores the back-fill batch by batch', () async {
-      final node = await TestNode.start(chain);
+      final node = await long();
+      final cp = checkpointOf(node);
       final cache = MemoryCache();
       final c = MurmurClient(checkpoint: cp)..useCache(cache);
       var fromCheckpoint = false;
@@ -49,15 +59,15 @@ void main() {
       expect(c.headerAt(cp.height)!.id, cp.hash);
       await until(c, () => c.checkingFromCheckpoint == null);
       expect(fromCheckpoint, isTrue);
-      expect(c.headerAt(1)!.id, chain.first.header.id);
+      expect(c.headerAt(1)!.id, node.hashAt(1));
       // The first batch was stored before the back-fill joined.
       expect(cache.saves, contains((1, 2000)));
-      expect(cache.headers.length, chain.length, reason: 'the joined chain is stored');
+      expect(cache.headers.length, node.height, reason: 'the joined chain is stored');
     });
 
     test('a checkpoint that is not on the chain stops the client', () async {
-      final node = await TestNode.start(chain);
-      final c = MurmurClient(checkpoint: Checkpoint(cp.height, '00' * 32));
+      final node = await long();
+      final c = MurmurClient(checkpoint: Checkpoint(2570, '00' * 32));
       addTearDown(c.dispose);
       await c.connect('127.0.0.1', node.port);
       final deadline = DateTime.now().add(const Duration(seconds: 20));
@@ -69,68 +79,85 @@ void main() {
     });
 
     test('an interrupted back-fill resumes after the headers in the local copy', () async {
-      final node = await TestNode.start(chain);
-      // What an interrupted back-fill leaves: the first 500 headers.
-      final cache = MemoryCache([for (final b in chain.take(500)) b.header]);
-      final c = await node.connect(MurmurClient(checkpoint: cp)..useCache(cache));
+      final node = await long();
+      // What an interrupted back-fill leaves: the chain's first 500 headers.
+      final cache = MemoryCache((await headersOf(node)).take(500).toList());
+      final c = await node.connect(MurmurClient(checkpoint: checkpointOf(node))..useCache(cache));
       await until(c, () => c.checkingFromCheckpoint == null);
-      expect(c.headerAt(500)!.id, chain[499].header.id);
-      expect(c.headerAt(501)!.id, chain[500].header.id);
-      expect(c.headersFromNode, lessThanOrEqualTo(chain.length - 500), reason: 'headers 1 to 500 were not fetched again');
-      expect(cache.headers.length, chain.length);
+      expect(c.headerAt(500)!.id, node.hashAt(500));
+      expect(c.headerAt(501)!.id, node.hashAt(501));
+      expect(c.headersFromNode, lessThanOrEqualTo(node.height - 500), reason: 'headers 1 to 500 were not fetched again');
+      expect(cache.headers.length, node.height);
     });
 
     test('stored headers of another chain are dropped, and the back-fill starts over from genesis', () async {
-      final node = await TestNode.start(chain);
-      final other = demoChain(500, miner: (await MurmurWallet.generate()).address);
-      final c = await node.connect(MurmurClient(checkpoint: cp)..useCache(MemoryCache([for (final b in other) b.header])));
+      final other = await TestNode.build(500, mineTo: await someoneElse());
+      await other.start();
+      final stored = await headersOf(other);
+      await other.stop();
+      final node = await long();
+      final cp = checkpointOf(node);
+      final c = await node.connect(MurmurClient(checkpoint: cp)..useCache(MemoryCache(stored)));
       await until(c, () => c.checkingFromCheckpoint == null);
       expect(c.headersFromNode, greaterThan(cp.height - NetworkInfo.demo.lwmaWindow - 1), reason: 'checked from genesis');
-      expect(c.headerAt(1)!.id, chain.first.header.id);
+      expect(c.headerAt(1)!.id, node.hashAt(1));
       expect(c.headerAt(cp.height)!.id, cp.hash);
     });
 
     test('a reorganization rebuilds the header history from the nearest mark', () async {
       // From genesis (the demo network has no checkpoint), past the marks
-      // at 1,024 and 2,048.
-      final before = chain.sublist(0, 2100);
-      final node = await TestNode.start(before);
+      // at 1,024 and 2,048. Ending ten minutes ago leaves the branches
+      // room: 120 blocks need two minutes after their fork point.
+      final node = await TestNode.build(2100,
+          mineTo: miner.address, endTime: DateTime.now().subtract(const Duration(minutes: 10)));
+      await node.start();
       final c = await node.connect(MurmurClient());
-      // A heavier fork from block 2,060: the client rolls back to it,
+      final before = List.of(node.hashes);
+      bool following(TestNode n) => c.height == n.height && toHex(c.hashAt(n.height)) == n.hashAt(n.height);
+      // A heavier branch from block 2,060: the client rolls back to it,
       // rebuilds the history from the mark at 2,048, and checks every new
       // header's history root against it.
-      final other = (await MurmurWallet.generate()).address;
-      final fork = demoChain(2130, miner: other, after: before, forkAt: 2060);
-      await node.reorganizeTo(fork, 2060);
-      await until(c, () => c.height == 2130 && c.hashAt(2130).join() == fork.last.header.hash.join(), reconnecting: true);
-      expect(c.headerAt(2060)!.id, before[2059].header.id);
-      expect(c.headerAt(2061)!.id, fork[2060].header.id);
+      await node.stop();
+      await node.grow(2130, mineTo: await someoneElse(), forkAt: 2060);
+      await node.start();
+      await until(c, () => following(node), reconnecting: true);
+      expect(c.headerAt(2060)!.id, before[2059]);
+      expect(c.headerAt(2061)!.id, isNot(before[2060]));
       // A second one, below the newest mark: from the one before.
-      final deeper = demoChain(2160, miner: miner.address, after: fork, forkAt: 2040);
-      await node.reorganizeTo(deeper, 2040);
-      await until(c, () => c.height == 2160 && c.hashAt(2160).join() == deeper.last.header.hash.join(), reconnecting: true);
-      expect(c.headerAt(2041)!.id, deeper[2040].header.id);
-    });
+      await node.stop();
+      await node.grow(2160, mineTo: miner.address, forkAt: 2040);
+      await node.start();
+      await until(c, () => following(node), reconnecting: true);
+      expect(c.headerAt(2041)!.id, node.hashAt(2041));
+    }, timeout: const Timeout(Duration(minutes: 2)));
   }, skip: nodeSkip);
+
+  // A short chain ending now, for what doesn't need many blocks; the node
+  // mines on top to the same wallet when transactions must be mined.
+  Future<TestNode> short({bool mining = false}) async {
+    final node = await TestNode.build(300, mineTo: miner.address);
+    await node.start(mineTo: mining ? miner.address : null);
+    return node;
+  }
 
   group('state and sending', () {
     test('proves state, finds an address through filters, without the chain', () async {
-      await checkProvenState((c) async => (await TestNode.start(short)).connect(c));
+      await checkProvenState((c) async => (await short()).connect(c));
     });
 
     test('with a local copy, counts the chain and agrees with the state root; a second session starts from it', () async {
-      final node = await TestNode.start(short);
+      final node = await short();
       await checkLocalCopy(node.connect);
     });
 
     test('sends with proven nonces and gets transactions mined', () async {
-      final client = await (await TestNode.start(short, mineTo: miner.address)).connect(MurmurClient());
+      final client = await (await short(mining: true)).connect(MurmurClient());
       final wallet = miner;
       final me = wallet.addressHex;
       await until(client, () => client.availableTo(me) != null);
       final start = client.account(me)!;
       print('wallet ${me.substring(0, 12)}… balance ${start.balance}, nonce ${start.nonce}');
-      expect(start.balance, greaterThan(100), reason: 'the generated chain pays this wallet');
+      expect(start.balance, greaterThan(100), reason: 'the built chain pays this wallet');
   
       final text = 'hello from the flutter client ${DateTime.now().toIso8601String()}';
       final orphan = await client.submit(
@@ -194,7 +221,7 @@ void main() {
     }, timeout: const Timeout(Duration(minutes: 3)));
   
     test('invitations: funded cards are claimed by a new wallet, or taken back', () async {
-      final client = await (await TestNode.start(short, mineTo: miner.address)).connect(MurmurClient());
+      final client = await (await short(mining: true)).connect(MurmurClient());
       final inviter = miner;
       await until(client, () => client.availableTo(inviter.addressHex) != null);
       final costs = invitationCosts(await client.feeInfo());
