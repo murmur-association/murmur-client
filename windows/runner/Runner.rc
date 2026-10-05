@@ -89,15 +89,18 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
+            // What the user sees is "Murmur" (FileDescription is the name in
+            // Task Manager, ProductName the one in the file's properties);
+            // technical names keep the package's, murmur_client.
             // CompanyName and ProductName also name the folder the app's
-            // settings are kept in (%APPDATA%\Murmur\Murmur): changing them
-            // moves it.
-            VALUE "CompanyName", "Murmur" "\0"
+            // settings are kept in (%APPDATA%\Murmur Association\Murmur):
+            // changing them moves it.
+            VALUE "CompanyName", "Murmur Association" "\0"
             VALUE "FileDescription", "Murmur" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "murmur" "\0"
+            VALUE "InternalName", "murmur_client" "\0"
             VALUE "LegalCopyright", "Copyright 2026 The Murmur Authors. Apache License 2.0." "\0"
-            VALUE "OriginalFilename", "murmur.exe" "\0"
+            VALUE "OriginalFilename", "murmur_client.exe" "\0"
             VALUE "ProductName", "Murmur" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END

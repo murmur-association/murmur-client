@@ -60,3 +60,6 @@ app.*.map.json
 # Keys and local node data never belong here.
 *.key
 murmur-data/
+
+# Release archives made locally (tool/package_windows.dart).
+/dist/

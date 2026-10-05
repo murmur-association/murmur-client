@@ -19,6 +19,8 @@ include:
 
 variables:
   SECRET_DETECTION_ENABLED: 'true'
+  # The Flutter SDK every job builds with (cloned at this tag, and cached).
+  FLUTTER_VERSION: "3.47.5"
 
 # No merge request pipelines (pushes are checked as branch pipelines), and a
 # scheduled pipeline holds the scheduled release alone: the scanners are
@@ -44,7 +46,6 @@ secret_detection:
   # cached), since images aren't published for every release.
   image: ghcr.io/cirruslabs/flutter:3.44.0
   variables:
-    FLUTTER_VERSION: "3.47.5"
     PUB_CACHE: "$CI_PROJECT_DIR/.pub-cache"
   before_script:
   - |
@@ -255,14 +256,56 @@ build-web-testnet:
     - build/web/
     expire_in: 1 week
 
-# The page as a downloadable archive, with its checksum, in the package
-# registry: anyone can check that the live page is a release, or host it.
+# The Windows app for the testnet, as a zip to unpack and run: the app
+# (shown as Murmur, murmur_client.exe), the pinned node beside it
+# (tool/bundle_node.dart), the Visual C++ runtime and the notices
+# (tool/package_windows.dart). Its default node is the testnet's seed name.
+# On GitLab's Windows runner, like the node's own Windows build. Allowed to
+# fail: it must never hold back the page's release. A failure shows as a
+# warning on the pipeline, and that release then has no Windows download
+# (its link on the release page leads nowhere).
+build-windows:
+  extends: .on-release-tag
+  stage: build
+  tags:
+  - saas-windows-medium-amd64
+  allow_failure: true
+  cache:
+  - key: flutter-sdk-windows-$FLUTTER_VERSION
+    paths:
+    - .flutter-sdk-windows/
+  script:
+  - |
+    if ((Get-Content .flutter-sdk-windows/.ci-version -ErrorAction SilentlyContinue) -ne $env:FLUTTER_VERSION) {
+      Remove-Item -Recurse -Force .flutter-sdk-windows -ErrorAction SilentlyContinue
+      git clone --depth 1 --branch $env:FLUTTER_VERSION https://github.com/flutter/flutter.git .flutter-sdk-windows
+      Set-Content .flutter-sdk-windows/.ci-version $env:FLUTTER_VERSION
+    }
+  - $env:Path = "$env:CI_PROJECT_DIR\.flutter-sdk-windows\bin;$env:Path"
+  # What the runner has to build with, for when this job fails.
+  - flutter doctor -v
+  - flutter pub get
+  - >-
+    flutter build windows --release
+    --dart-define=MURMUR_NODE_HOST=testnet-seed.murmur.info --dart-define=MURMUR_NODE_PORT=7878
+  - dart run tool/bundle_node.dart
+  - dart run tool/package_windows.dart --tag $env:CI_COMMIT_TAG
+  artifacts:
+    paths:
+    - dist/murmur-client-*-windows-x64.zip
+    expire_in: 1 week
+
+# The page as a downloadable archive, and the Windows app if it was built,
+# with their checksums, in the package registry: anyone can check that the
+# live page is a release, or host it, and that a download is the release's.
 package:
   extends: .on-release-tag
   image: alpine:3.20
   stage: package
   needs:
   - build-web-testnet
+  - job: build-windows
+    artifacts: true
   script:
   - apk add --no-cache curl zip
   - mkdir -p dist
@@ -271,13 +314,25 @@ package:
   # The license and notice travel with the page.
   - zip -q -j "dist/$name" LICENSE NOTICE
   - cd dist
-  - sha256sum "$name" > SHA256SUMS
+  # One list for everything released: the page, and the Windows app if its
+  # build succeeded.
+  - sha256sum murmur-* > SHA256SUMS
   - cat SHA256SUMS
   - |
     for f in "$name" SHA256SUMS; do
       curl --fail --silent --show-error --retry 5 --retry-all-errors --header "JOB-TOKEN: $CI_JOB_TOKEN" --upload-file "$f" \
         "$CI_API_V4_URL/projects/$CI_PROJECT_ID/packages/generic/murmur-web/$CI_COMMIT_TAG/$f"
     done
+  - |
+    windows="murmur-client-$CI_COMMIT_TAG-windows-x64.zip"
+    if [ -f "$windows" ]; then
+      for f in "$windows" SHA256SUMS; do
+        curl --fail --silent --show-error --retry 5 --retry-all-errors --header "JOB-TOKEN: $CI_JOB_TOKEN" --upload-file "$f" \
+          "$CI_API_V4_URL/projects/$CI_PROJECT_ID/packages/generic/murmur-client-windows/$CI_COMMIT_TAG/$f"
+      done
+    else
+      echo "no Windows app in this release: its build failed"
+    fi
   artifacts:
     paths:
     - dist/
@@ -319,6 +374,8 @@ release:
       links:
       - name: Web app (testnet build)
         url: "$CI_API_V4_URL/projects/$CI_PROJECT_ID/packages/generic/murmur-web/$CI_COMMIT_TAG/murmur-web-$CI_COMMIT_TAG.zip"
+      - name: Windows app (testnet build, x64)
+        url: "$CI_API_V4_URL/projects/$CI_PROJECT_ID/packages/generic/murmur-client-windows/$CI_COMMIT_TAG/murmur-client-$CI_COMMIT_TAG-windows-x64.zip"
       - name: SHA256SUMS
         url: "$CI_API_V4_URL/projects/$CI_PROJECT_ID/packages/generic/murmur-web/$CI_COMMIT_TAG/SHA256SUMS"
       - name: Live page

@@ -138,16 +138,20 @@ Without these steps the page still works, but fetches from Google's servers.
 
 The page is served at **app.murmur.info** by Cloudflare Pages, like the project's site. Cloudflare's build machines have no Flutter, so GitLab CI builds the page and uploads it.
 
-**Making a release**, the same way as the node's:
-1. Raise `version:` in `pubspec.yaml` (for example to `0.1.1`), and move the "Unreleased" notes in [CHANGELOG.md](CHANGELOG.md) under a heading for it.
-2. Commit, then tag and push: `git tag v0.1.1 && git push origin main v0.1.1`.
+**Making a release** by hand, the same way as the node's:
+1. Refresh the testnet checkpoint: `flutter test tool/refresh_checkpoint.dart`, and check its one-line change.
+2. Raise `version:` in `pubspec.yaml` (for example to `0.1.1`), and move the "Unreleased" notes in [CHANGELOG.md](CHANGELOG.md) under a heading for it.
+3. Commit, then tag and push: `git tag v0.1.1 && git push origin main v0.1.1`.
 
-A tag of the form `vX.Y.Z` runs these jobs, in order; other tags and plain commits are only checked (analysis, tests, a web build):
+A tag of the form `vX.Y.Z` runs these jobs, in order, after the usual checks (analysis, tests, a web build); other tags and plain commits get only those checks:
 
+- `check-checkpoint` stops the release if the shipped checkpoint isn't on the live testnet's chain, or is over a week old.
+- `public-node-tests` runs a short read-only test of the client against the live testnet.
 - `build-web-testnet` stops if the tag isn't `v` plus the version in `pubspec.yaml`. Otherwise it builds the testnet page as above, with `--base-href /`.
-- `package` zips the page with LICENSE and NOTICE as `murmur-web-vX.Y.Z.zip`, writes `SHA256SUMS`, and uploads both to the project's package registry, so anyone can check the live page against a release, or host it themselves.
+- `build-windows` builds the Windows app for the testnet and zips it with its own node, the Visual C++ runtime and the notices, as `murmur-client-vX.Y.Z-windows-x64.zip`. If it fails, the release goes on without a Windows download.
+- `package` zips the page with LICENSE and NOTICE as `murmur-web-vX.Y.Z.zip`, writes one `SHA256SUMS` for the page and the Windows app, and uploads them to the project's package registry, so anyone can check the live page or a download against a release, or host the page themselves.
 - `deploy-web` uploads the page with `wrangler pages deploy` to the Pages project `murmur-app` (`CF_PAGES_PROJECT` in `.gitlab-ci.yml`).
-- `release` then creates the GitLab Release "Murmur client vX.Y.Z", linking the archive, `SHA256SUMS` and the live page.
+- `release` then creates the GitLab Release "Murmur client vX.Y.Z", linking the archives, `SHA256SUMS` and the live page.
 
 `web/_headers`, copied into the build, sets the response headers: a Content-Security-Policy that allows only the page's own files and `wss://` connections (to any node, since users can pick theirs), plus `no-referrer`, `nosniff` and HSTS. The engine needs `'wasm-unsafe-eval'` for CanvasKit and `'unsafe-inline'` styles.
 
@@ -213,6 +217,7 @@ For how the code works, the rules it keeps, recipes and known gaps, see [AGENTS.
 | `tool/bundle_node.dart` | Puts `murmur-node` next to a built desktop app |
 | `tool/refresh_checkpoint.dart` | Refreshes the testnet checkpoint from the live network, before a release |
 | `tool/check_checkpoint.dart` | Checks the shipped checkpoint against the live network (the release job runs it) |
+| `tool/package_windows.dart` | Zips the built Windows app with its node, the C++ runtime and the notices (the release job runs it) |
 | `lib/protocol/commitments.dart` | The state tree, block filter and header history verifiers (PROTOCOL.md Section 3.6) |
 | `lib/protocol/consensus.dart` | The header rules the client checks: median-time-past and the difficulty retarget (Sections 3.5 and 4) |
 | `lib/services/secure_channel.dart` | The encrypted transport: X25519, HKDF, ChaCha20-Poly1305 (Section 7.4) |
