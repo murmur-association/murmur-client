@@ -200,6 +200,21 @@ check-checkpoint:
   script:
   - flutter test tool/check_checkpoint.dart
 
+# The client about to be released, against the live testnet, read-only
+# (test/live_node_test.dart sends nothing): state proofs and filters, and
+# the local copy counted and checked against the state root. Only here, so
+# that ordinary pushes never depend on the public network; a failure stops
+# the release before anything is built.
+public-node-tests:
+  extends:
+  - .flutter
+  - .on-release-tag
+  stage: test
+  variables:
+    MURMUR_NODE: testnet-seed.murmur.info:7878
+  script:
+  - flutter test test/live_node_test.dart
+
 # The public testnet page, app.murmur.info on Cloudflare Pages (see README
 # "Releases and deployment"). It connects to wss://node.murmur.info by
 # default and loads nothing from other origins: CanvasKit is served locally
