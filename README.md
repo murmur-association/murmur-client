@@ -148,7 +148,7 @@ A tag of the form `vX.Y.Z` runs these jobs, in order, after the usual checks (an
 - `check-checkpoint` stops the release if the shipped checkpoint isn't on the live testnet's chain, or is over a week old.
 - `public-node-tests` runs a short read-only test of the client against the live testnet.
 - `build-web-testnet` stops if the tag isn't `v` plus the version in `pubspec.yaml`. Otherwise it builds the testnet page as above, with `--base-href /`.
-- `build-windows` and `build-linux` build the desktop apps for the testnet and archive each with its own node and the notices (and on Windows the Visual C++ runtime), as `murmur-client-vX.Y.Z-windows-x64.zip` and `murmur-client-vX.Y.Z-linux-x64.tar.gz`. The Linux job first tries the app on a virtual display (`tool/linux_smoke_test.sh --wallet-storage`): its node starts and stops with it, a node left by a killed app is replaced, and a wallet is saved through the real keyring. If one fails, the release goes on without that download.
+- `build-windows` and `build-linux` build the desktop apps for the testnet and archive each with its own node and the notices (and on Windows the Visual C++ runtime), as `murmur-client-vX.Y.Z-windows-x64.zip` and `murmur-client-vX.Y.Z-linux-x64.tar.gz`. Each first tries the app (`tool/linux_smoke_test.sh --wallet-storage` on a virtual display, `tool/windows_smoke_test.ps1 -WalletStorage`): its node starts and stops with it, a node left by a killed app is replaced, and a wallet is saved through the real keyring. If one fails, the release goes on without that download.
 - `package` zips the page with LICENSE and NOTICE as `murmur-web-vX.Y.Z.zip`, writes one `SHA256SUMS` for the page and the Windows app, and uploads them to the project's package registry, so anyone can check the live page or a download against a release, or host the page themselves.
 - `deploy-web` uploads the page with `wrangler pages deploy` to the Pages project `murmur-app` (`CF_PAGES_PROJECT` in `.gitlab-ci.yml`).
 - `release` then creates the GitLab Release "Murmur client vX.Y.Z", linking the archives, `SHA256SUMS` and the live page.
@@ -218,7 +218,7 @@ For how the code works, the rules it keeps, recipes and known gaps, see [AGENTS.
 | `tool/refresh_checkpoint.dart` | Refreshes the testnet checkpoint from the live network, before a release |
 | `tool/check_checkpoint.dart` | Checks the shipped checkpoint against the live network (the release job runs it) |
 | `tool/package_desktop.dart` | Archives the built Windows or Linux app with its node and the notices (the release jobs run it) |
-| `tool/linux_smoke_test.sh` | Starts the built Linux app without a screen and checks its own node starts and stops with it |
+| `tool/linux_smoke_test.sh`, `tool/windows_smoke_test.ps1` | Try the built desktop app: its own node starts and stops with it, a node left by a crash is replaced, a wallet is saved through the system's secure storage |
 | `lib/protocol/commitments.dart` | The state tree, block filter and header history verifiers (PROTOCOL.md Section 3.6) |
 | `lib/protocol/consensus.dart` | The header rules the client checks: median-time-past and the difficulty retarget (Sections 3.5 and 4) |
 | `lib/services/secure_channel.dart` | The encrypted transport: X25519, HKDF, ChaCha20-Poly1305 (Section 7.4) |

@@ -259,7 +259,7 @@ build-web-testnet:
 # The Windows app for the testnet, as a zip to unpack and run: the app
 # (shown as Murmur, murmur_client.exe), the pinned node beside it
 # (tool/bundle_node.dart), the Visual C++ runtime and the notices
-# (tool/package_desktop.dart). Its default node is the testnet's seed name.
+# (tool/package_desktop.dart), after tool/windows_smoke_test.ps1 has tried it.
 # On GitLab's Windows runner, like the node's own Windows build. Allowed to
 # fail: it must never hold back the page's release. A failure shows as a
 # warning on the pipeline, and that release then has no Windows download
@@ -285,6 +285,15 @@ build-windows:
   # What the runner has to build with, for when this job fails.
   - flutter doctor -v
   - flutter pub get
+  # First a build whose own node stays off the public network, to try: its
+  # node starts and stops with it, a node left by a killed app is replaced,
+  # and a wallet is saved through Windows' own secure storage. The runner's
+  # profile is a clean one, which the test needs (it refuses any other).
+  - flutter build windows --release --dart-define=MURMUR_LOCAL_NODE_SPEC=demo
+  - dart run tool/bundle_node.dart
+  - powershell -NoProfile -ExecutionPolicy Bypass -File tool\windows_smoke_test.ps1 -WalletStorage
+  - if ($LASTEXITCODE -ne 0) { exit 1 }
+  # Then the one that's released: its default node is the testnet's seed.
   - >-
     flutter build windows --release
     --dart-define=MURMUR_NODE_HOST=testnet-seed.murmur.info --dart-define=MURMUR_NODE_PORT=7878
