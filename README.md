@@ -76,10 +76,10 @@ A page opened with `?node=host:port` (for example `http://localhost:8080/?node=1
 
 ## Running
 
-The repo holds the Dart code (`lib/`, `test/`, `tool/`), the web shell (`web/`) and `pubspec.yaml`, but not the native platform folders. Generate them once:
+The repo holds the Dart code (`lib/`, `test/`, `tool/`), the web shell (`web/`), the Windows app's shell (`windows/`: named Murmur, with the app's icon) and `pubspec.yaml`, but not the other native platform folders. Generate those once:
 
 ```
-flutter create . --platforms=windows,linux,macos,android,ios --project-name murmur_client
+flutter create . --platforms=linux,macos,android,ios --project-name murmur_client
 flutter pub get
 flutter test
 flutter run -d windows
