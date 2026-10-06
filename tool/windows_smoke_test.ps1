@@ -123,7 +123,23 @@ function Describe-App {
   "app $($script:app.Id): $state; its windows: $(if ($windows) { $windows } else { 'none' }); its node: $(if ($n) { $n.ProcessId } else { 'none' }); " +
     "session $([Diagnostics.Process]::GetCurrentProcess().SessionId), a desktop to show windows on: $([Environment]::UserInteractive)"
 }
-function Fail($what) { Write-Output "FAILED: $what"; Write-Output "  $(Describe-App)"; throw 'smoke test failed' }
+# The app's own words (the engine says on its error output why it gave up),
+# and the graphics libraries this system has: the engine draws through
+# Direct3D, and a server system may lack parts of it.
+$appLog = Join-Path $env:TEMP "murmur-smoke-$PID"
+function Describe-System {
+  foreach ($stream in 'out', 'err') {
+    $text = Get-Content "$appLog.$stream" -ErrorAction SilentlyContinue | Select-Object -Last 25
+    if ($text) { "the app's $stream`put:"; $text | ForEach-Object { "    $_" } }
+  }
+  "graphics libraries in the system: " + ((@('d3d11.dll', 'dxgi.dll', 'd3dcompiler_47.dll', 'd3d10warp.dll', 'dcomp.dll', 'dwmapi.dll', 'opengl32.dll') | ForEach-Object {
+    "$_ $(if (Test-Path (Join-Path $env:SystemRoot "System32\$_")) { 'yes' } else { 'NO' })" }) -join ', ')
+}
+function Fail($what) {
+  Write-Output "FAILED: $what"; Write-Output "  $(Describe-App)"
+  Describe-System | ForEach-Object { Write-Output "  $_" }
+  throw 'smoke test failed'
+}
 function Wait-For($seconds, $what, [scriptblock]$check) {
   for ($i = 0; $i -lt $seconds * 2; $i++) { if (& $check) { return }; Start-Sleep -Milliseconds 500 }
   Fail $what
@@ -137,7 +153,9 @@ function Bundled-Nodes { @(Get-CimInstance Win32_Process -Filter "Name='murmur-n
 
 # Starts the app and waits for its window and its node.
 function Start-App {
-  $script:app = Start-Process -PassThru $exe
+  $script:app = Start-Process -PassThru $exe -RedirectStandardOutput "$appLog.out" -RedirectStandardError "$appLog.err"
+  # Keeps its exit code readable: with redirected output PowerShell drops it otherwise.
+  $null = $script:app.Handle
   Wait-For 60 'the app made no window titled Murmur' { [AppWindows]::Titled($script:app.Id, 'Murmur') -ne [IntPtr]::Zero }
   Wait-For 60 "the node didn't start as the app's child" { $null -ne (Node-Of $script:app.Id) }
   $script:node = (Node-Of $script:app.Id).ProcessId
@@ -202,5 +220,6 @@ try {
   Start-Sleep -Seconds 1
   # Only what this run created: both folders were absent when it began.
   Remove-Item -Recurse -Force $settings, $data -ErrorAction SilentlyContinue
+  Remove-Item "$appLog.out", "$appLog.err" -ErrorAction SilentlyContinue
 }
 if (-not $ok) { exit 1 }

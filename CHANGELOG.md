@@ -2,6 +2,12 @@
 
 Newest first. Each release is a `vX.Y.Z` tag matching `version` in `pubspec.yaml`; see [README](README.md#releases-and-deployment). Entries marked **Breaking** need action from users.
 
+## v0.2.8: why the Windows app stops on the release runner (2026-10-06)
+
+No protocol or network change, and nothing new in the app.
+
+- **Changed: the Windows app's test keeps what the app says.** With an OpenGL library beside it, the app started on the release runner and made its window, then stopped by itself before starting its node: its engine couldn't set itself up there. The test now keeps the app's output, where the engine says why, and lists the graphics libraries the system has. v0.2.7 has no Windows download either.
+
 ## v0.2.7: an OpenGL library for the Windows release test (2026-10-06)
 
 No protocol or network change, and nothing new in the app.
