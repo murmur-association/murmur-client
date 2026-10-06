@@ -203,7 +203,25 @@ try {
   Write-Output "node $left was left behind; the next start stopped it and runs $node"
   Close-App
 
+  # The wallet's storage encrypts with Windows' data protection (DPAPI),
+  # under the account's own key. An account that isn't logged on with its
+  # profile, as a release runner's may be, has no such key: Windows refuses,
+  # for any program. Ask Windows itself, apart from the app, so that a
+  # refusal here isn't taken for a fault of the app's, nor the other way.
+  $protection = $null
   if ($WalletStorage) {
+    Add-Type -AssemblyName System.Security
+    try {
+      [void][Security.Cryptography.ProtectedData]::Protect([byte[]](1, 2, 3), $null, 'CurrentUser')
+    } catch {
+      $protection = "$($_.Exception.GetBaseException().Message)".Trim()
+    }
+  }
+  if ($WalletStorage -and $protection) {
+    Write-Output '== 3. a wallet through the real secure storage: NOT TRIED HERE'
+    Write-Output "  Windows' data protection doesn't work for this account ($env:USERNAME): $protection"
+    Write-Output "  The wallet's storage needs it, so this check needs a logged-on user's account."
+  } elseif ($WalletStorage) {
     Write-Output '== 3. a wallet through the real secure storage'
     # This builds and runs a debug app, which needs the debug runtime: on a
     # machine with only the build tools, that's in their folders, not the
@@ -229,11 +247,16 @@ try {
       $given | Copy-Item -Destination $debugDir
       Write-Output "software graphics for the debug build: $(($given | ForEach-Object Name) -join ', ')"
     }
-    flutter test integration_test/wallet_storage_test.dart -d windows 2>&1 | Select-Object -Last 30
-    if ($LASTEXITCODE -ne 0) { Fail 'the wallet storage test' }
+    $testLog = "$appLog.test"
+    flutter test integration_test/wallet_storage_test.dart -d windows 2>&1 | Out-File -Encoding utf8 $testLog
+    $testFailed = $LASTEXITCODE -ne 0
+    # All of it on a failure (the reason is at the top), its end otherwise.
+    Get-Content $testLog | Where-Object { $_.Trim() } | Select-Object -Last $(if ($testFailed) { 200 } else { 4 })
+    Remove-Item $testLog -ErrorAction SilentlyContinue
+    if ($testFailed) { Fail 'the wallet storage test' }
   }
   $ok = $true
-  Write-Output 'OK'
+  Write-Output $(if ($protection) { 'OK, but for the wallet check, which could not be tried on this account' } else { 'OK' })
 } catch {
   if ("$_" -ne 'smoke test failed') { Write-Output "FAILED: $_" }
 } finally {

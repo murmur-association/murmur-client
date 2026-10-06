@@ -2,6 +2,12 @@
 
 Newest first. Each release is a `vX.Y.Z` tag matching `version` in `pubspec.yaml`; see [README](README.md#releases-and-deployment). Entries marked **Breaking** need action from users.
 
+## v0.2.12: the Windows wallet check, where Windows allows it (2026-10-06)
+
+No protocol or network change, and nothing new in the app.
+
+- **Changed: the Windows wallet check asks Windows first.** In v0.2.11 the first two checks passed on the release runner: the app's node starts and stops with it, and a node left by a killed app is replaced. The third, saving a wallet, stopped where the storage asks Windows to encrypt with the account's own key, which Windows gives only to a logged-on user. The test now asks Windows itself whether that works for the account: where it does, the check runs and must pass; where it doesn't, it's reported as not tried, with Windows' reason. v0.2.11 has no Windows download either.
+
 ## v0.2.11: the Windows test's own bug (2026-10-06)
 
 No protocol or network change, and nothing new in the app.
