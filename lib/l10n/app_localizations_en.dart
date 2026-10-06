@@ -506,7 +506,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get importHelp =>
-      'Paste a 64-character hex seed, for example the contents of a key file made with murmur-node keygen (murmur.key), to use the rewards mined to its address.';
+      'Type or paste a wallet\'s seed: its 24 words, or its 64 hex characters (for example the contents of a key file made with murmur-node keygen, murmur.key, to use the rewards mined to its address).';
 
   @override
   String get seed => 'Seed';
@@ -515,7 +515,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get import => 'Import';
 
   @override
-  String get seedInvalid => 'A seed is exactly 64 hex characters.';
+  String get seedInvalid => 'A seed is 24 words or exactly 64 hex characters.';
 
   @override
   String get walletIntro =>
@@ -1813,4 +1813,49 @@ class AppLocalizationsEn extends AppLocalizations {
   String inviteDetailCancelledTo(String name) {
     return 'Cancelled: the tokens went to $name';
   }
+
+  @override
+  String get seedNewTitle => 'Save your wallet\'s seed';
+
+  @override
+  String get seedNewKeep =>
+      '**Keep it somewhere safe**, away from this device: written on paper, or in a password manager.';
+
+  @override
+  String get seedNewOnlyWay =>
+      'It is the **only way back** to this wallet if this device is lost or its passphrase forgotten. Nobody can recover it for you.';
+
+  @override
+  String get seedNewSecret =>
+      '**Anyone who has it controls the wallet.** Never share it, and never type it into a site that asks for it.';
+
+  @override
+  String get seedNewSaved => 'I have saved my seed';
+
+  @override
+  String get seedAsWords => 'As 24 words';
+
+  @override
+  String get seedAsHex => 'As 64 characters';
+
+  @override
+  String get seedEitherForm => 'Both are the same seed: either one is enough.';
+
+  @override
+  String get copyWords => 'Copy words';
+
+  @override
+  String get copyCharacters => 'Copy characters';
+
+  @override
+  String get seedOrWords => 'Seed: 24 words or 64 characters';
+
+  @override
+  String seedUnknownWord(String word) {
+    return '\"$word\" is not one of the seed words. Check its spelling.';
+  }
+
+  @override
+  String get seedBadChecksum =>
+      'These 24 words do not make a seed: one of them is wrong or out of place.';
 }

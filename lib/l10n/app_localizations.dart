@@ -784,10 +784,10 @@ abstract class AppLocalizations {
   /// **'Import wallet'**
   String get importWallet;
 
-  /// No description provided for @importHelp.
+  /// Explains what can be pasted to import a wallet
   ///
   /// In en, this message translates to:
-  /// **'Paste a 64-character hex seed, for example the contents of a key file made with murmur-node keygen (murmur.key), to use the rewards mined to its address.'**
+  /// **'Type or paste a wallet\'s seed: its 24 words, or its 64 hex characters (for example the contents of a key file made with murmur-node keygen, murmur.key, to use the rewards mined to its address).'**
   String get importHelp;
 
   /// No description provided for @seed.
@@ -802,10 +802,10 @@ abstract class AppLocalizations {
   /// **'Import'**
   String get import;
 
-  /// No description provided for @seedInvalid.
+  /// Error: the text is neither form of a seed
   ///
   /// In en, this message translates to:
-  /// **'A seed is exactly 64 hex characters.'**
+  /// **'A seed is 24 words or exactly 64 hex characters.'**
   String get seedInvalid;
 
   /// No description provided for @walletIntro.
@@ -2613,6 +2613,84 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Cancelled: the tokens went to {name}'**
   String inviteDetailCancelledTo(String name);
+
+  /// Title of the dialog that shows a newly created wallet its seed
+  ///
+  /// In en, this message translates to:
+  /// **'Save your wallet\'s seed'**
+  String get seedNewTitle;
+
+  /// New wallet seed dialog: where to keep the seed. ** marks emphasis
+  ///
+  /// In en, this message translates to:
+  /// **'**Keep it somewhere safe**, away from this device: written on paper, or in a password manager.'**
+  String get seedNewKeep;
+
+  /// New wallet seed dialog: why it matters. ** marks emphasis
+  ///
+  /// In en, this message translates to:
+  /// **'It is the **only way back** to this wallet if this device is lost or its passphrase forgotten. Nobody can recover it for you.'**
+  String get seedNewOnlyWay;
+
+  /// New wallet seed dialog: keep it secret. ** marks emphasis
+  ///
+  /// In en, this message translates to:
+  /// **'**Anyone who has it controls the wallet.** Never share it, and never type it into a site that asks for it.'**
+  String get seedNewSecret;
+
+  /// Checkbox the user ticks before the new wallet seed dialog can be closed
+  ///
+  /// In en, this message translates to:
+  /// **'I have saved my seed'**
+  String get seedNewSaved;
+
+  /// Heading over the seed written as 24 words
+  ///
+  /// In en, this message translates to:
+  /// **'As 24 words'**
+  String get seedAsWords;
+
+  /// Heading over the seed written as 64 hex characters
+  ///
+  /// In en, this message translates to:
+  /// **'As 64 characters'**
+  String get seedAsHex;
+
+  /// Under the two forms of the seed
+  ///
+  /// In en, this message translates to:
+  /// **'Both are the same seed: either one is enough.'**
+  String get seedEitherForm;
+
+  /// Button: copy the 24 words of the seed
+  ///
+  /// In en, this message translates to:
+  /// **'Copy words'**
+  String get copyWords;
+
+  /// Button: copy the 64 characters of the seed
+  ///
+  /// In en, this message translates to:
+  /// **'Copy characters'**
+  String get copyCharacters;
+
+  /// Label of the field where a seed is typed or pasted to import a wallet
+  ///
+  /// In en, this message translates to:
+  /// **'Seed: 24 words or 64 characters'**
+  String get seedOrWords;
+
+  /// Error: one of the 24 words is not a seed word
+  ///
+  /// In en, this message translates to:
+  /// **'\"{word}\" is not one of the seed words. Check its spelling.'**
+  String seedUnknownWord(String word);
+
+  /// Error: 24 valid words that do not make a seed
+  ///
+  /// In en, this message translates to:
+  /// **'These 24 words do not make a seed: one of them is wrong or out of place.'**
+  String get seedBadChecksum;
 }
 
 class _AppLocalizationsDelegate

@@ -515,7 +515,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get importHelp =>
-      'الصق بذرة سداسية عشرية من 64 حرفًا، مثل محتوى ملف مفتاح أنشأه الأمر murmur-node keygen ‏(murmur.key)، لاستخدام المكافآت المُعدَّنة إلى عنوانه.';
+      'اكتب أو الصق بذرة محفظة: كلماتها الـ24 أو أحرفها الست عشرية الـ64 (مثل محتوى ملف مفتاح أُنشئ بـ murmur-node keygen، أي murmur.key، لاستخدام المكافآت المُعدَّنة إلى عنوانه).';
 
   @override
   String get seed => 'البذرة';
@@ -524,7 +524,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get import => 'استيراد';
 
   @override
-  String get seedInvalid => 'البذرة 64 حرفًا سداسيًا عشريًا بالضبط.';
+  String get seedInvalid => 'البذرة 24 كلمة أو 64 حرفًا ست عشريًا بالضبط.';
 
   @override
   String get walletIntro =>
@@ -1846,4 +1846,49 @@ class AppLocalizationsAr extends AppLocalizations {
   String inviteDetailCancelledTo(String name) {
     return 'أُلغيت: ذهبت الرموز إلى $name';
   }
+
+  @override
+  String get seedNewTitle => 'احفظ بذرة محفظتك';
+
+  @override
+  String get seedNewKeep =>
+      '**احتفظ بها في مكان آمن**، بعيدًا عن هذا الجهاز: مكتوبة على ورق أو في مدير كلمات مرور.';
+
+  @override
+  String get seedNewOnlyWay =>
+      'هي **الطريق الوحيد للعودة** إلى هذه المحفظة إذا فُقد هذا الجهاز أو نُسيت عبارة المرور. لا أحد يستطيع استعادتها لك.';
+
+  @override
+  String get seedNewSecret =>
+      '**من يملكها يتحكم في المحفظة.** لا تشاركها أبدًا ولا تكتبها في موقع يطلبها.';
+
+  @override
+  String get seedNewSaved => 'لقد حفظت بذرتي';
+
+  @override
+  String get seedAsWords => 'في 24 كلمة';
+
+  @override
+  String get seedAsHex => 'في 64 حرفًا';
+
+  @override
+  String get seedEitherForm => 'كلتاهما البذرة نفسها: تكفي واحدة منهما.';
+
+  @override
+  String get copyWords => 'نسخ الكلمات';
+
+  @override
+  String get copyCharacters => 'نسخ الأحرف';
+
+  @override
+  String get seedOrWords => 'البذرة: 24 كلمة أو 64 حرفًا';
+
+  @override
+  String seedUnknownWord(String word) {
+    return '«$word» ليست من كلمات البذرة. تحقق من كتابتها.';
+  }
+
+  @override
+  String get seedBadChecksum =>
+      'هذه الكلمات الـ24 لا تشكّل بذرة: إحداها خاطئة أو في غير موضعها.';
 }

@@ -385,8 +385,13 @@ class WalletController extends ChangeNotifier {
 
   /// A new wallet, saved encrypted (prompts to set up its protection).
   /// Throws [VaultLocked] if the user cancels: then nothing is saved.
-  Future<void> create(VaultPrompts prompts, {required String reason}) async =>
-      _save(await MurmurWallet.generate(), prompts, reason);
+  /// Returns it with its key, this once, so its seed can be shown for the
+  /// user to keep; afterwards the key comes only from [unlock].
+  Future<MurmurWallet> create(VaultPrompts prompts, {required String reason}) async {
+    final wallet = await MurmurWallet.generate();
+    await _save(wallet, prompts, reason);
+    return wallet;
+  }
 
   /// Imports a 64-hex-char seed, e.g. the contents of a `murmur.key` file.
   Future<void> import(String seedHex, VaultPrompts prompts, {required String reason}) async =>

@@ -87,7 +87,9 @@ class _ConfirmOnEnterState extends State<ConfirmOnEnter> {
     // In a text of several lines Enter is a new line.
     final field = focused?.findAncestorWidgetOfExactType<EditableText>();
     final keys = HardwareKeyboard.instance;
-    if (field != null && field.maxLines != 1 && !keys.isControlPressed && !keys.isMetaPressed) return false;
+    if (field != null && field.keyboardType == TextInputType.multiline && !keys.isControlPressed && !keys.isMetaPressed) {
+      return false;
+    }
     final confirm = _confirm();
     if (confirm == null) return false;
     confirm();

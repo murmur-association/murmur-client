@@ -1,7 +1,6 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../protocol/alias.dart';
 import '../protocol/bytes.dart';
@@ -12,6 +11,7 @@ import 'brand.dart';
 import 'claim_page.dart';
 import 'common.dart';
 import 'compose_page.dart';
+import 'seed.dart';
 import 'unlock.dart';
 import 'invitations_page.dart';
 import 'paged_list.dart';
@@ -122,26 +122,7 @@ class WalletTab extends StatelessWidget {
     if (!sure || !context.mounted) return;
     final unlocked = await unlockWallet(context, reason: l.authReasonSeed);
     if (unlocked == null || !context.mounted) return;
-    final seedHex = unlocked.seedHex;
-    return showAppDialog<void>(
-      context: context,
-      builder: (context) => AlertDialog(
-        scrollable: true,
-        title: Text(l.seedTitle),
-        content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(l.seedWarning),
-          const SizedBox(height: 12),
-          SelectableText(seedHex, style: mono, textDirection: TextDirection.ltr),
-        ]),
-        actions: [
-          TextButton(
-            onPressed: () => Clipboard.setData(ClipboardData(text: seedHex)),
-            child: Text(l.copy),
-          ),
-          FilledButton(onPressed: () => Navigator.pop(context), child: Text(l.done)),
-        ],
-      ),
-    );
+    return showSeed(context, unlocked);
   }
 
   /// Removing the wallet from this device: "are you sure", then unlocking
@@ -338,37 +319,11 @@ class _NoWallet extends StatelessWidget {
 
   Future<void> _import(BuildContext context) async {
     final l = context.l10n;
-    final controller = TextEditingController();
-    final seed = await showAppDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        scrollable: true,
-        title: Text(l.importWallet),
-        content: Column(mainAxisSize: MainAxisSize.min, children: [
-          Text(l.importHelp),
-          const SizedBox(height: 12),
-          TextField(
-            controller: controller,
-            style: mono,
-            textDirection: TextDirection.ltr,
-            decoration: InputDecoration(border: const OutlineInputBorder(), labelText: l.seed),
-          ),
-        ]),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: Text(l.cancel)),
-          FilledButton(onPressed: () => Navigator.pop(context, controller.text.trim()), child: Text(l.import)),
-        ],
-      ),
-    );
-    if (seed == null || seed.isEmpty) return;
-    if (tryParseHash32(seed) == null) {
-      if (context.mounted) showSnack(context, l.seedInvalid);
-      return;
-    }
-    if (!context.mounted) return;
+    final seed = await askSeed(context);
+    if (seed == null || !context.mounted) return;
     // Saved encrypted: this sets up its protection (the device's check or a
     // passphrase).
-    await protectWallet(context, (p) => wallets.import(seed, p, reason: l.authReasonNewWallet));
+    await protectWallet(context, (p) => wallets.import(toHex(seed), p, reason: l.authReasonNewWallet));
   }
 
   @override
@@ -387,7 +342,7 @@ class _NoWallet extends StatelessWidget {
             FilledButton.icon(
               icon: const MurmurIcon(Glyph.add),
               label: Text(l.createWallet),
-              onPressed: () => protectWallet(context, (p) => wallets.create(p, reason: l.authReasonNewWallet)),
+              onPressed: () => createWallet(context),
             ),
             const SizedBox(height: 12),
             OutlinedButton.icon(

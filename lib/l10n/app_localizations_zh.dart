@@ -495,7 +495,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get importHelp =>
-      '粘贴 64 个字符的十六进制种子，例如 murmur-node keygen 生成的密钥文件（murmur.key）的内容，即可使用挖到该地址的奖励。';
+      '输入或粘贴钱包的种子：它的 24 个单词，或 64 个十六进制字符（例如用 murmur-node keygen 生成的密钥文件 murmur.key 的内容，以使用挖到该地址的奖励）。';
 
   @override
   String get seed => '种子';
@@ -504,7 +504,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get import => '导入';
 
   @override
-  String get seedInvalid => '种子恰好为 64 个十六进制字符。';
+  String get seedInvalid => '种子是 24 个单词，或恰好 64 个十六进制字符。';
 
   @override
   String get walletIntro => '钱包为你发送的交易签名。其密钥保留在此设备上。';
@@ -1755,4 +1755,45 @@ class AppLocalizationsZh extends AppLocalizations {
   String inviteDetailCancelledTo(String name) {
     return '已取消：代币已转给 $name';
   }
+
+  @override
+  String get seedNewTitle => '保存你的钱包种子';
+
+  @override
+  String get seedNewKeep => '**把它存放在安全的地方**，不要放在这台设备上：写在纸上，或存入密码管理器。';
+
+  @override
+  String get seedNewOnlyWay => '如果这台设备丢失或忘记了密码短语，它是回到这个钱包的**唯一途径**。没有人能替你找回。';
+
+  @override
+  String get seedNewSecret => '**谁拥有它，谁就控制这个钱包。**绝不要分享它，也不要在任何索要它的网站上输入。';
+
+  @override
+  String get seedNewSaved => '我已保存好种子';
+
+  @override
+  String get seedAsWords => '24 个单词';
+
+  @override
+  String get seedAsHex => '64 个字符';
+
+  @override
+  String get seedEitherForm => '两者是同一个种子：有其中一种就够了。';
+
+  @override
+  String get copyWords => '复制单词';
+
+  @override
+  String get copyCharacters => '复制字符';
+
+  @override
+  String get seedOrWords => '种子：24 个单词或 64 个字符';
+
+  @override
+  String seedUnknownWord(String word) {
+    return '“$word”不是种子单词。请检查拼写。';
+  }
+
+  @override
+  String get seedBadChecksum => '这 24 个单词不能组成种子：其中一个有误或位置不对。';
 }

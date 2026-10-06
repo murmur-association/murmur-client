@@ -5,7 +5,7 @@ import '../services/invitations.dart';
 import '../services/node_client.dart';
 import 'common.dart';
 import 'glyphs.dart';
-import 'unlock.dart';
+import 'seed.dart';
 
 /// Opening an invitation (a card's QR code or link): who it's from, what it
 /// holds, and one button that moves it into the newcomer's wallet, created
@@ -42,7 +42,7 @@ class _ClaimPageState extends State<ClaimPage> {
     setState(() => _claiming = true);
     try {
       if (scope.wallets.wallet == null &&
-          !await protectWallet(context, (p) => scope.wallets.create(p, reason: l.authReasonNewWallet))) {
+          !await createWallet(context)) {
         return;
       }
       await sweepInvitation(client: scope.client, invite: _invite!, to: scope.wallets.wallet!.address);

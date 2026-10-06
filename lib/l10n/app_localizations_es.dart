@@ -507,7 +507,7 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get importHelp =>
-      'Pega una semilla hexadecimal de 64 caracteres, por ejemplo el contenido de un archivo de clave creado con murmur-node keygen (murmur.key), para usar las recompensas minadas a su dirección.';
+      'Escribe o pega la semilla de una cartera: sus 24 palabras o sus 64 caracteres hexadecimales (por ejemplo el contenido de un archivo de clave creado con murmur-node keygen, murmur.key, para usar las recompensas minadas a su dirección).';
 
   @override
   String get seed => 'Semilla';
@@ -517,7 +517,7 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get seedInvalid =>
-      'Una semilla tiene exactamente 64 caracteres hexadecimales.';
+      'Una semilla son 24 palabras o exactamente 64 caracteres hexadecimales.';
 
   @override
   String get walletIntro =>
@@ -1828,4 +1828,49 @@ class AppLocalizationsEs extends AppLocalizations {
   String inviteDetailCancelledTo(String name) {
     return 'Cancelada: los tokens fueron a $name';
   }
+
+  @override
+  String get seedNewTitle => 'Guarda la semilla de tu cartera';
+
+  @override
+  String get seedNewKeep =>
+      '**Guárdala en un lugar seguro**, fuera de este dispositivo: escrita en papel o en un gestor de contraseñas.';
+
+  @override
+  String get seedNewOnlyWay =>
+      'Es la **única forma de volver** a esta cartera si pierdes este dispositivo u olvidas su frase de contraseña. Nadie puede recuperarla por ti.';
+
+  @override
+  String get seedNewSecret =>
+      '**Quien la tenga controla la cartera.** No la compartas nunca ni la escribas en un sitio que te la pida.';
+
+  @override
+  String get seedNewSaved => 'He guardado mi semilla';
+
+  @override
+  String get seedAsWords => 'En 24 palabras';
+
+  @override
+  String get seedAsHex => 'En 64 caracteres';
+
+  @override
+  String get seedEitherForm => 'Las dos son la misma semilla: basta con una.';
+
+  @override
+  String get copyWords => 'Copiar palabras';
+
+  @override
+  String get copyCharacters => 'Copiar caracteres';
+
+  @override
+  String get seedOrWords => 'Semilla: 24 palabras o 64 caracteres';
+
+  @override
+  String seedUnknownWord(String word) {
+    return '«$word» no es una de las palabras de semilla. Revisa cómo está escrita.';
+  }
+
+  @override
+  String get seedBadChecksum =>
+      'Estas 24 palabras no forman una semilla: alguna es incorrecta o está fuera de lugar.';
 }

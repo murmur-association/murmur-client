@@ -4,6 +4,10 @@ Newest first. Each release is a `vX.Y.Z` tag matching `version` in `pubspec.yaml
 
 ## Unreleased
 
+- **Added: the seed as 24 words.** A wallet's seed is shown both as its 64 characters and as 24 English words (the BIP39 encoding of the same 32 bytes), and either form is taken wherever a seed is asked for. A mistyped or misplaced word is caught and named.
+- **Added: a new wallet is shown its seed.** Creating a wallet, from the Wallet tab or by claiming an invitation, now ends with its seed on screen and why it must be kept: it's the only way back if the device is lost or the passphrase forgotten. The dialog closes once the user confirms it's saved.
+- **Added: Enter confirms dialogs.** Enter presses a dialog's copper button (Ctrl+Enter while writing a text of several lines); a red button is never pressed by a key.
+- **Fixed: dialogs under the on-screen keyboard.** On a phone, a dialog with a text field (the Public name prompt, for one) spilled out of its box when the keyboard came up. Dialogs now scroll.
 - **Changed: one test tries both desktop apps.** `tool/desktop_smoke_test.dart` replaces the two scripts that made the same checks, one for each system. Both release jobs now try the packaged folder, the files a user unpacks, with the same steps.
 
 ## v0.2.12: the Windows wallet check, where Windows allows it (2026-10-06)

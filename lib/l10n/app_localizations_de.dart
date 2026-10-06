@@ -510,7 +510,7 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get importHelp =>
-      'Füge einen 64-stelligen Hex-Seed ein, zum Beispiel den Inhalt einer mit murmur-node keygen erstellten Schlüsseldatei (murmur.key), um die an ihre Adresse geminten Belohnungen zu nutzen.';
+      'Gib den Seed einer Wallet ein oder füge ihn ein: seine 24 Wörter oder seine 64 Hex-Zeichen (zum Beispiel den Inhalt einer mit murmur-node keygen erstellten Schlüsseldatei, murmur.key, um die an ihre Adresse geschürften Belohnungen zu nutzen).';
 
   @override
   String get seed => 'Seed';
@@ -519,7 +519,8 @@ class AppLocalizationsDe extends AppLocalizations {
   String get import => 'Importieren';
 
   @override
-  String get seedInvalid => 'Ein Seed besteht aus genau 64 Hex-Zeichen.';
+  String get seedInvalid =>
+      'Ein Seed besteht aus 24 Wörtern oder genau 64 Hex-Zeichen.';
 
   @override
   String get walletIntro =>
@@ -1834,4 +1835,50 @@ class AppLocalizationsDe extends AppLocalizations {
   String inviteDetailCancelledTo(String name) {
     return 'Storniert: Die Token gingen an $name';
   }
+
+  @override
+  String get seedNewTitle => 'Sichere den Seed deiner Wallet';
+
+  @override
+  String get seedNewKeep =>
+      '**Bewahre ihn sicher auf**, getrennt von diesem Gerät: auf Papier geschrieben oder in einem Passwortmanager.';
+
+  @override
+  String get seedNewOnlyWay =>
+      'Er ist der **einzige Weg zurück** zu dieser Wallet, wenn dieses Gerät verloren geht oder die Passphrase vergessen wird. Niemand kann ihn für dich wiederherstellen.';
+
+  @override
+  String get seedNewSecret =>
+      '**Wer ihn hat, kontrolliert die Wallet.** Gib ihn nie weiter und tippe ihn nie auf einer Website ein, die danach fragt.';
+
+  @override
+  String get seedNewSaved => 'Ich habe meinen Seed gesichert';
+
+  @override
+  String get seedAsWords => 'Als 24 Wörter';
+
+  @override
+  String get seedAsHex => 'Als 64 Zeichen';
+
+  @override
+  String get seedEitherForm =>
+      'Beides ist derselbe Seed: eines von beiden genügt.';
+
+  @override
+  String get copyWords => 'Wörter kopieren';
+
+  @override
+  String get copyCharacters => 'Zeichen kopieren';
+
+  @override
+  String get seedOrWords => 'Seed: 24 Wörter oder 64 Zeichen';
+
+  @override
+  String seedUnknownWord(String word) {
+    return '„$word“ ist keines der Seed-Wörter. Prüfe die Schreibweise.';
+  }
+
+  @override
+  String get seedBadChecksum =>
+      'Diese 24 Wörter ergeben keinen Seed: eines ist falsch oder steht an der falschen Stelle.';
 }

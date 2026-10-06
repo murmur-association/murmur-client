@@ -497,7 +497,7 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get importHelp =>
-      '64 文字の 16 進シードを貼り付けてください。たとえば murmur-node keygen で作成した鍵ファイル（murmur.key）の内容を貼り付けると、そのアドレスに採掘された報酬を使えます。';
+      'ウォレットのシードを入力または貼り付けます。24 個の単語、または 64 文字の 16 進数です（たとえば murmur-node keygen で作った鍵ファイル murmur.key の内容。そのアドレスに採掘された報酬を使えます）。';
 
   @override
   String get seed => 'シード';
@@ -506,7 +506,7 @@ class AppLocalizationsJa extends AppLocalizations {
   String get import => 'インポート';
 
   @override
-  String get seedInvalid => 'シードはちょうど 64 文字の 16 進数です。';
+  String get seedInvalid => 'シードは 24 個の単語、またはちょうど 64 文字の 16 進数です。';
 
   @override
   String get walletIntro => 'ウォレットは、あなたが送るトランザクションに署名します。鍵はこの端末から出ません。';
@@ -1767,4 +1767,48 @@ class AppLocalizationsJa extends AppLocalizations {
   String inviteDetailCancelledTo(String name) {
     return '取り消し済み：トークンは $name に送られました';
   }
+
+  @override
+  String get seedNewTitle => 'ウォレットのシードを保存してください';
+
+  @override
+  String get seedNewKeep =>
+      '**安全な場所に保管してください。**この端末とは別に、紙に書くか、パスワードマネージャーに保存します。';
+
+  @override
+  String get seedNewOnlyWay =>
+      'この端末をなくしたり、パスフレーズを忘れたりしたとき、このウォレットに戻る**唯一の方法**です。誰も代わりに復元できません。';
+
+  @override
+  String get seedNewSecret =>
+      '**これを持つ人がウォレットを操作できます。**決して共有せず、入力を求めるサイトにも入力しないでください。';
+
+  @override
+  String get seedNewSaved => 'シードを保存しました';
+
+  @override
+  String get seedAsWords => '24 個の単語';
+
+  @override
+  String get seedAsHex => '64 文字';
+
+  @override
+  String get seedEitherForm => 'どちらも同じシードです。片方があれば十分です。';
+
+  @override
+  String get copyWords => '単語をコピー';
+
+  @override
+  String get copyCharacters => '文字をコピー';
+
+  @override
+  String get seedOrWords => 'シード：24 個の単語または 64 文字';
+
+  @override
+  String seedUnknownWord(String word) {
+    return '「$word」はシードの単語ではありません。つづりを確認してください。';
+  }
+
+  @override
+  String get seedBadChecksum => 'この 24 個の単語はシードになりません。どれかが間違っているか、順番が違います。';
 }

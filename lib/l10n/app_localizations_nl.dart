@@ -507,7 +507,7 @@ class AppLocalizationsNl extends AppLocalizations {
 
   @override
   String get importHelp =>
-      'Plak een hexadecimale seed van 64 tekens, bijvoorbeeld de inhoud van een sleutelbestand gemaakt met murmur-node keygen (murmur.key), om de beloningen te gebruiken die naar dat adres zijn gemined.';
+      'Typ of plak de seed van een wallet: de 24 woorden of de 64 hex-tekens (bijvoorbeeld de inhoud van een sleutelbestand gemaakt met murmur-node keygen, murmur.key, om de beloningen te gebruiken die naar het adres ervan zijn gemined).';
 
   @override
   String get seed => 'Seed';
@@ -516,8 +516,7 @@ class AppLocalizationsNl extends AppLocalizations {
   String get import => 'Importeren';
 
   @override
-  String get seedInvalid =>
-      'Een seed bestaat uit precies 64 hexadecimale tekens.';
+  String get seedInvalid => 'Een seed is 24 woorden of precies 64 hex-tekens.';
 
   @override
   String get walletIntro =>
@@ -1826,4 +1825,50 @@ class AppLocalizationsNl extends AppLocalizations {
   String inviteDetailCancelledTo(String name) {
     return 'Geannuleerd: de tokens gingen naar $name';
   }
+
+  @override
+  String get seedNewTitle => 'Bewaar de seed van je wallet';
+
+  @override
+  String get seedNewKeep =>
+      '**Bewaar hem op een veilige plek**, los van dit apparaat: op papier geschreven of in een wachtwoordmanager.';
+
+  @override
+  String get seedNewOnlyWay =>
+      'Het is de **enige weg terug** naar deze wallet als dit apparaat kwijtraakt of de wachtwoordzin vergeten wordt. Niemand kan hem voor je herstellen.';
+
+  @override
+  String get seedNewSecret =>
+      '**Wie hem heeft, beheert de wallet.** Deel hem nooit en typ hem nooit in op een site die erom vraagt.';
+
+  @override
+  String get seedNewSaved => 'Ik heb mijn seed bewaard';
+
+  @override
+  String get seedAsWords => 'Als 24 woorden';
+
+  @override
+  String get seedAsHex => 'Als 64 tekens';
+
+  @override
+  String get seedEitherForm =>
+      'Beide zijn dezelfde seed: één van de twee is genoeg.';
+
+  @override
+  String get copyWords => 'Woorden kopiëren';
+
+  @override
+  String get copyCharacters => 'Tekens kopiëren';
+
+  @override
+  String get seedOrWords => 'Seed: 24 woorden of 64 tekens';
+
+  @override
+  String seedUnknownWord(String word) {
+    return '\"$word\" is geen seedwoord. Controleer de spelling.';
+  }
+
+  @override
+  String get seedBadChecksum =>
+      'Deze 24 woorden vormen geen seed: één ervan is fout of staat op de verkeerde plek.';
 }
