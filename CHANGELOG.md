@@ -2,6 +2,12 @@
 
 Newest first. Each release is a `vX.Y.Z` tag matching `version` in `pubspec.yaml`; see [README](README.md#releases-and-deployment). Entries marked **Breaking** need action from users.
 
+## v0.2.6: what the Windows release runner lacks (2026-10-06)
+
+No protocol or network change, and nothing new in the app.
+
+- **Changed: the Windows app's test says which system libraries are missing.** On the release runner the packaged app still couldn't start, with the Visual C++ runtime beside it: some other library it loads isn't on that system. Before starting the app, the test now lists the libraries its programs need that are neither beside them nor in the system. v0.2.5 has no Windows download either.
+
 ## v0.2.5: the Windows app, tried as packaged (2026-10-06)
 
 No protocol or network change, and nothing new in the app.

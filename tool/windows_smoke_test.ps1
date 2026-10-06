@@ -27,6 +27,38 @@ $exe = Join-Path (Resolve-Path $Bundle) 'murmur_client.exe'
 $nodeExe = Join-Path (Resolve-Path $Bundle) 'murmur-node.exe'
 foreach ($f in $exe, $nodeExe) { if (-not (Test-Path $f)) { Write-Output "missing ${f}: build the app and bundle the node first"; exit 1 } }
 
+# The libraries the app's programs load at start that are neither beside
+# them nor in this system: with any missing, Windows won't start the app
+# (exit code -1073741515). Read from the files with dumpbin (the build
+# tools'), so nothing is started; without dumpbin, nothing is known.
+$bundleDir = Split-Path $exe
+function Missing-Libraries {
+  $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+  if (-not (Test-Path $vswhere)) { return @() }
+  $vs = & $vswhere -latest -products * -property installationPath
+  $dumpbin = Get-ChildItem "$vs\VC\Tools\MSVC\*\bin\Hostx64\x64\dumpbin.exe" -ErrorAction SilentlyContinue | Select-Object -Last 1
+  if (-not $dumpbin) { return @() }
+  $missing = @{}
+  foreach ($file in Get-ChildItem $bundleDir -File | Where-Object { $_.Extension -in '.exe', '.dll' }) {
+    foreach ($line in & $dumpbin.FullName /nologo /dependents $file.FullName) {
+      $name = $line.Trim()
+      # API sets (api-ms-win-…, ext-ms-…) are names the system resolves, not files.
+      if ($name -notmatch '^[\w.+-]+\.dll$' -or $name -match '^(api|ext)-ms-') { continue }
+      if ((Test-Path (Join-Path $bundleDir $name)) -or (Test-Path (Join-Path $env:SystemRoot "System32\$name"))) { continue }
+      $missing[$name.ToLower()] = "$name (for $($file.Name))"
+    }
+  }
+  @($missing.Values | Sort-Object)
+}
+$missing = Missing-Libraries
+if ($missing.Count -gt 0) {
+  Write-Output "this system lacks libraries the app needs, so the app can't start here and nothing was tried:"
+  $missing | ForEach-Object { Write-Output "  $_" }
+  Write-Output "system: $((Get-CimInstance Win32_OperatingSystem).Caption)"
+  # 3: not a failure of the app, but not a pass either.
+  exit 3
+}
+
 # Where the app keeps its settings and wallet, and its node's data.
 $settings = Join-Path $env:APPDATA 'Murmur Association'
 $data = Join-Path $env:APPDATA 'murmur-client'
@@ -111,12 +143,6 @@ try {
   # the Chain tab's switch would.
   New-Item -ItemType Directory -Force (Join-Path $settings 'Murmur') | Out-Null
   '{"flutter.run_local_node":true}' | Out-File -Encoding ascii (Join-Path $settings 'Murmur\shared_preferences.json')
-
-  # The Visual C++ runtime the app needs: beside it in a package, or the
-  # system's. Without either the app can't start (exit code -1073741515).
-  $bundleDir = Split-Path $exe
-  Write-Output ("runtime: " + (@('msvcp140.dll', 'vcruntime140.dll', 'vcruntime140_1.dll') | ForEach-Object {
-    "$_ $(if (Test-Path (Join-Path $bundleDir $_)) { 'beside the app' } elseif (Test-Path (Join-Path $env:SystemRoot "System32\$_")) { 'in the system' } else { 'MISSING' })" }) -join ', ')
 
   Write-Output '== 1. start, and stop with the window'
   Start-App
