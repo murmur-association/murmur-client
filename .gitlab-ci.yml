@@ -306,10 +306,16 @@ build-windows:
   # It's tried as packaged, the folder a user unpacks: the runner has no
   # Visual C++ runtime of its own, so the app starts only with the copies
   # the package carries (v0.2.4's test started it from the build folder,
-  # and it couldn't load them).
+  # and it couldn't load them). Nor has the runner, a server system, the
+  # OpenGL library every desktop Windows has and Flutter's engine loads:
+  # tool\fetch_test_opengl.ps1 puts a software one (Mesa, pinned by hash)
+  # beside this copy. This copy is only tried; the released package is
+  # built afresh below, and checked to hold none of it.
   - flutter build windows --release --dart-define=MURMUR_LOCAL_NODE_SPEC=demo
   - dart run tool/bundle_node.dart
   - dart run tool/package_desktop.dart --tag smoke
+  - powershell -NoProfile -ExecutionPolicy Bypass -File tool\fetch_test_opengl.ps1 -Into build\desktop-package\murmur-client-smoke-windows-x64
+  - if ($LASTEXITCODE -ne 0) { exit 1 }
   - powershell -NoProfile -ExecutionPolicy Bypass -File tool\windows_smoke_test.ps1 -WalletStorage -Bundle build\desktop-package\murmur-client-smoke-windows-x64
   - if ($LASTEXITCODE -ne 0) { exit 1 }
   - Remove-Item dist\murmur-client-smoke-windows-x64.zip
@@ -319,6 +325,12 @@ build-windows:
     --dart-define=MURMUR_NODE_HOST=testnet-seed.murmur.info --dart-define=MURMUR_NODE_PORT=7878
   - dart run tool/bundle_node.dart
   - dart run tool/package_desktop.dart --tag $env:CI_COMMIT_TAG
+  # Nothing of the test's may be in what's released.
+  - |
+    $inside = tar -tf "dist\murmur-client-$env:CI_COMMIT_TAG-windows-x64.zip"
+    $foreign = @($inside | Where-Object { $_ -match '(opengl32|libgallium_wgl)\.dll$' })
+    if ($foreign.Count -gt 0) { Write-Output "the released package holds test-only files: $($foreign -join ', ')"; exit 1 }
+    Write-Output "the released package holds $($inside.Count) entries, none of the test's"
   artifacts:
     paths:
     - dist/murmur-client-*-windows-x64.zip

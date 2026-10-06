@@ -2,6 +2,12 @@
 
 Newest first. Each release is a `vX.Y.Z` tag matching `version` in `pubspec.yaml`; see [README](README.md#releases-and-deployment). Entries marked **Breaking** need action from users.
 
+## v0.2.7: an OpenGL library for the Windows release test (2026-10-06)
+
+No protocol or network change, and nothing new in the app.
+
+- **Fixed: the Windows app can be tried on the release runner.** v0.2.6's test named what that system lacks: `OPENGL32.dll`, which every desktop Windows has and the app's engine loads at start. The release job now puts a software OpenGL (Mesa, pinned by its SHA-256) beside the copy it tries. It's for the test only: the released package is built afresh, and checked to hold none of it. v0.2.6 has no Windows download either.
+
 ## v0.2.6: what the Windows release runner lacks (2026-10-06)
 
 No protocol or network change, and nothing new in the app.

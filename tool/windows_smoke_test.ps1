@@ -38,14 +38,25 @@ function Missing-Libraries {
   $vs = & $vswhere -latest -products * -property installationPath
   $dumpbin = Get-ChildItem "$vs\VC\Tools\MSVC\*\bin\Hostx64\x64\dumpbin.exe" -ErrorAction SilentlyContinue | Select-Object -Last 1
   if (-not $dumpbin) { return @() }
+  # From the two programs, through the libraries beside them that they
+  # load: not every library in the folder (a plugin ships one for Java,
+  # dartjni.dll, that nothing loads on Windows).
   $missing = @{}
-  foreach ($file in Get-ChildItem $bundleDir -File | Where-Object { $_.Extension -in '.exe', '.dll' }) {
-    foreach ($line in & $dumpbin.FullName /nologo /dependents $file.FullName) {
+  $seen = @{}
+  $queue = New-Object System.Collections.Queue
+  $queue.Enqueue($exe); $queue.Enqueue($nodeExe)
+  while ($queue.Count -gt 0) {
+    $file = $queue.Dequeue()
+    if ($seen[$file.ToLower()]) { continue }
+    $seen[$file.ToLower()] = $true
+    foreach ($line in & $dumpbin.FullName /nologo /dependents $file) {
       $name = $line.Trim()
       # API sets (api-ms-win-…, ext-ms-…) are names the system resolves, not files.
       if ($name -notmatch '^[\w.+-]+\.dll$' -or $name -match '^(api|ext)-ms-') { continue }
-      if ((Test-Path (Join-Path $bundleDir $name)) -or (Test-Path (Join-Path $env:SystemRoot "System32\$name"))) { continue }
-      $missing[$name.ToLower()] = "$name (for $($file.Name))"
+      $beside = Join-Path $bundleDir $name
+      if (Test-Path $beside) { $queue.Enqueue($beside); continue }
+      if (Test-Path (Join-Path $env:SystemRoot "System32\$name")) { continue }
+      $missing[$name.ToLower()] = "$name (for $(Split-Path $file -Leaf))"
     }
   }
   @($missing.Values | Sort-Object)
