@@ -6,7 +6,7 @@
 # Every desktop Windows has what the app's engine needs to draw. The release
 # runner (Windows Server 2022, a server image with no graphics card) lacks
 # two libraries, so the app can't start there and
-# tooldesktop_smoke_test.dart can't try it:
+# tool\desktop_smoke_test.dart can't try it:
 # - OPENGL32.dll, which the engine loads at start: Mesa's (mesa-dist-win),
 #   with the library it needs;
 # - d3d10warp.dll, Windows' software Direct3D ("WARP"), the engine's last
