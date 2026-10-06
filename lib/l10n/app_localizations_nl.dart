@@ -1871,4 +1871,10 @@ class AppLocalizationsNl extends AppLocalizations {
   @override
   String get seedBadChecksum =>
       'Deze 24 woorden vormen geen seed: één ervan is fout of staat op de verkeerde plek.';
+
+  @override
+  String get qrCode => 'QR-code';
+
+  @override
+  String get addressQrHint => 'Scan om dit adres in Murmur te openen.';
 }

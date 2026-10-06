@@ -429,5 +429,7 @@
   "copyCharacters": "文字をコピー",
   "seedOrWords": "シード：24 個の単語または 64 文字",
   "seedUnknownWord": "「{word}」はシードの単語ではありません。つづりを確認してください。",
-  "seedBadChecksum": "この 24 個の単語はシードになりません。どれかが間違っているか、順番が違います。"
+  "seedBadChecksum": "この 24 個の単語はシードになりません。どれかが間違っているか、順番が違います。",
+  "qrCode": "QR コード",
+  "addressQrHint": "スキャンすると、このアドレスを Murmur で開けます。"
 }

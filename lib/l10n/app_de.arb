@@ -429,5 +429,7 @@
   "copyCharacters": "Zeichen kopieren",
   "seedOrWords": "Seed: 24 Wörter oder 64 Zeichen",
   "seedUnknownWord": "„{word}“ ist keines der Seed-Wörter. Prüfe die Schreibweise.",
-  "seedBadChecksum": "Diese 24 Wörter ergeben keinen Seed: eines ist falsch oder steht an der falschen Stelle."
+  "seedBadChecksum": "Diese 24 Wörter ergeben keinen Seed: eines ist falsch oder steht an der falschen Stelle.",
+  "qrCode": "QR-Code",
+  "addressQrHint": "Scannen, um diese Adresse in Murmur zu öffnen."
 }

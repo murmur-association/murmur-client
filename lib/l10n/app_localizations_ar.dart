@@ -1891,4 +1891,10 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get seedBadChecksum =>
       'هذه الكلمات الـ24 لا تشكّل بذرة: إحداها خاطئة أو في غير موضعها.';
+
+  @override
+  String get qrCode => 'رمز QR';
+
+  @override
+  String get addressQrHint => 'امسح الرمز لفتح هذا العنوان في Murmur.';
 }

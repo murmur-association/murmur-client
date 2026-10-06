@@ -429,5 +429,7 @@
   "copyCharacters": "Copia i caratteri",
   "seedOrWords": "Seme: 24 parole o 64 caratteri",
   "seedUnknownWord": "«{word}» non è una delle parole del seme. Controlla come è scritta.",
-  "seedBadChecksum": "Queste 24 parole non formano un seme: una è sbagliata o fuori posto."
+  "seedBadChecksum": "Queste 24 parole non formano un seme: una è sbagliata o fuori posto.",
+  "qrCode": "Codice QR",
+  "addressQrHint": "Scansiona per aprire questo indirizzo in Murmur."
 }

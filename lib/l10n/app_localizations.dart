@@ -2691,6 +2691,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'These 24 words do not make a seed: one of them is wrong or out of place.'**
   String get seedBadChecksum;
+
+  /// Share menu entry that shows a QR code of the link
+  ///
+  /// In en, this message translates to:
+  /// **'QR code'**
+  String get qrCode;
+
+  /// Under the QR code of an address: what scanning it does
+  ///
+  /// In en, this message translates to:
+  /// **'Scan to open this address in Murmur.'**
+  String get addressQrHint;
 }
 
 class _AppLocalizationsDelegate

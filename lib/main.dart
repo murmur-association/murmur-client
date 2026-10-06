@@ -7,6 +7,7 @@ import 'services/local_node.dart';
 import 'services/local_node_link.dart';
 import 'services/node_client.dart';
 import 'services/storage.dart';
+import 'ui/address_page.dart';
 import 'ui/brand.dart';
 import 'ui/common.dart';
 import 'services/invitations.dart' show inviteInRoute;
@@ -72,19 +73,22 @@ class MurmurApp extends StatelessWidget {
           supportedLocales: AppLocalizations.supportedLocales,
           navigatorObservers: [routeObserver],
           home: const HomePage(),
-          // A shared link opens over the home page: a thread (#/thread/<txid>)
-          // or an invitation card (#/invite/<code>).
-          onGenerateRoute: (settings) {
-            final txid = threadInRoute(settings.name);
-            if (txid != null) {
-              return MaterialPageRoute(settings: settings, builder: (_) => ThreadPage(rootTxid: txid));
-            }
-            final code = inviteInRoute(settings.name);
-            if (code != null) return MaterialPageRoute(settings: settings, builder: (_) => ClaimPage(code: code));
-            return null;
-          },
+          onGenerateRoute: routeOfLink,
         ),
       ),
     );
   }
+}
+
+/// The page a shared link opens, over the home page: a thread
+/// (`#/thread/<txid>`), an address (`#/address/<address>`, what its QR code
+/// holds) or an invitation card (`#/invite/<code>`). Null for anything else.
+Route<void>? routeOfLink(RouteSettings settings) {
+  final txid = threadInRoute(settings.name);
+  if (txid != null) return MaterialPageRoute(settings: settings, builder: (_) => ThreadPage(rootTxid: txid));
+  final address = addressInRoute(settings.name);
+  if (address != null) return MaterialPageRoute(settings: settings, builder: (_) => AddressPage(address: address));
+  final code = inviteInRoute(settings.name);
+  if (code != null) return MaterialPageRoute(settings: settings, builder: (_) => ClaimPage(code: code));
+  return null;
 }

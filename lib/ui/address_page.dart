@@ -45,7 +45,7 @@ class AddressPage extends StatelessWidget {
                       Expanded(child: Text(nameOf(context, address), style: theme.textTheme.titleLarge)),
                     ]),
                     const SizedBox(height: 8),
-                    HashText(address),
+                    HashText(address, qr: addressLink(address), qrCaption: l.addressQrHint),
                     // Names and mutes are this device's own.
                     Wrap(spacing: 8, runSpacing: 8, children: [
                       OutlinedButton.icon(

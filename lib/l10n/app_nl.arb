@@ -429,5 +429,7 @@
   "copyCharacters": "Tekens kopiëren",
   "seedOrWords": "Seed: 24 woorden of 64 tekens",
   "seedUnknownWord": "\"{word}\" is geen seedwoord. Controleer de spelling.",
-  "seedBadChecksum": "Deze 24 woorden vormen geen seed: één ervan is fout of staat op de verkeerde plek."
+  "seedBadChecksum": "Deze 24 woorden vormen geen seed: één ervan is fout of staat op de verkeerde plek.",
+  "qrCode": "QR-code",
+  "addressQrHint": "Scan om dit adres in Murmur te openen."
 }

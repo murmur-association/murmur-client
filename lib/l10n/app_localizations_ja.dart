@@ -1811,4 +1811,10 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get seedBadChecksum => 'この 24 個の単語はシードになりません。どれかが間違っているか、順番が違います。';
+
+  @override
+  String get qrCode => 'QR コード';
+
+  @override
+  String get addressQrHint => 'スキャンすると、このアドレスを Murmur で開けます。';
 }

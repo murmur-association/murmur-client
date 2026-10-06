@@ -260,9 +260,10 @@ A TxStatus of invalid or refused takes the transaction out of nonce and balance 
 **Sharing** (`ui/share.dart`). Every link, address and hash has a `ShareButton` (`Glyph.share`) instead of a copy button.
 - **Where the system has a real share sheet**, the button offers "Copy" and "Share…": Android, iOS and macOS through `share_plus`, and browsers with the Web Share API through `navigator.share`.
 - **Elsewhere it simply copies.** That's Windows and Linux, where the plugin would fall back to a mail link, and Firefox on desktop.
+- **A QR code where a link opens something on another device:** `ShareButton(qr:)` adds "QR code" to the menu, and `showQr` shows the link large with a share button under it to pass it on again. Addresses have it (`HashText(qr: addressLink(address))`: scanning opens the address's page) and invitation cards use the same dialog.
 - **The wallet seed** keeps a plain copy button on purpose: it must never be offered to other apps.
 
-**Links:** `#/thread/<txid>` opens a thread over the home page (`onGenerateRoute` in `main.dart`, `threadInRoute`). An unknown root is asked for by id (GetTx). Native builds share `https://app.murmur.info/#/thread/<txid>`.
+**Links** (`routeOfLink` in `main.dart`): `#/thread/<txid>` opens a thread over the home page (`threadInRoute`), `#/address/<address>` an address's page (`addressInRoute`), `#/invite/<code>` an invitation. An unknown root is asked for by id (GetTx). Native builds share `https://app.murmur.info/#/thread/<txid>`.
 
 **Times:** lists show relative times (`formatAgo`: "5 min ago", the date after 30 days); detail pages show full ones (`formatTime`).
 

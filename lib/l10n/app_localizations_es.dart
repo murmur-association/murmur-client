@@ -1873,4 +1873,10 @@ class AppLocalizationsEs extends AppLocalizations {
   @override
   String get seedBadChecksum =>
       'Estas 24 palabras no forman una semilla: alguna es incorrecta o está fuera de lugar.';
+
+  @override
+  String get qrCode => 'Código QR';
+
+  @override
+  String get addressQrHint => 'Escanea para abrir esta dirección en Murmur.';
 }

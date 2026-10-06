@@ -517,26 +517,8 @@ class _InviteTile extends StatelessWidget {
   final ValueChanged<bool>? onSelected;
 
   /// The QR code large, over the list, with the typed code under it.
-  void _enlarge(BuildContext context) {
-    showAppDialog<void>(
-      context: context,
-      builder: (context) => Dialog(
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            QrView(_linkOf(record), size: 280),
-            const SizedBox(height: 12),
-            SizedBox(
-              width: 280,
-              child: SelectableText(record.code, style: mono.copyWith(fontSize: 13), textAlign: TextAlign.center),
-            ),
-            const SizedBox(height: 4),
-            ShareButton(_linkOf(record), subject: context.l10n.inviteCardTitle, size: 24),
-          ]),
-        ),
-      ),
-    );
-  }
+  void _enlarge(BuildContext context) =>
+      showQr(context, _linkOf(record), code: record.code, subject: context.l10n.inviteCardTitle);
 
   @override
   Widget build(BuildContext context) {

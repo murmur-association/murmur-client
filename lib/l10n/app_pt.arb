@@ -429,5 +429,7 @@
   "copyCharacters": "Copiar caracteres",
   "seedOrWords": "Semente: 24 palavras ou 64 caracteres",
   "seedUnknownWord": "«{word}» não é uma das palavras de semente. Verifique como está escrita.",
-  "seedBadChecksum": "Estas 24 palavras não formam uma semente: uma está errada ou fora do lugar."
+  "seedBadChecksum": "Estas 24 palavras não formam uma semente: uma está errada ou fora do lugar.",
+  "qrCode": "Código QR",
+  "addressQrHint": "Digitalize para abrir este endereço no Murmur."
 }

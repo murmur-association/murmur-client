@@ -70,7 +70,7 @@ class WalletTab extends StatelessWidget {
                       if (mined > 0) Text(l.blocksMined(mined)),
                       const SizedBox(height: 12),
                       Text(l.address, style: theme.textTheme.labelLarge),
-                      HashText(address),
+                      HashText(address, qr: addressLink(address), qrCaption: l.addressQrHint),
                       const SizedBox(height: 12),
                       _PublicName(client: client, address: address),
                       const SizedBox(height: 4),

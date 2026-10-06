@@ -604,5 +604,9 @@
   "seedUnknownWord": "\"{word}\" is not one of the seed words. Check its spelling.",
   "@seedUnknownWord": {"description":"Error: one of the 24 words is not a seed word","placeholders":{"word":{"type":"String"}}},
   "seedBadChecksum": "These 24 words do not make a seed: one of them is wrong or out of place.",
-  "@seedBadChecksum": {"description":"Error: 24 valid words that do not make a seed"}
+  "@seedBadChecksum": {"description":"Error: 24 valid words that do not make a seed"},
+  "qrCode": "QR code",
+  "@qrCode": {"description":"Share menu entry that shows a QR code of the link"},
+  "addressQrHint": "Scan to open this address in Murmur.",
+  "@addressQrHint": {"description":"Under the QR code of an address: what scanning it does"}
 }

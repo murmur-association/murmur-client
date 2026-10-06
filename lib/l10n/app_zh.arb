@@ -429,5 +429,7 @@
   "copyCharacters": "复制字符",
   "seedOrWords": "种子：24 个单词或 64 个字符",
   "seedUnknownWord": "“{word}”不是种子单词。请检查拼写。",
-  "seedBadChecksum": "这 24 个单词不能组成种子：其中一个有误或位置不对。"
+  "seedBadChecksum": "这 24 个单词不能组成种子：其中一个有误或位置不对。",
+  "qrCode": "二维码",
+  "addressQrHint": "扫描即可在 Murmur 中打开此地址。"
 }

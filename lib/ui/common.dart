@@ -25,7 +25,7 @@ import 'share.dart';
 export 'dialogs.dart';
 export 'l10n.dart';
 export 'people.dart' show nameOf, publicNameOf, AddressAvatar, editAlias;
-export 'share.dart' show ShareButton;
+export 'share.dart' show ShareButton, showQr;
 
 /// Makes the client, the wallet and the preferences available to every page.
 class AppScope extends InheritedWidget {
@@ -79,6 +79,12 @@ String threadLink(String txid) => '$appBaseUrl/#/thread/$txid';
 
 /// The thread a route name (a link's `#/thread/<txid>`) opens, if any.
 String? threadInRoute(String? name) => RegExp(r'^/thread/([0-9a-f]{64})$').firstMatch(name ?? '')?.group(1);
+
+/// A link that opens the page of `address`: what its QR code holds.
+String addressLink(String address) => '$appBaseUrl/#/address/$address';
+
+/// The address a route name (a link's `#/address/<address>`) opens, if any.
+String? addressInRoute(String? name) => RegExp(r'^/address/([0-9a-f]{64})$').firstMatch(name ?? '')?.group(1);
 
 /// The node's repository: its code, PROTOCOL.md and the whitepaper.
 const nodeRepositoryUrl = 'https://gitlab.com/elc4no/murmur';
@@ -349,11 +355,16 @@ void showSnack(BuildContext context, String text) {
 
 /// A hex value with a copy button; optionally tappable.
 class HashText extends StatelessWidget {
-  const HashText(this.hex, {super.key, this.shorten = false, this.onTap});
+  const HashText(this.hex, {super.key, this.shorten = false, this.onTap, this.qr, this.qrCaption});
 
   final String hex;
   final bool shorten;
   final VoidCallback? onTap;
+
+  /// For an address: the link to its page, offered as a QR code to scan
+  /// (see [ShareButton.qr]), and what to say under it.
+  final String? qr;
+  final String? qrCaption;
 
   @override
   Widget build(BuildContext context) {
@@ -371,7 +382,7 @@ class HashText extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         Flexible(child: onTap != null ? InkWell(onTap: onTap, child: text) : SelectionArea(child: text)),
-        ShareButton(hex, size: 16),
+        ShareButton(hex, size: 16, qr: qr, qrCaption: qrCaption),
       ],
     );
   }

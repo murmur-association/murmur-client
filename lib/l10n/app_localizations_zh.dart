@@ -1796,4 +1796,10 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get seedBadChecksum => '这 24 个单词不能组成种子：其中一个有误或位置不对。';
+
+  @override
+  String get qrCode => '二维码';
+
+  @override
+  String get addressQrHint => '扫描即可在 Murmur 中打开此地址。';
 }
