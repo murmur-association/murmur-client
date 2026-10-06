@@ -120,7 +120,10 @@ function Describe-App {
   $state = if ($p) { 'running' } else { "exited with code $($script:app.ExitCode)" }
   $windows = @([AppWindows]::Of($script:app.Id) | ForEach-Object { "'$($_[1])' ($($_[2]), $(if ($_[3]) { 'shown' } else { 'hidden' }))" }) -join '; '
   $n = Node-Of $script:app.Id
+  $all = @(Get-CimInstance Win32_Process -Filter "Name='murmur-node.exe'" | ForEach-Object {
+    "$($_.ProcessId) (parent $($_.ParentProcessId), started $($_.CreationDate.ToString('HH:mm:ss.fff')), $($_.ExecutablePath))" }) -join '; '
   "app $($script:app.Id): $state; its windows: $(if ($windows) { $windows } else { 'none' }); its node: $(if ($n) { $n.ProcessId } else { 'none' }); " +
+    "every murmur-node running: $(if ($all) { $all } else { 'none' }); the bundled one is $nodeExe; " +
     "session $([Diagnostics.Process]::GetCurrentProcess().SessionId), a desktop to show windows on: $([Environment]::UserInteractive)"
 }
 # The app's own words (the engine says on its error output why it gave up),
@@ -189,7 +192,13 @@ try {
   if (-not (Alive $left)) { Fail "the node died with the killed app, so there's nothing to clean up" }
   Start-App
   Wait-For 15 'the node left by the killed app is still running' { -not (Alive $left) }
-  if ((Bundled-Nodes).Count -ne 1) { Fail 'more than one node is running' }
+  # One node in the end, and it's this app's: looked at over a few seconds,
+  # not at one instant, since the app stops the old one and starts its own.
+  Wait-For 15 "there isn't exactly one node running, this app's" {
+    $nodes = Bundled-Nodes
+    $nodes.Count -eq 1 -and $nodes[0].ParentProcessId -eq $script:app.Id
+  }
+  $node = (Node-Of $app.Id).ProcessId
   Write-Output "node $left was left behind; the next start stopped it and runs $node"
   Close-App
 
