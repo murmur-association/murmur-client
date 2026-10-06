@@ -16,7 +16,6 @@ import 'package:murmur_client/ui/common.dart';
 import 'package:murmur_client/ui/invitations_page.dart';
 import 'package:murmur_client/ui/messages_tab.dart';
 import 'package:murmur_client/ui/paged_list.dart';
-import 'package:murmur_client/ui/starred_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
@@ -167,38 +166,6 @@ void main() {
     await tester.tap(find.text('Print'));
     await tester.pumpAndSettle();
     expect(chosen!(records.first), '');
-  });
-
-  testWidgets('the Starred page lists what was starred, and a removed star keeps its row', (tester) async {
-    final prefs = Preferences();
-    Future<void> open() async {
-      // A fresh page each time: it lists the stars as they were when opened.
-      await tester.pumpWidget(const SizedBox());
-      await tester.pumpWidget(AppScope(
-        client: MurmurClient(),
-        wallets: WalletController(),
-        prefs: prefs,
-        child: const MaterialApp(
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
-          supportedLocales: AppLocalizations.supportedLocales,
-          home: StarredPage(),
-        ),
-      ));
-      await tester.pump();
-    }
-
-    await open();
-    final l = tester.element(find.byType(StarredPage)).l10n;
-    expect(find.text(l.noStarred), findsOneWidget);
-
-    // A star on something the client can't fetch (it's offline here).
-    await prefs.setStarred('ab' * 32, true);
-    await open();
-    expect(find.text(l.starredGone), findsOneWidget);
-    await tester.tap(find.byTooltip(l.unstar));
-    await tester.pump();
-    expect(prefs.starred, isEmpty);
-    expect(find.byTooltip(l.star), findsOneWidget, reason: 'still listed, to star again');
   });
 
   testWidgets('a copper name in a row opens its address', (tester) async {

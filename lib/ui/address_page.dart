@@ -43,6 +43,8 @@ class AddressPage extends StatelessWidget {
                       AddressAvatar(address, size: 56),
                       const SizedBox(width: 16),
                       Expanded(child: Text(nameOf(context, address), style: theme.textTheme.titleLarge)),
+                      // Followed in the Starred tab (not oneself).
+                      if (!isMine) StarButton.person(address),
                     ]),
                     const SizedBox(height: 8),
                     HashText(address, qr: addressLink(address), qrCaption: l.addressQrHint),

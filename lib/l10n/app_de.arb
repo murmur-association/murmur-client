@@ -386,7 +386,7 @@
   "explainAlias": "Veröffentlicht deinen öffentlichen Namen. Wie ein neuer Thread kostet er {total} × die Gebühr: Die Gebühr geht an den Miner, {burn} × die Gebühr wird verbrannt.",
   "inviteFromNoPublic": "Kein öffentlicher Name bekannt",
   "starredTitle": "Markiert",
-  "noStarred": "Noch nichts markiert. Markiere einen Thread oder eine Nachricht auf ihrer Seite, dann erscheint sie hier.",
+  "noStarred": "Noch nichts markiert. Markiere einen Thread, eine Nachricht oder eine Person auf ihrer Seite, dann erscheint sie hier.",
   "starredGone": "Nicht mehr in der Kette",
   "feeSuggestedLabel": "Vorgeschlagene Gebühr",
   "feeForBytes": "für {weight} Bytes",
@@ -431,5 +431,9 @@
   "seedUnknownWord": "„{word}“ ist keines der Seed-Wörter. Prüfe die Schreibweise.",
   "seedBadChecksum": "Diese 24 Wörter ergeben keinen Seed: eines ist falsch oder steht an der falschen Stelle.",
   "qrCode": "QR-Code",
-  "addressQrHint": "Scannen, um diese Adresse in Murmur zu öffnen."
+  "addressQrHint": "Scannen, um diese Adresse in Murmur zu öffnen.",
+  "starredPeople": "Personen",
+  "starredThreads": "Threads und Nachrichten",
+  "newActivity": "Neue Aktivität",
+  "starredNew": "{count, plural, =1{1 markierter Eintrag mit neuer Aktivität} other{{count} markierte Einträge mit neuer Aktivität}}"
 }

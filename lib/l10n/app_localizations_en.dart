@@ -1685,7 +1685,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get noStarred =>
-      'Nothing starred yet. Star a thread or a message from its page, and it shows up here.';
+      'Nothing starred yet. Star a thread, a message or a person from their page, and they show up here.';
 
   @override
   String get starredGone => 'No longer on the chain';
@@ -1864,4 +1864,24 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get addressQrHint => 'Scan to open this address in Murmur.';
+
+  @override
+  String get starredPeople => 'People';
+
+  @override
+  String get starredThreads => 'Threads and messages';
+
+  @override
+  String get newActivity => 'New activity';
+
+  @override
+  String starredNew(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count starred with new activity',
+      one: '1 starred with new activity',
+    );
+    return '$_temp0';
+  }
 }

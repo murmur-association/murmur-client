@@ -386,7 +386,7 @@
   "explainAlias": "Publiceert je openbare naam. Net als een nieuw draadje kost dat {total} × de fee: de fee gaat naar de miner en {burn} × de fee wordt verbrand.",
   "inviteFromNoPublic": "Geen openbare naam bekend",
   "starredTitle": "Met ster",
-  "noStarred": "Nog niets met een ster. Geef een draadje of bericht een ster op de eigen pagina, dan verschijnt het hier.",
+  "noStarred": "Nog niets met een ster. Geef een draadje, een bericht of een persoon een ster op de eigen pagina, dan verschijnt het hier.",
   "starredGone": "Niet meer in de keten",
   "feeSuggestedLabel": "Voorgestelde fee",
   "feeForBytes": "voor {weight} bytes",
@@ -431,5 +431,9 @@
   "seedUnknownWord": "\"{word}\" is geen seedwoord. Controleer de spelling.",
   "seedBadChecksum": "Deze 24 woorden vormen geen seed: één ervan is fout of staat op de verkeerde plek.",
   "qrCode": "QR-code",
-  "addressQrHint": "Scan om dit adres in Murmur te openen."
+  "addressQrHint": "Scan om dit adres in Murmur te openen.",
+  "starredPeople": "Personen",
+  "starredThreads": "Draadjes en berichten",
+  "newActivity": "Nieuwe activiteit",
+  "starredNew": "{count, plural, =1{1 item met ster heeft nieuwe activiteit} other{{count} items met ster hebben nieuwe activiteit}}"
 }

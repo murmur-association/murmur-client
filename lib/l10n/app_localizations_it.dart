@@ -1702,7 +1702,7 @@ class AppLocalizationsIt extends AppLocalizations {
 
   @override
   String get noStarred =>
-      'Ancora nessuna stella. Metti una stella a una discussione o a un messaggio dalla sua pagina e comparirà qui.';
+      'Ancora nessuna stella. Metti una stella a una discussione, a un messaggio o a una persona dalla sua pagina e comparirà qui.';
 
   @override
   String get starredGone => 'Non è più nella catena';
@@ -1884,4 +1884,24 @@ class AppLocalizationsIt extends AppLocalizations {
   @override
   String get addressQrHint =>
       'Scansiona per aprire questo indirizzo in Murmur.';
+
+  @override
+  String get starredPeople => 'Persone';
+
+  @override
+  String get starredThreads => 'Discussioni e messaggi';
+
+  @override
+  String get newActivity => 'Nuova attività';
+
+  @override
+  String starredNew(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count elementi con stella hanno nuova attività',
+      one: '1 elemento con stella ha nuova attività',
+    );
+    return '$_temp0';
+  }
 }

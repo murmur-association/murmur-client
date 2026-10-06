@@ -1705,7 +1705,7 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get noStarred =>
-      'Noch nichts markiert. Markiere einen Thread oder eine Nachricht auf ihrer Seite, dann erscheint sie hier.';
+      'Noch nichts markiert. Markiere einen Thread, eine Nachricht oder eine Person auf ihrer Seite, dann erscheint sie hier.';
 
   @override
   String get starredGone => 'Nicht mehr in der Kette';
@@ -1887,4 +1887,24 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get addressQrHint => 'Scannen, um diese Adresse in Murmur zu öffnen.';
+
+  @override
+  String get starredPeople => 'Personen';
+
+  @override
+  String get starredThreads => 'Threads und Nachrichten';
+
+  @override
+  String get newActivity => 'Neue Aktivität';
+
+  @override
+  String starredNew(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count markierte Einträge mit neuer Aktivität',
+      one: '1 markierter Eintrag mit neuer Aktivität',
+    );
+    return '$_temp0';
+  }
 }

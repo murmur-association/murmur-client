@@ -386,7 +386,7 @@
   "explainAlias": "Publica o seu nome público. Como um tópico novo, custa {total} × a taxa: a taxa vai para o minerador e {burn} × a taxa é queimado.",
   "inviteFromNoPublic": "Nenhum nome público conhecido",
   "starredTitle": "Com estrela",
-  "noStarred": "Ainda não há nada com estrela. Marque um tópico ou uma mensagem na sua página e aparece aqui.",
+  "noStarred": "Ainda não há nada com estrela. Marque um tópico, uma mensagem ou uma pessoa na sua página e aparece aqui.",
   "starredGone": "Já não está na cadeia",
   "feeSuggestedLabel": "Taxa sugerida",
   "feeForBytes": "por {weight} bytes",
@@ -431,5 +431,9 @@
   "seedUnknownWord": "«{word}» não é uma das palavras de semente. Verifique como está escrita.",
   "seedBadChecksum": "Estas 24 palavras não formam uma semente: uma está errada ou fora do lugar.",
   "qrCode": "Código QR",
-  "addressQrHint": "Digitalize para abrir este endereço no Murmur."
+  "addressQrHint": "Digitalize para abrir este endereço no Murmur.",
+  "starredPeople": "Pessoas",
+  "starredThreads": "Tópicos e mensagens",
+  "newActivity": "Atividade nova",
+  "starredNew": "{count, plural, =1{1 item com estrela tem atividade nova} other{{count} itens com estrela têm atividade nova}}"
 }

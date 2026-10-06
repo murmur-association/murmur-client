@@ -972,6 +972,13 @@ class MurmurClient extends ChangeNotifier {
   /// Direct replies to a message, oldest first.
   List<TxView> repliesOf(TxView v) => _messages.repliesOf(v);
 
+  /// Every reply under a message, at any depth, among what's fetched.
+  Iterable<TxView> repliesUnder(TxView v) => _messages.repliesUnder(v);
+
+  /// The threads and replies `address` wrote, among what's fetched, newest
+  /// first.
+  List<TxView> messagesBy(String address) => _messages.messagesBy(address);
+
   /// The message a reply answers, if the client knows it.
   TxView? parentOf(TxView v) => _messages.parentOf(v);
 

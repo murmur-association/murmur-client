@@ -1695,7 +1695,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get noStarred =>
-      'Ainda não há nada com estrela. Marque um tópico ou uma mensagem na sua página e aparece aqui.';
+      'Ainda não há nada com estrela. Marque um tópico, uma mensagem ou uma pessoa na sua página e aparece aqui.';
 
   @override
   String get starredGone => 'Já não está na cadeia';
@@ -1876,4 +1876,24 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get addressQrHint => 'Digitalize para abrir este endereço no Murmur.';
+
+  @override
+  String get starredPeople => 'Pessoas';
+
+  @override
+  String get starredThreads => 'Tópicos e mensagens';
+
+  @override
+  String get newActivity => 'Atividade nova';
+
+  @override
+  String starredNew(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count itens com estrela têm atividade nova',
+      one: '1 item com estrela tem atividade nova',
+    );
+    return '$_temp0';
+  }
 }

@@ -2422,19 +2422,19 @@ abstract class AppLocalizations {
   /// **'No public name known'**
   String get inviteFromNoPublic;
 
-  /// The Starred page, opened from the top bar
+  /// The Starred tab
   ///
   /// In en, this message translates to:
   /// **'Starred'**
   String get starredTitle;
 
-  /// The Starred page, opened from the top bar
+  /// The Starred tab
   ///
   /// In en, this message translates to:
-  /// **'Nothing starred yet. Star a thread or a message from its page, and it shows up here.'**
+  /// **'Nothing starred yet. Star a thread, a message or a person from their page, and they show up here.'**
   String get noStarred;
 
-  /// The Starred page, opened from the top bar
+  /// The Starred tab
   ///
   /// In en, this message translates to:
   /// **'No longer on the chain'**
@@ -2703,6 +2703,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Scan to open this address in Murmur.'**
   String get addressQrHint;
+
+  /// Starred tab: heading of the starred people
+  ///
+  /// In en, this message translates to:
+  /// **'People'**
+  String get starredPeople;
+
+  /// Starred tab: heading of the starred threads and messages
+  ///
+  /// In en, this message translates to:
+  /// **'Threads and messages'**
+  String get starredThreads;
+
+  /// Starred tab: a mark on a starred thread or person with activity the user has not seen
+  ///
+  /// In en, this message translates to:
+  /// **'New activity'**
+  String get newActivity;
+
+  /// Badge on the Starred tab
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 starred with new activity} other{{count} starred with new activity}}'**
+  String starredNew(int count);
 }
 
 class _AppLocalizationsDelegate

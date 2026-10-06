@@ -11,7 +11,8 @@ import 'chain_tab.dart';
 import 'common.dart';
 import 'compose_page.dart';
 import 'messages_tab.dart';
-import 'starred_page.dart';
+import '../services/starred.dart';
+import 'starred_tab.dart';
 import 'threads_tab.dart';
 import 'wallet_tab.dart';
 import 'glyphs.dart';
@@ -24,7 +25,9 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> with RouteAware {
-  int _tab = 0;
+  static const _threads = 0, _messages = 1, _starred = 2, _wallet = 3;
+
+  int _tab = _threads;
   bool _started = false;
 
   /// Bumped each time the Threads tab comes into view, so it takes a fresh
@@ -32,16 +35,31 @@ class _HomePageState extends State<HomePage> with RouteAware {
   /// publishing a thread, for example).
   int _threadsShown = 0;
 
+  /// Bumped each time the Starred tab comes into view: it lists the stars
+  /// as they are then.
+  int _starredShown = 0;
+
+  /// What had been seen of the starred things' activity when the Starred
+  /// tab came into view. Newer activity stays marked while the tab is open,
+  /// though the tab's badge clears at once.
+  int? _starredSince;
+
   void _selectTab(int i) {
     setState(() {
-      if (i == 0 && _tab != 0) _threadsShown++;
+      if (i == _threads && _tab != _threads) _threadsShown++;
+      if (i == _starred && _tab != _starred) {
+        _starredShown++;
+        _starredSince = AppScope.of(context).prefs.starredSeen;
+      }
       _tab = i;
     });
   }
 
   @override
   void didPopNext() {
-    if (_tab == 0) setState(() => _threadsShown++);
+    if (_tab == _threads) setState(() => _threadsShown++);
+    // Back from a page where a star may have been given or taken.
+    if (_tab == _starred) setState(() => _starredShown++);
   }
 
   @override
@@ -64,7 +82,7 @@ class _HomePageState extends State<HomePage> with RouteAware {
 
   void _compose(BuildContext context, WalletController wallets, TxKind kind) {
     if (wallets.wallet == null) {
-      _selectTab(2);
+      _selectTab(_wallet);
       showSnack(context, context.l10n.createWalletFirst);
       return;
     }
@@ -102,12 +120,36 @@ class _HomePageState extends State<HomePage> with RouteAware {
         // A wallet starts from now, not its whole history. On the Messages
         // tab, what's there is seen.
         final seen = prefs.messagesSeen[me];
-        final until = seen == null ? DateTime.now().millisecondsSinceEpoch ~/ 1000 : (_tab == 1 ? newest : null);
+        final until =
+            seen == null ? DateTime.now().millisecondsSinceEpoch ~/ 1000 : (_tab == _messages ? newest : null);
         if (until != null && until > (seen ?? 0)) {
           WidgetsBinding.instance.addPostFrameCallback((_) => prefs.setMessagesSeen(me, until));
         }
-        if (_tab == 1) newReplies = 0;
+        if (_tab == _messages) newReplies = 0;
       }
+      // Starred threads and people: followed, and counted when they have
+      // activity not seen yet. Seeing starts when the first star is given,
+      // not with its whole history, and moves on while the tab is open.
+      final activity = starredActivity(client,
+          starred: prefs.starred, people: prefs.starredPeople, me: me, muted: prefs.muted);
+      var starredNew = 0;
+      if (prefs.starred.isNotEmpty || prefs.starredPeople.isNotEmpty) {
+        final seen = prefs.starredSeen;
+        final until =
+            seen == null ? DateTime.now().millisecondsSinceEpoch ~/ 1000 : (_tab == _starred ? activity.newest : null);
+        if (until != null && until > (seen ?? -1)) {
+          WidgetsBinding.instance.addPostFrameCallback((_) => prefs.setStarredSeen(until));
+        }
+        if (seen != null && _tab != _starred) starredNew = min(activity.newSince(seen).length, 99);
+      }
+      Widget starredIcon(bool filled) => Badge(
+            isLabelVisible: starredNew > 0,
+            label: Text(starredNew >= 99 ? '99+' : formatAmount(context, starredNew)),
+            child: Semantics(
+              label: starredNew > 0 ? l.starredNew(starredNew) : null,
+              child: MurmurIcon(Glyph.star, filled: filled),
+            ),
+          );
       Widget messagesIcon(bool filled) => Badge(
             isLabelVisible: newReplies > 0,
             label: Text(newReplies >= 99 ? '99+' : formatAmount(context, newReplies)),
@@ -128,12 +170,6 @@ class _HomePageState extends State<HomePage> with RouteAware {
           ]),
           actions: [
             ConnectionChip(client: client),
-            // What the user starred, from any tab.
-            IconButton(
-              icon: const MurmurIcon(Glyph.star),
-              tooltip: l.starredTitle,
-              onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const StarredPage())),
-            ),
             const LanguageMenu(),
             const ThemeToggle(),
             IconButton(
@@ -204,6 +240,7 @@ class _HomePageState extends State<HomePage> with RouteAware {
             child: IndexedStack(index: _tab, children: [
               ThreadsTab(refreshToken: _threadsShown),
               const MessagesTab(),
+              StarredTab(refreshToken: _starredShown, activity: activity, since: _starredSince),
               const WalletTab(),
               const ChainTab(),
             ]),
@@ -212,12 +249,12 @@ class _HomePageState extends State<HomePage> with RouteAware {
         // Each tab's own action: a thread from Threads, a transfer from the
         // wallet (once there is one to send from).
         floatingActionButton: switch (_tab) {
-          0 => FloatingActionButton.extended(
+          _threads => FloatingActionButton.extended(
               onPressed: () => _compose(context, wallets, TxKind.orphan),
               icon: const MurmurIcon(Glyph.edit),
               label: Text(l.newThread),
             ),
-          2 when wallets.wallet != null => FloatingActionButton.extended(
+          _wallet when wallets.wallet != null => FloatingActionButton.extended(
               onPressed: () => _compose(context, wallets, TxKind.raw),
               icon: const MurmurIcon(Glyph.transfer),
               label: Text(l.newTransaction),
@@ -234,6 +271,7 @@ class _HomePageState extends State<HomePage> with RouteAware {
                 selectedIcon: const MurmurIcon(Glyph.thread, filled: true),
                 label: l.tabThreads),
             NavigationDestination(icon: messagesIcon(false), selectedIcon: messagesIcon(true), label: l.tabMessages),
+            NavigationDestination(icon: starredIcon(false), selectedIcon: starredIcon(true), label: l.starredTitle),
             NavigationDestination(
                 icon: const MurmurIcon(Glyph.wallet),
                 selectedIcon: const MurmurIcon(Glyph.wallet, filled: true),

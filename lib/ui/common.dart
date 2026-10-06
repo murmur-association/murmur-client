@@ -316,10 +316,19 @@ class InfoPoint extends StatelessWidget {
 
 /// Stars or unstars a message, or a whole thread by its root: starred ones
 /// are easy to find, and their content stays in the local copy however old.
+/// Or a person, by their address ([StarButton.person]): followed in the
+/// Starred tab.
 class StarButton extends StatelessWidget {
-  const StarButton(this.txid, {super.key});
+  const StarButton(this.txid, {super.key}) : person = false;
 
+  /// For the person at an address.
+  const StarButton.person(String address, {super.key})
+      : txid = address,
+        person = true;
+
+  /// The txid, or with [person] the address.
   final String txid;
+  final bool person;
 
   @override
   Widget build(BuildContext context) {
@@ -327,12 +336,12 @@ class StarButton extends StatelessWidget {
     return ListenableBuilder(
       listenable: prefs,
       builder: (context, _) {
-        final starred = prefs.starred.contains(txid);
+        final starred = (person ? prefs.starredPeople : prefs.starred).contains(txid);
         return IconButton(
           // Starred: a solid copper star, unmistakable next to an outline.
           icon: MurmurIcon(Glyph.star, filled: starred, color: starred ? Theme.of(context).colorScheme.primary : null),
           tooltip: starred ? context.l10n.unstar : context.l10n.star,
-          onPressed: () => prefs.setStarred(txid, !starred),
+          onPressed: () => person ? prefs.setStarredPerson(txid, !starred) : prefs.setStarred(txid, !starred),
         );
       },
     );

@@ -386,7 +386,7 @@
   "explainAlias": "Publica tu nombre público. Como un hilo nuevo, cuesta {total} × la comisión: la comisión va al minero y se queman {burn} × la comisión.",
   "inviteFromNoPublic": "Sin nombre público conocido",
   "starredTitle": "Destacados",
-  "noStarred": "Aún no has destacado nada. Destaca un hilo o un mensaje desde su página y aparecerá aquí.",
+  "noStarred": "Aún no has destacado nada. Destaca un hilo, un mensaje o a una persona desde su página y aparecerá aquí.",
   "starredGone": "Ya no está en la cadena",
   "feeSuggestedLabel": "Comisión sugerida",
   "feeForBytes": "por {weight} bytes",
@@ -431,5 +431,9 @@
   "seedUnknownWord": "«{word}» no es una de las palabras de semilla. Revisa cómo está escrita.",
   "seedBadChecksum": "Estas 24 palabras no forman una semilla: alguna es incorrecta o está fuera de lugar.",
   "qrCode": "Código QR",
-  "addressQrHint": "Escanea para abrir esta dirección en Murmur."
+  "addressQrHint": "Escanea para abrir esta dirección en Murmur.",
+  "starredPeople": "Personas",
+  "starredThreads": "Hilos y mensajes",
+  "newActivity": "Actividad nueva",
+  "starredNew": "{count, plural, =1{1 destacado con actividad nueva} other{{count} destacados con actividad nueva}}"
 }

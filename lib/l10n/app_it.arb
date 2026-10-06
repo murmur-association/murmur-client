@@ -386,7 +386,7 @@
   "explainAlias": "Pubblica il tuo nome pubblico. Come una nuova discussione, costa {total} × la commissione: la commissione va al miner e {burn} × la commissione viene bruciato.",
   "inviteFromNoPublic": "Nessun nome pubblico noto",
   "starredTitle": "Con stella",
-  "noStarred": "Ancora nessuna stella. Metti una stella a una discussione o a un messaggio dalla sua pagina e comparirà qui.",
+  "noStarred": "Ancora nessuna stella. Metti una stella a una discussione, a un messaggio o a una persona dalla sua pagina e comparirà qui.",
   "starredGone": "Non è più nella catena",
   "feeSuggestedLabel": "Commissione suggerita",
   "feeForBytes": "per {weight} byte",
@@ -431,5 +431,9 @@
   "seedUnknownWord": "«{word}» non è una delle parole del seme. Controlla come è scritta.",
   "seedBadChecksum": "Queste 24 parole non formano un seme: una è sbagliata o fuori posto.",
   "qrCode": "Codice QR",
-  "addressQrHint": "Scansiona per aprire questo indirizzo in Murmur."
+  "addressQrHint": "Scansiona per aprire questo indirizzo in Murmur.",
+  "starredPeople": "Persone",
+  "starredThreads": "Discussioni e messaggi",
+  "newActivity": "Nuova attività",
+  "starredNew": "{count, plural, =1{1 elemento con stella ha nuova attività} other{{count} elementi con stella hanno nuova attività}}"
 }

@@ -1645,7 +1645,8 @@ class AppLocalizationsJa extends AppLocalizations {
   String get starredTitle => 'スター付き';
 
   @override
-  String get noStarred => 'まだスター付きのものはありません。スレッドやメッセージのページでスターを付けると、ここに表示されます。';
+  String get noStarred =>
+      'まだスター付きのものはありません。スレッド、メッセージ、ユーザーのページでスターを付けると、ここに表示されます。';
 
   @override
   String get starredGone => 'チェーン上にありません';
@@ -1817,4 +1818,23 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get addressQrHint => 'スキャンすると、このアドレスを Murmur で開けます。';
+
+  @override
+  String get starredPeople => 'ユーザー';
+
+  @override
+  String get starredThreads => 'スレッドとメッセージ';
+
+  @override
+  String get newActivity => '新しいアクティビティ';
+
+  @override
+  String starredNew(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'スター付き $count 件に新しいアクティビティ',
+    );
+    return '$_temp0';
+  }
 }

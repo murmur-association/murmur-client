@@ -386,7 +386,7 @@
   "explainAlias": "公開名を公開します。新しいスレッドと同じく、費用は手数料の {total} 倍です。手数料はマイナーに渡り、手数料の {burn} 倍が焼却されます。",
   "inviteFromNoPublic": "既知の公開名はありません",
   "starredTitle": "スター付き",
-  "noStarred": "まだスター付きのものはありません。スレッドやメッセージのページでスターを付けると、ここに表示されます。",
+  "noStarred": "まだスター付きのものはありません。スレッド、メッセージ、ユーザーのページでスターを付けると、ここに表示されます。",
   "starredGone": "チェーン上にありません",
   "feeSuggestedLabel": "推奨手数料",
   "feeForBytes": "{weight} バイト分",
@@ -431,5 +431,9 @@
   "seedUnknownWord": "「{word}」はシードの単語ではありません。つづりを確認してください。",
   "seedBadChecksum": "この 24 個の単語はシードになりません。どれかが間違っているか、順番が違います。",
   "qrCode": "QR コード",
-  "addressQrHint": "スキャンすると、このアドレスを Murmur で開けます。"
+  "addressQrHint": "スキャンすると、このアドレスを Murmur で開けます。",
+  "starredPeople": "ユーザー",
+  "starredThreads": "スレッドとメッセージ",
+  "newActivity": "新しいアクティビティ",
+  "starredNew": "{count, plural, other{スター付き {count} 件に新しいアクティビティ}}"
 }

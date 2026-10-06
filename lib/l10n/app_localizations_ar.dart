@@ -1718,7 +1718,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get noStarred =>
-      'لا شيء مميز بنجمة بعد. ميّز موضوعًا أو رسالة بنجمة من صفحتها وستظهر هنا.';
+      'لا شيء مميز بنجمة بعد. ميّز موضوعًا أو رسالة أو شخصًا بنجمة من صفحته وسيظهر هنا.';
 
   @override
   String get starredGone => 'لم يعد على السلسلة';
@@ -1897,4 +1897,27 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get addressQrHint => 'امسح الرمز لفتح هذا العنوان في Murmur.';
+
+  @override
+  String get starredPeople => 'الأشخاص';
+
+  @override
+  String get starredThreads => 'المواضيع والرسائل';
+
+  @override
+  String get newActivity => 'نشاط جديد';
+
+  @override
+  String starredNew(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count عنصر مميز بنجمة فيه نشاط جديد',
+      many: '$count عنصرًا مميزًا بنجمة فيه نشاط جديد',
+      few: '$count عناصر مميزة بنجمة فيها نشاط جديد',
+      two: 'عنصران مميزان بنجمة فيهما نشاط جديد',
+      one: 'عنصر واحد مميز بنجمة فيه نشاط جديد',
+    );
+    return '$_temp0';
+  }
 }

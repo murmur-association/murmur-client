@@ -1635,7 +1635,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get starredTitle => '已加星标';
 
   @override
-  String get noStarred => '还没有加星标的内容。在话题或消息的页面上加星标，它就会出现在这里。';
+  String get noStarred => '还没有加星标的内容。在话题、消息或用户的页面上加星标，它就会出现在这里。';
 
   @override
   String get starredGone => '已不在链上';
@@ -1802,4 +1802,23 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get addressQrHint => '扫描即可在 Murmur 中打开此地址。';
+
+  @override
+  String get starredPeople => '用户';
+
+  @override
+  String get starredThreads => '话题和消息';
+
+  @override
+  String get newActivity => '有新动态';
+
+  @override
+  String starredNew(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count 个星标项有新动态',
+    );
+    return '$_temp0';
+  }
 }

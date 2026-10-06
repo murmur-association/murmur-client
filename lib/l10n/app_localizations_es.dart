@@ -1698,7 +1698,7 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get noStarred =>
-      'Aún no has destacado nada. Destaca un hilo o un mensaje desde su página y aparecerá aquí.';
+      'Aún no has destacado nada. Destaca un hilo, un mensaje o a una persona desde su página y aparecerá aquí.';
 
   @override
   String get starredGone => 'Ya no está en la cadena';
@@ -1879,4 +1879,24 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get addressQrHint => 'Escanea para abrir esta dirección en Murmur.';
+
+  @override
+  String get starredPeople => 'Personas';
+
+  @override
+  String get starredThreads => 'Hilos y mensajes';
+
+  @override
+  String get newActivity => 'Actividad nueva';
+
+  @override
+  String starredNew(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count destacados con actividad nueva',
+      one: '1 destacado con actividad nueva',
+    );
+    return '$_temp0';
+  }
 }

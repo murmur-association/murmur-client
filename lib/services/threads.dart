@@ -60,6 +60,9 @@ class MessageIndex {
   /// Sender -> its mined Orphans of the alias length, latest first.
   final _aliasCandidates = <String, List<TxView>>{};
 
+  /// Author -> their Orphans and Replies, newest first.
+  final _byAuthor = <String, List<TxView>>{};
+
   /// Most recently active first.
   final threads = <ThreadSummary>[];
 
@@ -82,6 +85,9 @@ class MessageIndex {
     final oldestFirst = newestFirst.reversed.toList();
     for (final v in oldestFirst) {
       if (_isMessage(v)) ix._byTxid[v.tx.id] = v;
+    }
+    for (final v in newestFirst) {
+      if (_isMessage(v)) ix._byAuthor.putIfAbsent(v.tx.fromAddress, () => []).add(v);
     }
 
     for (final v in oldestFirst) {
@@ -187,6 +193,22 @@ class MessageIndex {
   List<TxView> repliesOf(TxView v) => _children[v.tx.id] ?? const [];
 
   int replyCountOf(TxView v) => repliesOf(v).length;
+
+  /// Every valid reply under this message, at any depth.
+  Iterable<TxView> repliesUnder(TxView v) sync* {
+    final seen = <String>{v.tx.id};
+    final stack = [...repliesOf(v)];
+    while (stack.isNotEmpty) {
+      final r = stack.removeLast();
+      if (!seen.add(r.tx.id)) continue;
+      yield r;
+      stack.addAll(repliesOf(r));
+    }
+  }
+
+  /// The threads and replies `address` wrote, among what's known, newest
+  /// first.
+  List<TxView> messagesBy(String address) => _byAuthor[address] ?? const [];
 
   int flagCountOf(TxView v) => _flaggers[v.tx.id]?.length ?? 0;
 

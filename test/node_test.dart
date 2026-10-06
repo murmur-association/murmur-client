@@ -16,6 +16,7 @@ import 'package:murmur_client/protocol/models.dart';
 import 'package:murmur_client/protocol/network.dart';
 import 'package:murmur_client/services/invitations.dart';
 import 'package:murmur_client/services/node_client.dart';
+import 'package:murmur_client/services/starred.dart';
 import 'package:murmur_client/services/storage.dart' show InviteRecord;
 
 import 'support/client_checks.dart';
@@ -243,6 +244,13 @@ void main() {
       // And it ends as the list of the device that saw them being sent,
       // which got them in another order.
       expect(listed, [for (final t in client.threads(upTo: upTo)) t.root.tx.id]);
+
+      // What that device stars is followed: the reply under the starred
+      // thread, and the newest message of the starred person.
+      final replied = reader.lookupTx(reply.id)!.blockTime;
+      final activity = starredActivity(reader, starred: {older.id}, people: {me});
+      expect(activity.messages, {older.id: replied});
+      expect(activity.people, {me: replied});
     }, timeout: const Timeout(Duration(minutes: 3)));
   
     test('invitations: funded cards are claimed by a new wallet, or taken back', () async {

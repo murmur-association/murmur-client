@@ -147,6 +147,15 @@ class Preferences extends ChangeNotifier {
   /// in the local copy however old it gets.
   Set<String> starred = {};
 
+  /// Starred people (addresses), in the order they were starred: followed
+  /// in the Starred tab.
+  Set<String> starredPeople = {};
+
+  /// The newest activity (Unix seconds) on starred threads and people that
+  /// the user has seen in the Starred tab: what its badge counts from. Null
+  /// until there's something starred, which starts it at "now".
+  int? starredSeen;
+
   /// Whether the Threads tab shows only starred threads.
   bool starredOnly = false;
 
@@ -168,6 +177,8 @@ class Preferences extends ChangeNotifier {
     aliases = _jsonMap(prefs.getString('aliases')).map((k, v) => MapEntry(k, '$v'));
     muted = (prefs.getStringList('muted') ?? const []).toSet();
     starred = (prefs.getStringList('starred') ?? const []).toSet();
+    starredPeople = (prefs.getStringList('starred_people') ?? const []).toSet();
+    starredSeen = prefs.getInt('starred_seen');
     starredOnly = prefs.getBool('starred_only') ?? false;
     runLocalNode = prefs.getBool('run_local_node') ?? false;
     localNodeMining = prefs.getBool('local_node_mining') ?? false;
@@ -218,6 +229,21 @@ class Preferences extends ChangeNotifier {
     star ? starred.add(txid) : starred.remove(txid);
     notifyListeners();
     await (await SharedPreferences.getInstance()).setStringList('starred', starred.toList());
+  }
+
+  Future<void> setStarredPerson(String address, bool star) async {
+    starredPeople = {...starredPeople};
+    star ? starredPeople.add(address) : starredPeople.remove(address);
+    notifyListeners();
+    await (await SharedPreferences.getInstance()).setStringList('starred_people', starredPeople.toList());
+  }
+
+  /// Moves what's been seen in the Starred tab forward, never back.
+  Future<void> setStarredSeen(int until) async {
+    if ((starredSeen ?? -1) >= until) return;
+    starredSeen = until;
+    notifyListeners();
+    await (await SharedPreferences.getInstance()).setInt('starred_seen', until);
   }
 
   Future<void> setStarredOnly(bool value) async {

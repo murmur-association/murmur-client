@@ -1695,7 +1695,7 @@ class AppLocalizationsNl extends AppLocalizations {
 
   @override
   String get noStarred =>
-      'Nog niets met een ster. Geef een draadje of bericht een ster op de eigen pagina, dan verschijnt het hier.';
+      'Nog niets met een ster. Geef een draadje, een bericht of een persoon een ster op de eigen pagina, dan verschijnt het hier.';
 
   @override
   String get starredGone => 'Niet meer in de keten';
@@ -1877,4 +1877,24 @@ class AppLocalizationsNl extends AppLocalizations {
 
   @override
   String get addressQrHint => 'Scan om dit adres in Murmur te openen.';
+
+  @override
+  String get starredPeople => 'Personen';
+
+  @override
+  String get starredThreads => 'Draadjes en berichten';
+
+  @override
+  String get newActivity => 'Nieuwe activiteit';
+
+  @override
+  String starredNew(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count items met ster hebben nieuwe activiteit',
+      one: '1 item met ster heeft nieuwe activiteit',
+    );
+    return '$_temp0';
+  }
 }
