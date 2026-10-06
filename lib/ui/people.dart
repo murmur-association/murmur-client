@@ -47,8 +47,10 @@ class AddressAvatar extends StatelessWidget {
         dimension: size,
         child: bytes == null
             ? null
-            : CustomPaint(painter: AddressMarkPainter(bytes,
-                dark: Theme.of(context).brightness == Brightness.dark, surface: Theme.of(context).colorScheme.surface)),
+            : CustomPaint(
+                painter: AddressMarkPainter(bytes,
+                    dark: Theme.of(context).brightness == Brightness.dark,
+                    surface: Theme.of(context).colorScheme.surface)),
       ),
     );
   }
@@ -213,11 +215,21 @@ class AddressMarkPainter extends CustomPainter {
         if (take(1) == 1) canvas.drawCircle(p, 2.8, Paint()..color = surface);
       } else if (i == heart) {
         canvas.drawCircle(p, 9, hole);
-        canvas.drawCircle(p, 9, ring..color = accent..strokeWidth = 3.2);
+        canvas.drawCircle(
+            p,
+            9,
+            ring
+              ..color = accent
+              ..strokeWidth = 3.2);
         canvas.drawCircle(p, 4.2, Paint()..color = node);
       } else {
         canvas.drawCircle(p, 5.8, hole);
-        canvas.drawCircle(p, 5.8, ring..color = node..strokeWidth = 4.5);
+        canvas.drawCircle(
+            p,
+            5.8,
+            ring
+              ..color = node
+              ..strokeWidth = 4.5);
         if (take(1) == 1) canvas.drawCircle(p, 1.8, Paint()..color = accent);
       }
     }
@@ -249,9 +261,10 @@ Future<void> editAlias(BuildContext context, String address) async {
   final l = context.l10n;
   final prefs = AppScope.of(context).prefs;
   final controller = TextEditingController(text: prefs.aliases[address] ?? '');
-  final name = await showDialog<String>(
+  final name = await showAppDialog<String>(
     context: context,
     builder: (context) => AlertDialog(
+      scrollable: true,
       title: Text(l.aliasTitle),
       content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text(l.aliasHelp),

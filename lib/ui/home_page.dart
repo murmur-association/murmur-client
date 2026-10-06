@@ -177,8 +177,8 @@ class _HomePageState extends State<HomePage> with RouteAware {
               actions: [
                 if (client.state == LinkState.disconnected)
                   TextButton(
-                    onPressed: () => client.connect(client.host ?? NodeSettings.defaultHost,
-                        client.port ?? NodeSettings.defaultPort),
+                    onPressed: () => client.connect(
+                        client.host ?? NodeSettings.defaultHost, client.port ?? NodeSettings.defaultPort),
                     child: Text(l.reconnect),
                   ),
                 TextButton(onPressed: () => showConnectDialog(context), child: Text(l.changeNode)),
@@ -188,7 +188,8 @@ class _HomePageState extends State<HomePage> with RouteAware {
           if (client.state == LinkState.live && client.tipLooksOld)
             MaterialBanner(
               content: Ticking(
-                builder: (context) => Text(l.staleTip(formatElapsed(context, client.headerAt(client.height)!.timestamp))),
+                builder: (context) =>
+                    Text(l.staleTip(formatElapsed(context, client.headerAt(client.height)!.timestamp))),
               ),
               leading: const MurmurIcon(Glyph.warning),
               actions: [TextButton(onPressed: () => showConnectDialog(context), child: Text(l.changeNode))],
@@ -232,8 +233,7 @@ class _HomePageState extends State<HomePage> with RouteAware {
                 icon: const MurmurIcon(Glyph.thread),
                 selectedIcon: const MurmurIcon(Glyph.thread, filled: true),
                 label: l.tabThreads),
-            NavigationDestination(
-                icon: messagesIcon(false), selectedIcon: messagesIcon(true), label: l.tabMessages),
+            NavigationDestination(icon: messagesIcon(false), selectedIcon: messagesIcon(true), label: l.tabMessages),
             NavigationDestination(
                 icon: const MurmurIcon(Glyph.wallet),
                 selectedIcon: const MurmurIcon(Glyph.wallet, filled: true),
@@ -340,9 +340,10 @@ Future<void> showConnectDialog(BuildContext context) async {
   final host = TextEditingController(text: client.host ?? NodeSettings.defaultHost);
   final port = TextEditingController(text: '${client.port ?? NodeSettings.defaultPort}');
   final formKey = GlobalKey<FormState>();
-  await showDialog<void>(
+  await showAppDialog<void>(
     context: context,
     builder: (context) => AlertDialog(
+      scrollable: true,
       title: Text(l.node),
       content: Form(
         key: formKey,

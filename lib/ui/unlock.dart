@@ -14,9 +14,10 @@ import 'glyphs.dart';
 Future<bool> confirmAction(BuildContext context,
     {required String title, required String body, required String action, bool destructive = false}) async {
   final l = context.l10n;
-  final ok = await showDialog<bool>(
+  final ok = await showAppDialog<bool>(
     context: context,
     builder: (context) => AlertDialog(
+      scrollable: true,
       // Centred: the dialog lays its icon out at full width.
       icon: const Center(child: MurmurIcon(Glyph.key, size: 32)),
       title: Text(title),
@@ -45,10 +46,11 @@ class DialogPrompts implements VaultPrompts {
     final l = context.l10n;
     final first = TextEditingController(), second = TextEditingController();
     final form = GlobalKey<FormState>();
-    return showDialog<String>(
+    return showAppDialog<String>(
       context: context,
       barrierDismissible: false,
       builder: (context) => AlertDialog(
+        scrollable: true,
         icon: const Center(child: MurmurIcon(Glyph.key, size: 32)),
         title: Text(l.passphraseNewTitle),
         content: Form(
@@ -61,7 +63,8 @@ class DialogPrompts implements VaultPrompts {
               obscureText: true,
               autofocus: true,
               decoration: InputDecoration(labelText: l.passphraseField, border: const OutlineInputBorder()),
-              validator: (v) => (v ?? '').length < minPassphraseLength ? l.passphraseTooShort(minPassphraseLength) : null,
+              validator: (v) =>
+                  (v ?? '').length < minPassphraseLength ? l.passphraseTooShort(minPassphraseLength) : null,
             ),
             const SizedBox(height: 12),
             TextFormField(
@@ -89,9 +92,10 @@ class DialogPrompts implements VaultPrompts {
   Future<String?> passphrase(String reason) {
     final l = context.l10n;
     final field = TextEditingController();
-    return showDialog<String>(
+    return showAppDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
+        scrollable: true,
         icon: const Center(child: MurmurIcon(Glyph.key, size: 32)),
         title: Text(l.passphraseTitle),
         content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -117,10 +121,11 @@ class DialogPrompts implements VaultPrompts {
   Future<bool?> passkeyUnsupported() {
     final l = context.l10n;
     final small = Theme.of(context).textTheme.bodyMedium;
-    return showDialog<bool>(
+    return showAppDialog<bool>(
       context: context,
       barrierDismissible: false,
       builder: (context) => AlertDialog(
+        scrollable: true,
         icon: Center(child: MurmurIcon(Glyph.warning, size: 32, color: Theme.of(context).colorScheme.primary)),
         title: Text(l.passkeyNoPrfTitle),
         content: SizedBox(

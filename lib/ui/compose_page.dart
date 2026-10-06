@@ -174,7 +174,7 @@ class _ComposePageState extends State<ComposePage> {
     // Rebuilt both ways, so the button follows (a new block may rebuild the
     // page while the summary is open).
     setState(() => _confirming = true);
-    final sure = await showDialog<bool>(
+    final sure = await showAppDialog<bool>(
       context: context,
       builder: (_) => _SendSummary(
         kind: _kind,

@@ -90,11 +90,15 @@ class _InvitationsPageState extends State<InvitationsPage> {
   }
 
   Future<void> _create() async {
-    final records = await showDialog<List<InviteRecord>>(context: context, builder: (_) => const _CreateDialog());
+    final records = await showAppDialog<List<InviteRecord>>(context: context, builder: (_) => const _CreateDialog());
     if (records == null || !mounted) return;
     await _resolve();
     // The new cards come selected, ready to print.
-    if (mounted) setState(() => _selected..clear()..addAll(records.map((r) => r.code)));
+    if (mounted) {
+      setState(() => _selected
+        ..clear()
+        ..addAll(records.map((r) => r.code)));
+    }
   }
 
   @override
@@ -111,8 +115,14 @@ class _InvitationsPageState extends State<InvitationsPage> {
           };
           // Only cards that can still be claimed can be printed or cancelled.
           // (A selection is kept while a new card is still being checked.)
-          final selectable = [for (final r in records) if (states[r.code] == InviteState.waiting) r];
-          final chosen = [for (final r in selectable) if (_selected.contains(r.code)) r];
+          final selectable = [
+            for (final r in records)
+              if (states[r.code] == InviteState.waiting) r
+          ];
+          final chosen = [
+            for (final r in selectable)
+              if (_selected.contains(r.code)) r
+          ];
           final live = client.state == LinkState.live;
           final theme = Theme.of(context);
           return Scaffold(
@@ -219,7 +229,8 @@ enum ReturnTo { funder, current }
 /// Confirms cancelling `records` (see [_CancelDialog]): where their tokens
 /// go, or null if the user keeps them.
 Future<ReturnTo?> askCancel(BuildContext context, List<InviteRecord> records, Map<String, String> cardAddresses) =>
-    showDialog<ReturnTo>(context: context, builder: (_) => _CancelDialog(records: records, cardAddresses: cardAddresses));
+    showAppDialog<ReturnTo>(
+        context: context, builder: (_) => _CancelDialog(records: records, cardAddresses: cardAddresses));
 
 /// "Cancel n invitations?", and, when a card was funded by another wallet
 /// than the one here now (the cards stay when the wallet changes), where
@@ -248,9 +259,8 @@ class _CancelDialogState extends State<_CancelDialog> {
       // which is the one here.
       final ask = !(known && me != null && funders.every((f) => f == me));
       bool usable(ReturnTo t) => t == ReturnTo.funder ? known : me != null;
-      final choice = _choice != null && usable(_choice!)
-          ? _choice
-          : [ReturnTo.funder, ReturnTo.current].where(usable).firstOrNull;
+      final choice =
+          _choice != null && usable(_choice!) ? _choice : [ReturnTo.funder, ReturnTo.current].where(usable).firstOrNull;
       final distinct = {...funders.whereType<String>()};
       final funderLine = !known
           ? l.inviteFromChecking
@@ -259,6 +269,7 @@ class _CancelDialogState extends State<_CancelDialog> {
               : l.inviteFromMixed;
 
       return AlertDialog(
+        scrollable: true,
         title: Text(l.cancelInviteTitle(widget.records.length)),
         content: SizedBox(
           width: 460,
@@ -310,7 +321,7 @@ enum _From { original, originalAlias, originalPublic, current, currentAlias, cur
 /// the user cancels. `cardAddresses` are the cards' addresses by code.
 Future<String Function(InviteRecord)?> askCardName(
         BuildContext context, List<InviteRecord> records, Map<String, String> cardAddresses) =>
-    showDialog<String Function(InviteRecord)>(
+    showAppDialog<String Function(InviteRecord)>(
       context: context,
       builder: (_) => _FromDialog(records: records, cardAddresses: cardAddresses),
     );
@@ -405,6 +416,7 @@ class _FromDialogState extends State<_FromDialog> {
       }
 
       return AlertDialog(
+        scrollable: true,
         title: Text(l.inviteFromTitle),
         content: SizedBox(
           width: 460,
@@ -506,7 +518,7 @@ class _InviteTile extends StatelessWidget {
 
   /// The QR code large, over the list, with the typed code under it.
   void _enlarge(BuildContext context) {
-    showDialog<void>(
+    showAppDialog<void>(
       context: context,
       builder: (context) => Dialog(
         child: Padding(
@@ -531,7 +543,8 @@ class _InviteTile extends StatelessWidget {
     final l = context.l10n;
     final waiting = state == InviteState.waiting;
     final done = _done(state);
-    final small = Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant);
+    final small =
+        Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant);
     return ListTile(
       contentPadding: const EdgeInsetsDirectional.only(start: 0, end: 4),
       leading: Row(mainAxisSize: MainAxisSize.min, children: [
@@ -567,7 +580,7 @@ class _InviteTile extends StatelessWidget {
       // Finished cards open their story: who claimed it and when, or when
       // it was cancelled.
       onTap: done
-          ? () => showDialog<void>(context: context, builder: (_) => _InviteDetails(record, address))
+          ? () => showAppDialog<void>(context: context, builder: (_) => _InviteDetails(record, address))
           : (onSelected == null ? null : () => onSelected!(!selected)),
     );
   }
@@ -615,6 +628,7 @@ class _InviteDetails extends StatelessWidget {
       final claimer = out?.tx.toAddress;
       final cancelled = record.tookBack || (claimer != null && claimer == wallets.wallet?.addressHex);
       return AlertDialog(
+        scrollable: true,
         title: Row(children: [
           if (card != null) ...[AddressAvatar(card, size: 32), const SizedBox(width: 12)],
           Text(l.inviteCardSerial(record.serial, record.batch)),
@@ -729,6 +743,7 @@ class _CreateDialogState extends State<_CreateDialog> {
           value,
         ]);
     return AlertDialog(
+      scrollable: true,
       title: Text(l.createInvitations),
       content: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 420),
@@ -742,7 +757,8 @@ class _CreateDialogState extends State<_CreateDialog> {
             SizedBox(
               width: 48,
               child: Text(formatAmount(context, _count),
-                  textAlign: TextAlign.center, style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700)),
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700)),
             ),
             IconButton.outlined(
               onPressed: _count < 20 ? () => setState(() => _count++) : null,
@@ -753,7 +769,8 @@ class _CreateDialogState extends State<_CreateDialog> {
           if (costs == null)
             Text(l.checkingFees, style: caption)
           else ...[
-            line(l.inviteEachLabel, l.inviteEachCaption, _Amount(costs.perCard, style: theme.textTheme.titleMedium, iconSize: 18)),
+            line(l.inviteEachLabel, l.inviteEachCaption,
+                _Amount(costs.perCard, style: theme.textTheme.titleMedium, iconSize: 18)),
             const Divider(height: 24),
             line(l.inviteTotalLabel, l.inviteTotalCaption,
                 _Amount(total!, style: theme.textTheme.headlineSmall, iconSize: 24)),

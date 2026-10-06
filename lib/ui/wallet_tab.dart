@@ -85,8 +85,8 @@ class WalletTab extends StatelessWidget {
                         OutlinedButton.icon(
                           icon: const MurmurIcon(Glyph.send),
                           label: Text(l.invitations),
-                          onPressed: () => Navigator.of(context)
-                              .push(MaterialPageRoute(builder: (_) => const InvitationsPage())),
+                          onPressed: () =>
+                              Navigator.of(context).push(MaterialPageRoute(builder: (_) => const InvitationsPage())),
                         ),
                         OutlinedButton.icon(
                           icon: const MurmurIcon(Glyph.logout),
@@ -123,9 +123,10 @@ class WalletTab extends StatelessWidget {
     final unlocked = await unlockWallet(context, reason: l.authReasonSeed);
     if (unlocked == null || !context.mounted) return;
     final seedHex = unlocked.seedHex;
-    return showDialog<void>(
+    return showAppDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
+        scrollable: true,
         title: Text(l.seedTitle),
         content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(l.seedWarning),
@@ -176,10 +177,11 @@ class _PublicName extends StatelessWidget {
     final l = context.l10n;
     final controller = TextEditingController(text: current ?? '');
     final formKey = GlobalKey<FormState>();
-    final name = await showDialog<String>(
+    final name = await showAppDialog<String>(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setState) => AlertDialog(
+          scrollable: true,
           title: Text(l.publicName),
           content: SizedBox(
             width: 460,
@@ -285,7 +287,8 @@ class _Protection extends StatelessWidget {
     return Row(children: [
       MurmurIcon(protection == 'legacy' ? Glyph.warning : Glyph.key, size: 16, color: color),
       const SizedBox(width: 6),
-      Flexible(child: Text(text, style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant))),
+      Flexible(
+          child: Text(text, style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant))),
     ]);
   }
 }
@@ -336,9 +339,10 @@ class _NoWallet extends StatelessWidget {
   Future<void> _import(BuildContext context) async {
     final l = context.l10n;
     final controller = TextEditingController();
-    final seed = await showDialog<String>(
+    final seed = await showAppDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
+        scrollable: true,
         title: Text(l.importWallet),
         content: Column(mainAxisSize: MainAxisSize.min, children: [
           Text(l.importHelp),

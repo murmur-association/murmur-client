@@ -100,9 +100,8 @@ class _ClaimPageState extends State<ClaimPage> {
                         ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
                         : const MurmurIcon(Glyph.wallet),
                     label: Text(wallets.wallet == null ? l.claimCreateWallet : l.claimIntoWallet),
-                    onPressed: balance == null || balance == 0 || _claiming || client.state != LinkState.live
-                        ? null
-                        : _claim,
+                    onPressed:
+                        balance == null || balance == 0 || _claiming || client.state != LinkState.live ? null : _claim,
                   ),
                   if (client.state != LinkState.live) ...[
                     const SizedBox(height: 8),
@@ -123,9 +122,10 @@ class _ClaimPageState extends State<ClaimPage> {
 Future<void> enterInvitation(BuildContext context) async {
   final l = context.l10n;
   final controller = TextEditingController();
-  final code = await showDialog<String>(
+  final code = await showAppDialog<String>(
     context: context,
     builder: (context) => AlertDialog(
+      scrollable: true,
       title: Text(l.haveInvitation),
       content: TextField(
         controller: controller,

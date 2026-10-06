@@ -22,6 +22,7 @@ import 'glyphs.dart';
 import 'people.dart';
 import 'share.dart';
 
+export 'dialogs.dart';
 export 'l10n.dart';
 export 'people.dart' show nameOf, publicNameOf, AddressAvatar, editAlias;
 export 'share.dart' show ShareButton;
