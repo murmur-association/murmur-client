@@ -4,6 +4,10 @@ Newest first. Each release is a `vX.Y.Z` tag matching `version` in `pubspec.yaml
 
 ## Unreleased
 
+## v0.3.0: seed words, encrypted invitation cards, addresses as QR codes (2026-10-06)
+
+No protocol or network change. The testnet checkpoint moves to block 22,700.
+
 - **Changed: invitation cards are stored encrypted.** A card's code is its key, so the codes this device keeps are now encrypted like the wallet's seed, under a protection of their own (the device's check, a passkey or a passphrase, set up when cards are first made or next unlocked). The list of cards needs nothing; showing a card's QR code and link, printing and cancelling ask to unlock. Cards made with earlier versions are encrypted at the next unlock. A card's link is now shared from its QR dialog.
 - **Fixed: threads no longer jump while the list loads.** An old thread with a recent reply used to show up late, pushing down the threads already listed. Its reply now has the thread fetched at once, and the less recent threads wait for it.
 - **Added: an address as a QR code.** The share button of an address (the wallet's own, or any address page) offers "QR code": a code of the link to that address's page, large on screen for another device to scan, with a share button to pass the link on. Links of the form `#/address/<address>` open that page.
