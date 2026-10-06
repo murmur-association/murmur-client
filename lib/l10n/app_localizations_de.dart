@@ -1907,4 +1907,16 @@ class AppLocalizationsDe extends AppLocalizations {
     );
     return '$_temp0';
   }
+
+  @override
+  String get authReasonCards =>
+      'Bestätige, dass du es bist, um die Einladungskarten zu entsperren';
+
+  @override
+  String get passphraseNewBodyCards =>
+      'Sie verschlüsselt die Codes deiner Einladungskarten auf diesem Gerät. Du gibst sie ein, um eine Karte anzuzeigen, zu drucken oder zu stornieren. Wenn du sie vergisst, lassen sich noch nicht übergebene Karten nicht mehr anzeigen oder stornieren.';
+
+  @override
+  String get inviteLockedPoint =>
+      '**Die Codes werden verschlüsselt gespeichert.** Zum Anzeigen, Drucken oder Stornieren einer Karte musst du sie **entsperren**.';
 }

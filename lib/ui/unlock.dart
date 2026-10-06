@@ -37,9 +37,13 @@ Future<bool> confirmAction(BuildContext context,
 
 /// Passphrase dialogs, for devices where the vault uses one.
 class DialogPrompts implements VaultPrompts {
-  DialogPrompts(this.context);
+  DialogPrompts(this.context, {this.forCards = false});
 
   final BuildContext context;
+
+  /// Whether it's the invitation cards' codes being protected, not the
+  /// wallet: a new passphrase is then explained as theirs.
+  final bool forCards;
 
   @override
   Future<String?> newPassphrase() {
@@ -56,7 +60,7 @@ class DialogPrompts implements VaultPrompts {
         content: Form(
           key: form,
           child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Text(l.passphraseNewBody),
+            Text(forCards ? l.passphraseNewBodyCards : l.passphraseNewBody),
             const SizedBox(height: 16),
             TextFormField(
               controller: first,

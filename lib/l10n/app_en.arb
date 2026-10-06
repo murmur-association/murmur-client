@@ -616,5 +616,11 @@
   "newActivity": "New activity",
   "@newActivity": {"description":"Starred tab: a mark on a starred thread or person with activity the user has not seen"},
   "starredNew": "{count, plural, =1{1 starred with new activity} other{{count} starred with new activity}}",
-  "@starredNew": {"description":"Badge on the Starred tab","placeholders":{"count":{"type":"int"}}}
+  "@starredNew": {"description":"Badge on the Starred tab","placeholders":{"count":{"type":"int"}}},
+  "authReasonCards": "Confirm it's you to unlock the invitation cards",
+  "@authReasonCards": {"description":"Why the device check or passphrase is asked: to read the invitation cards' codes (show, print, cancel)"},
+  "passphraseNewBodyCards": "It encrypts your invitation cards' codes on this device. You'll type it to show, print or cancel a card. If you forget it, cards not yet handed over can no longer be shown or cancelled.",
+  "@passphraseNewBodyCards": {"description":"Under the title Choose a passphrase, when it protects the invitation cards' codes, not the wallet"},
+  "inviteLockedPoint": "**Codes are stored encrypted.** Showing, printing or cancelling a card asks you to **unlock** them.",
+  "@inviteLockedPoint": {"description":"Invitations page, one of the points on how cards work. **…** marks the key words"}
 }

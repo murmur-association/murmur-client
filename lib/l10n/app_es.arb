@@ -435,5 +435,8 @@
   "starredPeople": "Personas",
   "starredThreads": "Hilos y mensajes",
   "newActivity": "Actividad nueva",
-  "starredNew": "{count, plural, =1{1 destacado con actividad nueva} other{{count} destacados con actividad nueva}}"
+  "starredNew": "{count, plural, =1{1 destacado con actividad nueva} other{{count} destacados con actividad nueva}}",
+  "authReasonCards": "Confirma que eres tú para desbloquear las tarjetas de invitación",
+  "passphraseNewBodyCards": "Cifra los códigos de tus tarjetas de invitación en este dispositivo. La escribirás para mostrar, imprimir o cancelar una tarjeta. Si la olvidas, las tarjetas aún no entregadas ya no podrán mostrarse ni cancelarse.",
+  "inviteLockedPoint": "**Los códigos se guardan cifrados.** Mostrar, imprimir o cancelar una tarjeta te pide **desbloquearlos**."
 }

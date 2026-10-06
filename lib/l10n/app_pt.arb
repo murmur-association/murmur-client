@@ -435,5 +435,8 @@
   "starredPeople": "Pessoas",
   "starredThreads": "Tópicos e mensagens",
   "newActivity": "Atividade nova",
-  "starredNew": "{count, plural, =1{1 item com estrela tem atividade nova} other{{count} itens com estrela têm atividade nova}}"
+  "starredNew": "{count, plural, =1{1 item com estrela tem atividade nova} other{{count} itens com estrela têm atividade nova}}",
+  "authReasonCards": "Confirme que é você para desbloquear os cartões de convite",
+  "passphraseNewBodyCards": "Cifra os códigos dos seus cartões de convite neste dispositivo. Vai escrevê-la para mostrar, imprimir ou cancelar um cartão. Se a esquecer, os cartões ainda não entregues deixam de poder ser mostrados ou cancelados.",
+  "inviteLockedPoint": "**Os códigos são guardados cifrados.** Mostrar, imprimir ou cancelar um cartão pede-lhe para os **desbloquear**."
 }

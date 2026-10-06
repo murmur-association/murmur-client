@@ -1920,4 +1920,15 @@ class AppLocalizationsAr extends AppLocalizations {
     );
     return '$_temp0';
   }
+
+  @override
+  String get authReasonCards => 'أكّد أنك أنت لفتح بطاقات الدعوة';
+
+  @override
+  String get passphraseNewBodyCards =>
+      'تشفّر رموز بطاقات الدعوة على هذا الجهاز. ستكتبها لعرض بطاقة أو طباعتها أو إلغائها. إذا نسيتها فلن يمكن بعد ذلك عرض البطاقات التي لم تُسلَّم ولا إلغاؤها.';
+
+  @override
+  String get inviteLockedPoint =>
+      '**تُحفظ الرموز مشفّرة.** عرض بطاقة أو طباعتها أو إلغاؤها يطلب منك **فتحها**.';
 }

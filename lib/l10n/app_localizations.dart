@@ -2727,6 +2727,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{count, plural, =1{1 starred with new activity} other{{count} starred with new activity}}'**
   String starredNew(int count);
+
+  /// Why the device check or passphrase is asked: to read the invitation cards' codes (show, print, cancel)
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm it\'s you to unlock the invitation cards'**
+  String get authReasonCards;
+
+  /// Under the title Choose a passphrase, when it protects the invitation cards' codes, not the wallet
+  ///
+  /// In en, this message translates to:
+  /// **'It encrypts your invitation cards\' codes on this device. You\'ll type it to show, print or cancel a card. If you forget it, cards not yet handed over can no longer be shown or cancelled.'**
+  String get passphraseNewBodyCards;
+
+  /// Invitations page, one of the points on how cards work. **…** marks the key words
+  ///
+  /// In en, this message translates to:
+  /// **'**Codes are stored encrypted.** Showing, printing or cancelling a card asks you to **unlock** them.'**
+  String get inviteLockedPoint;
 }
 
 class _AppLocalizationsDelegate

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../protocol/bytes.dart';
 import '../protocol/invite.dart';
 import '../services/invitations.dart';
+import '../services/key_vault.dart';
 import '../services/node_client.dart';
 import '../services/storage.dart';
 import 'brand.dart';
@@ -15,15 +16,30 @@ import 'print_sheet.dart';
 import 'qr.dart';
 import 'unlock.dart';
 
-/// The invitations this device made (kept in secure storage: their codes
-/// hold keys).
+/// The invitations this device made (their codes hold keys, and are kept
+/// encrypted: see [InviteStore]).
 final inviteStore = InviteStore();
 
-String _linkOf(InviteRecord r) => inviteLink(appBaseUrl, r.code);
+String _linkOf(String code) => inviteLink(appBaseUrl, code);
 
-/// The inviter's side, in one list: every card with its account picture,
-/// QR code and copy button, checkboxes, and Cancel and Print for the
-/// selected ones.
+/// The codes of `records` by card address, for one use, after the device's
+/// check or the passphrase: asked every time a card is shown, printed or
+/// cancelled. Null (and a note) if that doesn't happen.
+Future<Map<String, String>?> unlockCards(BuildContext context, List<InviteRecord> records) async {
+  final l = context.l10n;
+  try {
+    final codes =
+        await inviteStore.unlock(records, DialogPrompts(context, forCards: true), reason: l.authReasonCards);
+    return {for (final (i, r) in records.indexed) r.address: codes[i]};
+  } on VaultLocked catch (e) {
+    if (context.mounted) showSnack(context, e.wrongPassphrase ? l.wrongPassphrase : l.authFailed);
+    return null;
+  }
+}
+
+/// The inviter's side, in one list: every card with its account picture
+/// and QR code button, checkboxes, and Cancel and Print for the selected
+/// ones.
 class InvitationsPage extends StatefulWidget {
   const InvitationsPage({super.key});
 
@@ -32,47 +48,41 @@ class InvitationsPage extends StatefulWidget {
 }
 
 class _InvitationsPageState extends State<InvitationsPage> {
-  /// Each card's address, by code (deriving a key takes a moment).
-  final _addresses = <String, String>{};
-
-  /// Selected cards, by code.
+  /// Selected cards, by address.
   final _selected = <String>{};
   bool _cancelling = false;
 
   @override
   void initState() {
     super.initState();
-    inviteStore.load().then((_) => _resolve());
-  }
-
-  Future<void> _resolve() async {
-    for (final r in inviteStore.invites) {
-      _addresses[r.code] ??= await cardAddressOf(r.code);
-    }
-    if (mounted) setState(() {});
+    inviteStore.load();
   }
 
   /// Takes the selected cards' tokens back, after asking once: whoever has
   /// them can no longer claim them. When a card was funded by another
-  /// wallet than the one here now, it also asks where the tokens go.
+  /// wallet than the one here now, it also asks where the tokens go. Then
+  /// the cards are unlocked: cancelling signs with each card's own key.
   Future<void> _cancel(List<InviteRecord> records) async {
     final scope = AppScope.of(context);
     final l = context.l10n;
     if (records.isEmpty) return;
-    final to = await askCancel(context, records, _addresses);
+    final to = await askCancel(context, records);
     if (to == null || !mounted) return;
+    final codes = await unlockCards(context, records);
+    if (codes == null || !mounted) return;
     setState(() => _cancelling = true);
     try {
       for (final r in records) {
         final String? destination = switch (to) {
-          ReturnTo.funder => funderOf(scope.client, r, _addresses),
+          ReturnTo.funder => funderOf(scope.client, r),
           ReturnTo.current => scope.wallets.wallet?.addressHex,
         };
         // The dialog offers only destinations every card has.
         if (destination == null) continue;
-        await sweepInvitation(client: scope.client, invite: Invite.parse(r.code)!, to: fromHex(destination));
+        await sweepInvitation(
+            client: scope.client, invite: Invite.parse(codes[r.address]!)!, to: fromHex(destination));
         await inviteStore.markTookBack(r);
-        _selected.remove(r.code);
+        _selected.remove(r.address);
       }
     } on TxProblem catch (e) {
       if (mounted) showSnack(context, txProblemText(l, e));
@@ -82,23 +92,22 @@ class _InvitationsPageState extends State<InvitationsPage> {
   }
 
   /// Asks which name the cards show (the wallet here now may not be the one
-  /// that funded them), then prints.
+  /// that funded them), unlocks the cards, then prints.
   Future<void> _print(List<InviteRecord> records) async {
-    final from = await askCardName(context, records, _addresses);
+    final from = await askCardName(context, records);
     if (from == null || !mounted) return;
-    printHtml(cardSheet(context, records, from: from));
+    final codes = await unlockCards(context, records);
+    if (codes == null || !mounted) return;
+    printHtml(cardSheet(context, records, codes: codes, from: from));
   }
 
   Future<void> _create() async {
     final records = await showAppDialog<List<InviteRecord>>(context: context, builder: (_) => const _CreateDialog());
     if (records == null || !mounted) return;
-    await _resolve();
     // The new cards come selected, ready to print.
-    if (mounted) {
-      setState(() => _selected
-        ..clear()
-        ..addAll(records.map((r) => r.code)));
-    }
+    setState(() => _selected
+      ..clear()
+      ..addAll(records.map((r) => r.address)));
   }
 
   @override
@@ -109,19 +118,16 @@ class _InvitationsPageState extends State<InvitationsPage> {
         listenable: inviteStore,
         builder: (context, _) {
           final records = inviteStore.invites.reversed.toList();
-          final states = {
-            for (final r in records)
-              r.code: _addresses[r.code] == null ? InviteState.checking : inviteState(client, r, _addresses[r.code]!),
-          };
+          final states = {for (final r in records) r.address: inviteState(client, r)};
           // Only cards that can still be claimed can be printed or cancelled.
           // (A selection is kept while a new card is still being checked.)
           final selectable = [
             for (final r in records)
-              if (states[r.code] == InviteState.waiting) r
+              if (states[r.address] == InviteState.waiting) r
           ];
           final chosen = [
             for (final r in selectable)
-              if (_selected.contains(r.code)) r
+              if (_selected.contains(r.address)) r
           ];
           final live = client.state == LinkState.live;
           final theme = Theme.of(context);
@@ -147,6 +153,7 @@ class _InvitationsPageState extends State<InvitationsPage> {
                     InfoPoint(Glyph.coin, l.inviteCancelPoint, style: theme.textTheme.bodySmall),
                     InfoPoint(Glyph.show, l.invitePublicPoint, style: theme.textTheme.bodySmall),
                     InfoPoint(Glyph.key, l.inviteCashPoint, style: theme.textTheme.bodySmall),
+                    InfoPoint(Glyph.hide, l.inviteLockedPoint, style: theme.textTheme.bodySmall),
                     InfoPoint(Glyph.warning, l.inviteLocalPoint,
                         color: StatusColors.of(context).pending, style: theme.textTheme.bodySmall),
                   ]),
@@ -162,7 +169,7 @@ class _InvitationsPageState extends State<InvitationsPage> {
                       if (chosen.length == selectable.length) {
                         _selected.clear();
                       } else {
-                        _selected.addAll(selectable.map((r) => r.code));
+                        _selected.addAll(selectable.map((r) => r.address));
                       }
                     }),
                   ),
@@ -180,30 +187,28 @@ class _InvitationsPageState extends State<InvitationsPage> {
                 ]),
               // Cards that can still be claimed (or are being checked)...
               for (final r in records)
-                if (!_done(states[r.code]!))
+                if (!_done(states[r.address]!))
                   _InviteTile(
                     record: r,
-                    address: _addresses[r.code],
-                    state: states[r.code]!,
-                    selected: _selected.contains(r.code),
-                    onSelected: states[r.code] != InviteState.waiting
+                    state: states[r.address]!,
+                    selected: _selected.contains(r.address),
+                    onSelected: states[r.address] != InviteState.waiting
                         ? null
-                        : (on) => setState(() => on ? _selected.add(r.code) : _selected.remove(r.code)),
+                        : (on) => setState(() => on ? _selected.add(r.address) : _selected.remove(r.address)),
                   ),
               // ...then, folded away, the ones that are over.
-              if (records.any((r) => _done(states[r.code]!)))
+              if (records.any((r) => _done(states[r.address]!)))
                 ExpansionTile(
                   tilePadding: const EdgeInsetsDirectional.only(start: 12, end: 8),
                   shape: const Border(),
                   collapsedShape: const Border(),
                   title: Text(
-                    l.inviteDoneSection(records.where((r) => _done(states[r.code]!)).length),
+                    l.inviteDoneSection(records.where((r) => _done(states[r.address]!)).length),
                     style: theme.textTheme.titleSmall,
                   ),
                   children: [
                     for (final r in records)
-                      if (_done(states[r.code]!))
-                        _InviteTile(record: r, address: _addresses[r.code], state: states[r.code]!),
+                      if (_done(states[r.address]!)) _InviteTile(record: r, state: states[r.address]!),
                   ],
                 ),
             ]),
@@ -218,28 +223,23 @@ bool _done(InviteState s) => s == InviteState.claimed || s == InviteState.cancel
 
 /// The wallet (hex) that funded card `r`: kept with the card, or found on
 /// the chain. Null while it's still being looked up.
-String? funderOf(MurmurClient client, InviteRecord r, Map<String, String> cardAddresses) {
-  final card = cardAddresses[r.code];
-  return r.funder ?? (card == null ? null : inviterOf(client, card));
-}
+String? funderOf(MurmurClient client, InviteRecord r) => r.funder ?? inviterOf(client, r.address);
 
 /// Where a cancelled card's tokens go.
 enum ReturnTo { funder, current }
 
 /// Confirms cancelling `records` (see [_CancelDialog]): where their tokens
 /// go, or null if the user keeps them.
-Future<ReturnTo?> askCancel(BuildContext context, List<InviteRecord> records, Map<String, String> cardAddresses) =>
-    showAppDialog<ReturnTo>(
-        context: context, builder: (_) => _CancelDialog(records: records, cardAddresses: cardAddresses));
+Future<ReturnTo?> askCancel(BuildContext context, List<InviteRecord> records) =>
+    showAppDialog<ReturnTo>(context: context, builder: (_) => _CancelDialog(records: records));
 
 /// "Cancel n invitations?", and, when a card was funded by another wallet
 /// than the one here now (the cards stay when the wallet changes), where
 /// the tokens go: back to the wallet that funded each card, or to this one.
 class _CancelDialog extends StatefulWidget {
-  const _CancelDialog({required this.records, required this.cardAddresses});
+  const _CancelDialog({required this.records});
 
   final List<InviteRecord> records;
-  final Map<String, String> cardAddresses;
 
   @override
   State<_CancelDialog> createState() => _CancelDialogState();
@@ -253,7 +253,7 @@ class _CancelDialogState extends State<_CancelDialog> {
     final l = context.l10n;
     return AppBuilder(builder: (context, client, wallets) {
       final me = wallets.wallet?.addressHex;
-      final funders = [for (final r in widget.records) funderOf(client, r, widget.cardAddresses)];
+      final funders = [for (final r in widget.records) funderOf(client, r)];
       final known = funders.every((f) => f != null);
       // Nothing to ask: every card goes back to the wallet that funded it,
       // which is the one here.
@@ -318,12 +318,11 @@ class _CancelDialogState extends State<_CancelDialog> {
 enum _From { original, originalAlias, originalPublic, current, currentAlias, currentPublic, custom }
 
 /// Asks which name the cards `records` show (see [_FromDialog]); null if
-/// the user cancels. `cardAddresses` are the cards' addresses by code.
-Future<String Function(InviteRecord)?> askCardName(
-        BuildContext context, List<InviteRecord> records, Map<String, String> cardAddresses) =>
+/// the user cancels.
+Future<String Function(InviteRecord)?> askCardName(BuildContext context, List<InviteRecord> records) =>
     showAppDialog<String Function(InviteRecord)>(
       context: context,
-      builder: (_) => _FromDialog(records: records, cardAddresses: cardAddresses),
+      builder: (_) => _FromDialog(records: records),
     );
 
 /// The last choice this session, offered first next time.
@@ -335,10 +334,9 @@ String _lastCustom = '';
 /// this device now (the same three), or any text. A public name (PROTOCOL.md
 /// Section 7.8) can be picked once it's known for sure to be the latest.
 class _FromDialog extends StatefulWidget {
-  const _FromDialog({required this.records, required this.cardAddresses});
+  const _FromDialog({required this.records});
 
   final List<InviteRecord> records;
-  final Map<String, String> cardAddresses;
 
   @override
   State<_FromDialog> createState() => _FromDialogState();
@@ -361,7 +359,7 @@ class _FromDialogState extends State<_FromDialog> {
     return AppBuilder(builder: (context, client, wallets) {
       final aliases = AppScope.of(context).prefs.aliases;
       final me = wallets.wallet?.addressHex;
-      String? funder(InviteRecord r) => funderOf(client, r, widget.cardAddresses);
+      String? funder(InviteRecord r) => funderOf(client, r);
       // A published alias (Section 7.8), shown with the start of its address.
       String? public(String? address) {
         if (address == null) return null;
@@ -497,28 +495,30 @@ class _Amount extends StatelessWidget {
 }
 
 /// One card: checkbox (while it can be claimed), account picture, number,
-/// state and amount, a QR icon that shows the code large in place, and its
-/// copy button.
+/// state and amount, and a QR icon that, once the cards are unlocked, shows
+/// the code large in place, with its link to share.
 class _InviteTile extends StatelessWidget {
   const _InviteTile({
     required this.record,
-    required this.address,
     required this.state,
     this.selected = false,
     this.onSelected,
   });
 
   final InviteRecord record;
-  final String? address;
   final InviteState state;
   final bool selected;
 
   /// Null when the card can't be selected (claimed, cancelled, checking).
   final ValueChanged<bool>? onSelected;
 
-  /// The QR code large, over the list, with the typed code under it.
-  void _enlarge(BuildContext context) =>
-      showQr(context, _linkOf(record), code: record.code, subject: context.l10n.inviteCardTitle);
+  /// The QR code large, over the list, with the typed code under it and a
+  /// button to share its link: after unlocking, since it shows the card's key.
+  Future<void> _enlarge(BuildContext context) async {
+    final code = (await unlockCards(context, [record]))?[record.address];
+    if (code == null || !context.mounted) return;
+    showQr(context, _linkOf(code), code: code, subject: context.l10n.inviteCardTitle);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -534,7 +534,7 @@ class _InviteTile extends StatelessWidget {
         done
             ? const SizedBox(width: 48)
             : Checkbox(value: selected, onChanged: onSelected == null ? null : (on) => onSelected!(on ?? false)),
-        if (address != null) Opacity(opacity: done ? 0.5 : 1, child: AddressAvatar(address!, size: 36)),
+        Opacity(opacity: done ? 0.5 : 1, child: AddressAvatar(record.address, size: 36)),
       ]),
       title: Text(l.inviteCardSerial(record.serial, record.batch)),
       subtitle: Row(children: [
@@ -551,18 +551,15 @@ class _InviteTile extends StatelessWidget {
       ]),
       trailing: !waiting
           ? null
-          : Row(mainAxisSize: MainAxisSize.min, children: [
-              IconButton(
-                icon: const MurmurIcon(Glyph.qr, size: 22),
-                tooltip: l.inviteCardHow,
-                onPressed: () => _enlarge(context),
-              ),
-              ShareButton(_linkOf(record), subject: l.inviteCardTitle),
-            ]),
+          : IconButton(
+              icon: const MurmurIcon(Glyph.qr, size: 22),
+              tooltip: l.inviteCardHow,
+              onPressed: () => _enlarge(context),
+            ),
       // Finished cards open their story: who claimed it and when, or when
       // it was cancelled.
       onTap: done
-          ? () => showAppDialog<void>(context: context, builder: (_) => _InviteDetails(record, address))
+          ? () => showAppDialog<void>(context: context, builder: (_) => _InviteDetails(record))
           : (onSelected == null ? null : () => onSelected!(!selected)),
     );
   }
@@ -572,25 +569,22 @@ class _InviteTile extends StatelessWidget {
 /// who claimed it and when (with what they received), or when it was
 /// cancelled and what came back.
 class _InviteDetails extends StatelessWidget {
-  const _InviteDetails(this.record, this.address);
+  const _InviteDetails(this.record);
 
   final InviteRecord record;
-  final String? address;
 
   @override
   Widget build(BuildContext context) {
     final l = context.l10n;
     return AppBuilder(builder: (context, client, wallets) {
       final theme = Theme.of(context);
-      final card = address;
+      final card = record.address;
       TxView? funding, out;
-      if (card != null) {
-        // Every block touching the card is found by its filter.
-        client.watchAddress(card);
-        for (final v in client.activityOf(card)) {
-          if (v.tx.fromAddress == card) out ??= v;
-          if (v.tx.toAddress == card && v.tx.fromAddress != card) funding ??= v;
-        }
+      // Every block touching the card is found by its filter.
+      client.watchAddress(card);
+      for (final v in client.activityOf(card)) {
+        if (v.tx.fromAddress == card) out ??= v;
+        if (v.tx.toAddress == card && v.tx.fromAddress != card) funding ??= v;
       }
       String when(TxView v) => v.blockTime == null ? l.inviteDetailOnItsWay : formatTime(context, v.blockTime!);
       final caption = theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant);
@@ -612,7 +606,8 @@ class _InviteDetails extends StatelessWidget {
       return AlertDialog(
         scrollable: true,
         title: Row(children: [
-          if (card != null) ...[AddressAvatar(card, size: 32), const SizedBox(width: 12)],
+          AddressAvatar(card, size: 32),
+          const SizedBox(width: 12),
           Text(l.inviteCardSerial(record.serial, record.batch)),
         ]),
         content: ConstrainedBox(
@@ -682,6 +677,8 @@ class _CreateDialogState extends State<_CreateDialog> {
     final scope = AppScope.of(context);
     final l = context.l10n;
     final costs = _costs!;
+    // Asked only the first time cards are made, to protect their codes.
+    final prompts = DialogPrompts(context, forCards: true);
     setState(() => _funding = true);
     try {
       // One unlock for the batch: funding the cards is one action.
@@ -690,7 +687,7 @@ class _CreateDialogState extends State<_CreateDialog> {
       final records = await createInvitations(
         client: scope.client,
         wallet: wallet,
-        keep: inviteStore.add,
+        keep: (records, codes) => inviteStore.add(records, codes, prompts, reason: l.authReasonCards),
         count: _count,
         perCard: costs.perCard,
         fundingFee: costs.fundingFee,
@@ -698,6 +695,9 @@ class _CreateDialogState extends State<_CreateDialog> {
       if (mounted) Navigator.pop(context, records);
     } on TxProblem catch (e) {
       if (mounted) showSnack(context, txProblemText(l, e));
+    } on VaultLocked {
+      // The codes' protection wasn't set up: nothing was made or paid.
+      if (mounted) showSnack(context, l.authFailed);
     } finally {
       if (mounted) setState(() => _funding = false);
     }
@@ -791,15 +791,18 @@ String _logoSvg(String color, {String size = '100%'}) =>
 /// A printable page of business cards (85 x 55 mm): the logo and name, a
 /// faded logo as a watermark, the slogan, the QR code, who it's from and
 /// "n of N", and the typed code. In the app's copper-on-paper colours.
-/// Self-contained HTML (SVG, inline styles): nothing is fetched. `from`
-/// gives each card's sender line; an empty one leaves it out.
-String cardSheet(BuildContext context, List<InviteRecord> records, {required String Function(InviteRecord) from}) {
+/// Self-contained HTML (SVG, inline styles): nothing is fetched. `codes`
+/// are the cards' codes by address (`unlockCards`), and `from` gives each
+/// card's sender line; an empty one leaves it out.
+String cardSheet(BuildContext context, List<InviteRecord> records,
+    {required Map<String, String> codes, required String Function(InviteRecord) from}) {
   final l = context.l10n;
   String esc(String s) => const HtmlEscape().convert(s);
   const copper = '#C1703A', ink = '#17171A';
   final cards = StringBuffer();
   for (final r in records) {
     final sender = from(r).trim();
+    final code = codes[r.address]!;
     cards.write('<div class="card">'
         '<div class="mark">${_logoSvg(copper)}</div>'
         '<div class="main">'
@@ -810,9 +813,9 @@ String cardSheet(BuildContext context, List<InviteRecord> records, {required Str
         '${sender.isEmpty ? '' : '${esc(l.inviteCardFrom(sender))} · '}'
         '${esc(l.inviteCardSerial(r.serial, r.batch))}</div>'
         '</div>'
-        '<div class="side"><div class="qr">${qrSvg(_linkOf(r), size: '27mm')}</div>'
+        '<div class="side"><div class="qr">${qrSvg(_linkOf(code), size: '27mm')}</div>'
         '<div class="scan">${esc(l.inviteCardJoin)}</div></div>'
-        '<div class="code">${esc(r.code)}</div>'
+        '<div class="code">${esc(code)}</div>'
         '</div>');
   }
   final dir = Directionality.of(context) == TextDirection.rtl ? 'rtl' : 'ltr';

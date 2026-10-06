@@ -435,5 +435,8 @@
   "starredPeople": "用户",
   "starredThreads": "话题和消息",
   "newActivity": "有新动态",
-  "starredNew": "{count, plural, other{{count} 个星标项有新动态}}"
+  "starredNew": "{count, plural, other{{count} 个星标项有新动态}}",
+  "authReasonCards": "请确认是您本人以解锁邀请卡",
+  "passphraseNewBodyCards": "它用于加密此设备上邀请卡的代码。显示、打印或取消邀请卡时需要输入。如果忘记，尚未交出的邀请卡将无法再显示或取消。",
+  "inviteLockedPoint": "**代码以加密方式保存。** 显示、打印或取消邀请卡时需要**解锁**。"
 }

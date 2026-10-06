@@ -16,6 +16,8 @@ import 'package:murmur_client/ui/seed.dart';
 import 'package:murmur_client/ui/wallet_tab.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'support/vault_prompts.dart';
+
 final _seed = Uint8List.fromList(List.generate(32, (i) => 200 - i));
 
 /// Wallets whose "create" makes a known wallet at once, without the vault's
@@ -33,15 +35,6 @@ class _Wallets extends WalletController {
     notifyListeners();
     return made;
   }
-}
-
-class _Prompts implements VaultPrompts {
-  @override
-  Future<String?> newPassphrase() async => 'correct horse';
-  @override
-  Future<String?> passphrase(String reason) async => 'correct horse';
-  @override
-  Future<bool?> passkeyUnsupported() async => false;
 }
 
 void main() {
@@ -74,7 +67,7 @@ void main() {
   test('creating a wallet hands back the wallet it stored, to show its seed once', () async {
     FlutterSecureStorage.setMockInitialValues({});
     final wallets = WalletController();
-    final created = await wallets.create(_Prompts(), reason: 'test');
+    final created = await wallets.create(TestPrompts('correct horse', null), reason: 'test');
     expect(created.addressHex, wallets.wallet!.addressHex);
     expect(created.seed, hasLength(32));
     // The stored record still says nothing of the seed.

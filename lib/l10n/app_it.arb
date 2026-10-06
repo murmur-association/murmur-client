@@ -435,5 +435,8 @@
   "starredPeople": "Persone",
   "starredThreads": "Discussioni e messaggi",
   "newActivity": "Nuova attività",
-  "starredNew": "{count, plural, =1{1 elemento con stella ha nuova attività} other{{count} elementi con stella hanno nuova attività}}"
+  "starredNew": "{count, plural, =1{1 elemento con stella ha nuova attività} other{{count} elementi con stella hanno nuova attività}}",
+  "authReasonCards": "Conferma la tua identità per sbloccare le carte d'invito",
+  "passphraseNewBodyCards": "Cifra i codici delle tue carte d'invito su questo dispositivo. La scriverai per mostrare, stampare o annullare una carta. Se la dimentichi, le carte non ancora consegnate non potranno più essere mostrate né annullate.",
+  "inviteLockedPoint": "**I codici sono salvati cifrati.** Per mostrare, stampare o annullare una carta devi **sbloccarli**."
 }

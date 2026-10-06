@@ -1837,4 +1837,15 @@ class AppLocalizationsJa extends AppLocalizations {
     );
     return '$_temp0';
   }
+
+  @override
+  String get authReasonCards => '招待カードのロックを解除するには本人確認をしてください';
+
+  @override
+  String get passphraseNewBodyCards =>
+      'この端末上の招待カードのコードを暗号化します。カードの表示、印刷、取り消しのたびに入力します。忘れると、まだ渡していないカードは表示も取り消しもできなくなります。';
+
+  @override
+  String get inviteLockedPoint =>
+      '**コードは暗号化して保存されます。** カードの表示、印刷、取り消しには**ロック解除**が必要です。';
 }

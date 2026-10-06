@@ -1821,4 +1821,14 @@ class AppLocalizationsZh extends AppLocalizations {
     );
     return '$_temp0';
   }
+
+  @override
+  String get authReasonCards => '请确认是您本人以解锁邀请卡';
+
+  @override
+  String get passphraseNewBodyCards =>
+      '它用于加密此设备上邀请卡的代码。显示、打印或取消邀请卡时需要输入。如果忘记，尚未交出的邀请卡将无法再显示或取消。';
+
+  @override
+  String get inviteLockedPoint => '**代码以加密方式保存。** 显示、打印或取消邀请卡时需要**解锁**。';
 }

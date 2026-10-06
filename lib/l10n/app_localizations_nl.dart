@@ -1897,4 +1897,16 @@ class AppLocalizationsNl extends AppLocalizations {
     );
     return '$_temp0';
   }
+
+  @override
+  String get authReasonCards =>
+      'Bevestig dat jij het bent om de uitnodigingskaarten te ontgrendelen';
+
+  @override
+  String get passphraseNewBodyCards =>
+      'Ze versleutelt de codes van je uitnodigingskaarten op dit apparaat. Je typt ze om een kaart te tonen, af te drukken of te annuleren. Als je ze vergeet, kunnen nog niet overhandigde kaarten niet meer getoond of geannuleerd worden.';
+
+  @override
+  String get inviteLockedPoint =>
+      '**De codes worden versleuteld bewaard.** Om een kaart te tonen, af te drukken of te annuleren moet je ze **ontgrendelen**.';
 }

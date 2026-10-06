@@ -54,17 +54,22 @@ Uint8List? _first(JSObject results) {
 /// Throws [PasskeyUnsupported] when a passkey was made but its manager
 /// can't encrypt with it (a third-party manager without PRF, say), so the
 /// user can try another, and [VaultLocked] when they dismiss the prompt.
-Future<Map<String, String>?> sealWithDevice(Uint8List seed, String reason) async {
+Future<Map<String, String>?> sealWithDevice(Uint8List seed, String reason, VaultSlot slot) async {
   var created = false;
   try {
     if (!web.window.isSecureContext) return null;
     if (!(await web.PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable().toDart).toDart) return null;
     final salt = randomBytes(32);
-    // A passkey for this wallet on this device, asking for PRF support.
+    // A passkey for this wallet (or for the invitations) on this device,
+    // asking for PRF support. Its name is what the passkey manager lists.
+    final name = switch (slot) {
+      VaultSlot.wallet => 'Murmur wallet',
+      VaultSlot.invitations => 'Murmur invitations',
+    };
     final creation = web.PublicKeyCredentialCreationOptions(
       challenge: randomBytes(32).toJS,
       rp: web.PublicKeyCredentialRpEntity(name: 'Murmur'),
-      user: web.PublicKeyCredentialUserEntity(id: randomBytes(16).toJS, name: 'Murmur wallet', displayName: reason),
+      user: web.PublicKeyCredentialUserEntity(id: randomBytes(16).toJS, name: name, displayName: reason),
       pubKeyCredParams: [
         web.PublicKeyCredentialParameters(type: 'public-key', alg: -7),
         web.PublicKeyCredentialParameters(type: 'public-key', alg: -257),

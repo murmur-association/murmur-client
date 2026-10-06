@@ -25,10 +25,18 @@ void main() {
 
   test('a card remembers the wallet that funded it; older records still load without it', () {
     final funder = 'ab' * 32;
-    final saved = InviteRecord(code: 'C', amount: 5, serial: 1, batch: 2, funder: funder).toJson();
-    expect(InviteRecord.fromJson(jsonDecode(jsonEncode(saved)))!.funder, funder);
-    final old = InviteRecord.fromJson({'code': 'C', 'amount': 5, 'serial': 1, 'batch': 2, 'tookBack': true})!;
-    expect((old.funder, old.tookBack), (null, true));
+    final card = 'cd' * 32;
+    final saved =
+        InviteRecord(address: card, amount: 5, serial: 1, batch: 2, funder: funder, sealed: {'box': 'ff'}).toJson();
+    final back = InviteRecord.fromJson(jsonDecode(jsonEncode(saved)))!;
+    expect((back.address, back.funder), (card, funder));
+    expect(back.sealed, {'box': 'ff'});
+    // An earlier version's record: its code, and no funder.
+    final old = InviteRecord.fromJson({'code': 'C', 'amount': 5, 'serial': 1, 'batch': 2, 'tookBack': true},
+        address: card)!;
+    expect((old.funder, old.tookBack, old.plainCode), (null, true, 'C'));
+    // A record with neither a code nor a sealed one is no card.
+    expect(InviteRecord.fromJson({'address': card, 'amount': 5, 'serial': 1, 'batch': 2}), isNull);
   });
   final invite = Invite(network: Uint8List.fromList(genesis.sublist(0, 4)), seed: seed);
 

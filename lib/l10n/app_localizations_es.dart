@@ -1899,4 +1899,16 @@ class AppLocalizationsEs extends AppLocalizations {
     );
     return '$_temp0';
   }
+
+  @override
+  String get authReasonCards =>
+      'Confirma que eres tú para desbloquear las tarjetas de invitación';
+
+  @override
+  String get passphraseNewBodyCards =>
+      'Cifra los códigos de tus tarjetas de invitación en este dispositivo. La escribirás para mostrar, imprimir o cancelar una tarjeta. Si la olvidas, las tarjetas aún no entregadas ya no podrán mostrarse ni cancelarse.';
+
+  @override
+  String get inviteLockedPoint =>
+      '**Los códigos se guardan cifrados.** Mostrar, imprimir o cancelar una tarjeta te pide **desbloquearlos**.';
 }

@@ -1904,4 +1904,16 @@ class AppLocalizationsIt extends AppLocalizations {
     );
     return '$_temp0';
   }
+
+  @override
+  String get authReasonCards =>
+      'Conferma la tua identità per sbloccare le carte d\'invito';
+
+  @override
+  String get passphraseNewBodyCards =>
+      'Cifra i codici delle tue carte d\'invito su questo dispositivo. La scriverai per mostrare, stampare o annullare una carta. Se la dimentichi, le carte non ancora consegnate non potranno più essere mostrate né annullate.';
+
+  @override
+  String get inviteLockedPoint =>
+      '**I codici sono salvati cifrati.** Per mostrare, stampare o annullare una carta devi **sbloccarli**.';
 }

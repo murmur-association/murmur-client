@@ -435,5 +435,8 @@
   "starredPeople": "ユーザー",
   "starredThreads": "スレッドとメッセージ",
   "newActivity": "新しいアクティビティ",
-  "starredNew": "{count, plural, other{スター付き {count} 件に新しいアクティビティ}}"
+  "starredNew": "{count, plural, other{スター付き {count} 件に新しいアクティビティ}}",
+  "authReasonCards": "招待カードのロックを解除するには本人確認をしてください",
+  "passphraseNewBodyCards": "この端末上の招待カードのコードを暗号化します。カードの表示、印刷、取り消しのたびに入力します。忘れると、まだ渡していないカードは表示も取り消しもできなくなります。",
+  "inviteLockedPoint": "**コードは暗号化して保存されます。** カードの表示、印刷、取り消しには**ロック解除**が必要です。"
 }

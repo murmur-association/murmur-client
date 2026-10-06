@@ -435,5 +435,8 @@
   "starredPeople": "Personen",
   "starredThreads": "Draadjes en berichten",
   "newActivity": "Nieuwe activiteit",
-  "starredNew": "{count, plural, =1{1 item met ster heeft nieuwe activiteit} other{{count} items met ster hebben nieuwe activiteit}}"
+  "starredNew": "{count, plural, =1{1 item met ster heeft nieuwe activiteit} other{{count} items met ster hebben nieuwe activiteit}}",
+  "authReasonCards": "Bevestig dat jij het bent om de uitnodigingskaarten te ontgrendelen",
+  "passphraseNewBodyCards": "Ze versleutelt de codes van je uitnodigingskaarten op dit apparaat. Je typt ze om een kaart te tonen, af te drukken of te annuleren. Als je ze vergeet, kunnen nog niet overhandigde kaarten niet meer getoond of geannuleerd worden.",
+  "inviteLockedPoint": "**De codes worden versleuteld bewaard.** Om een kaart te tonen, af te drukken of te annuleren moet je ze **ontgrendelen**."
 }

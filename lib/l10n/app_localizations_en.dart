@@ -1884,4 +1884,16 @@ class AppLocalizationsEn extends AppLocalizations {
     );
     return '$_temp0';
   }
+
+  @override
+  String get authReasonCards =>
+      'Confirm it\'s you to unlock the invitation cards';
+
+  @override
+  String get passphraseNewBodyCards =>
+      'It encrypts your invitation cards\' codes on this device. You\'ll type it to show, print or cancel a card. If you forget it, cards not yet handed over can no longer be shown or cancelled.';
+
+  @override
+  String get inviteLockedPoint =>
+      '**Codes are stored encrypted.** Showing, printing or cancelling a card asks you to **unlock** them.';
 }

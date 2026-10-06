@@ -127,7 +127,7 @@ void main() {
     final prefs = Preferences();
     await prefs.setAlias(funder, 'Old wallet');
     final records = [
-      for (var i = 1; i <= 2; i++) InviteRecord(code: 'C$i', amount: 5, serial: i, batch: 2, funder: funder),
+      for (var i = 1; i <= 2; i++) InviteRecord(address: '${i}c' * 32, amount: 5, serial: i, batch: 2, funder: funder),
     ];
     String Function(InviteRecord)? chosen;
     tester.view.physicalSize = const Size(900, 1000);
@@ -143,7 +143,7 @@ void main() {
         supportedLocales: AppLocalizations.supportedLocales,
         home: Builder(
           builder: (context) => TextButton(
-            onPressed: () async => chosen = await askCardName(context, records, const {}),
+            onPressed: () async => chosen = await askCardName(context, records),
             child: const Text('print'),
           ),
         ),
@@ -193,7 +193,7 @@ void main() {
   });
 
   testWidgets('cancelling a card funded by another wallet asks where its tokens go', (tester) async {
-    final records = [InviteRecord(code: 'C1', amount: 5, serial: 1, batch: 1, funder: 'ab' * 32)];
+    final records = [InviteRecord(address: 'cd' * 32, amount: 5, serial: 1, batch: 1, funder: 'ab' * 32)];
     ReturnTo? to;
     await tester.pumpWidget(AppScope(
       client: MurmurClient(),
@@ -204,7 +204,7 @@ void main() {
         supportedLocales: AppLocalizations.supportedLocales,
         home: Builder(
           builder: (context) => TextButton(
-            onPressed: () async => to = await askCancel(context, records, const {}),
+            onPressed: () async => to = await askCancel(context, records),
             child: const Text('cancel'),
           ),
         ),

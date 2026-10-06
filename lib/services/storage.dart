@@ -1,5 +1,5 @@
-// Persistence: the wallet seed, encrypted (key_vault.dart), and invitation
-// cards go to the platform's secure storage; the node address and the
+// Persistence: the wallet seed and the invitation cards' codes, encrypted
+// (key_vault.dart), go to the platform's secure storage; the node address and the
 // display preferences go to plain preferences.
 
 import 'dart:convert';
@@ -11,6 +11,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../crypto/wallet.dart';
 import '../protocol/bytes.dart';
+import '../protocol/invite.dart';
 import 'activity.dart';
 import 'local_node.dart' show defaultLocalNodeCpu;
 import 'key_vault.dart';
@@ -278,18 +279,22 @@ class Preferences extends ChangeNotifier {
   }
 }
 
-/// An invitation this device made: its card's code (which holds the card's
-/// key), when it was made, and how much it was funded with.
+/// An invitation this device made: its card's address, how much it was
+/// funded with, and the card's code, which holds the card's key and so is
+/// kept encrypted ([InviteStore]).
 class InviteRecord {
   InviteRecord(
-      {required this.code,
+      {required this.address,
       required this.amount,
       required this.serial,
       required this.batch,
       this.funder,
-      this.tookBack = false});
+      this.tookBack = false,
+      this.sealed,
+      this.plainCode});
 
-  final String code;
+  /// The card's address (hex): public, and what tells cards apart.
+  final String address;
   final int amount;
 
   /// "n of batch", as printed on the card.
@@ -303,62 +308,151 @@ class InviteRecord {
   /// Whether the inviter cancelled it, taking its tokens back.
   bool tookBack;
 
+  /// The card's code, sealed to the store's key (`sealTo`).
+  Map<String, String>? sealed;
+
+  /// The code in the clear, as earlier versions stored it: sealed at the
+  /// next unlock, or when cards are next made.
+  String? plainCode;
+
   Map<String, Object> toJson() => {
-        'code': code,
+        'address': address,
         'amount': amount,
         'serial': serial,
         'batch': batch,
         if (funder != null) 'funder': funder!,
         'tookBack': tookBack,
+        if (sealed != null) 'sealed': sealed!,
+        if (plainCode != null) 'code': plainCode!,
       };
 
-  static InviteRecord? fromJson(Object? j) {
+  /// A stored record; null for one that can't be read. `address` is given
+  /// for records of earlier versions, which held only the code.
+  static InviteRecord? fromJson(Object? j, {String? address}) {
     if (j is! Map) return null;
-    final code = j['code'], amount = j['amount'], serial = j['serial'], batch = j['batch'], funder = j['funder'];
-    if (code is! String || amount is! int || serial is! int || batch is! int) return null;
+    final amount = j['amount'], serial = j['serial'], batch = j['batch'], funder = j['funder'];
+    final code = j['code'], sealed = j['sealed'];
+    final at = address ?? j['address'];
+    if (at is! String || amount is! int || serial is! int || batch is! int) return null;
+    if (sealed is! Map && code is! String) return null;
     return InviteRecord(
-        code: code,
+        address: at,
         amount: amount,
         serial: serial,
         batch: batch,
         funder: funder is String ? funder : null,
-        tookBack: j['tookBack'] == true);
+        tookBack: j['tookBack'] == true,
+        sealed: sealed is Map ? sealed.map((k, v) => MapEntry('$k', '$v')) : null,
+        plainCode: code is String ? code : null);
   }
 }
 
-/// The invitations this device made. Their codes hold spendable keys, so
-/// they're kept in secure storage like the wallet seed.
+/// The invitations this device made. A card's code holds a spendable key,
+/// so the codes are kept encrypted, like the wallet's seed: each is sealed
+/// to a key whose secret is in the vault (`VaultSlot.invitations`), under
+/// its own protection. That key isn't the wallet's: cards stay on the device
+/// when the wallet changes.
+/// - **Listing and making cards asks nothing:** addresses are public, and
+///   sealing needs only the public key.
+/// - **Reading a code asks every time** ([unlock]): to show its QR code or
+///   link, to print it, or to cancel it (which signs with the card's key).
 class InviteStore extends ChangeNotifier {
   static const _key = 'murmur_invitations';
   final _storage = const FlutterSecureStorage();
 
   List<InviteRecord> invites = [];
 
+  /// The vault's record of the key's secret, with the public key
+  /// (`publicKey`) the codes are sealed to. Null until cards need it.
+  Map<String, String>? _vault;
+
   Future<void> load() async {
+    var loaded = <InviteRecord>[];
+    Map<String, String>? vault;
     try {
       final json = await _storage.read(key: _key);
       final decoded = json == null ? null : jsonDecode(json);
-      invites = [
-        if (decoded is List)
-          for (final j in decoded)
-            if (InviteRecord.fromJson(j) case final InviteRecord r) r,
-      ];
+      if (decoded is Map) {
+        final key = decoded['key'];
+        if (key is Map) vault = key.map((k, v) => MapEntry('$k', '$v'));
+        loaded = [
+          if (decoded['cards'] case final List cards)
+            for (final j in cards)
+              if (InviteRecord.fromJson(j) case final InviteRecord r) r,
+        ];
+      } else if (decoded is List) {
+        // Earlier versions: a list of records with their codes in the clear.
+        for (final j in decoded) {
+          final code = j is Map ? j['code'] : null;
+          final invite = code is String ? Invite.parse(code) : null;
+          if (invite == null) continue;
+          final address = (await MurmurWallet.fromSeed(invite.seed)).addressHex;
+          if (InviteRecord.fromJson(j, address: address) case final InviteRecord r) loaded.add(r);
+        }
+      }
     } on FormatException {
-      invites = [];
+      loaded = [];
     }
+    invites = loaded;
+    _vault = vault;
     notifyListeners();
   }
 
   Future<void> _save() async {
     notifyListeners();
-    await _storage.write(key: _key, value: jsonEncode([for (final r in invites) r.toJson()]));
+    await _storage.write(
+        key: _key,
+        value: jsonEncode({
+          if (_vault != null) 'key': _vault,
+          'cards': [for (final r in invites) r.toJson()],
+        }));
   }
 
-  /// Saved before the cards are funded, so a key that's been paid to is
-  /// never lost.
-  Future<void> add(List<InviteRecord> records) async {
+  /// Makes the key the codes are sealed to, if there's none yet, which sets
+  /// up its protection (prompts), and seals the codes earlier versions left
+  /// in the clear. Returns the key's secret when it was just made, so the
+  /// caller needn't ask for it again. Throws [VaultLocked] if the user
+  /// cancels: then nothing changes.
+  Future<Uint8List?> _protect(VaultPrompts prompts, String reason) async {
+    if (_vault != null) return null;
+    final secret = randomBytes(32);
+    final sealed = await sealSeed(secret, prompts, reason: reason, slot: VaultSlot.invitations);
+    final public = await sealingKeyOf(secret);
+    for (final r in invites) {
+      final code = r.plainCode;
+      if (code == null) continue;
+      r.sealed = await sealTo(public, utf8.encode(code));
+      r.plainCode = null;
+    }
+    _vault = {...sealed, 'publicKey': toHex(public)};
+    return secret;
+  }
+
+  /// Keeps new cards, each with its code. Saved before the cards are
+  /// funded, so a key that's been paid to is never lost. Asks only the
+  /// first time, to set up the protection; throws [VaultLocked] if that's
+  /// cancelled.
+  Future<void> add(List<InviteRecord> records, List<String> codes, VaultPrompts prompts,
+      {required String reason}) async {
+    await _protect(prompts, reason);
+    final public = fromHex(_vault!['publicKey']!);
+    for (final (i, r) in records.indexed) {
+      r.sealed = await sealTo(public, utf8.encode(codes[i]));
+    }
     invites = [...invites, ...records];
     await _save();
+  }
+
+  /// The codes of `records`, for one use, after the device's check or the
+  /// passphrase (every time). Throws [VaultLocked].
+  Future<List<String>> unlock(List<InviteRecord> records, VaultPrompts prompts, {required String reason}) async {
+    var secret = await _protect(prompts, reason);
+    if (secret != null) {
+      await _save();
+    } else {
+      secret = await openSeed(_vault!, prompts, reason: reason);
+    }
+    return [for (final r in records) utf8.decode(await openSealed(r.sealed!, secret))];
   }
 
   Future<void> markTookBack(InviteRecord r) async {

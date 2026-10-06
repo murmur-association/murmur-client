@@ -31,13 +31,15 @@ const _typicalMessage = 280;
   );
 }
 
-/// Makes `count` cards funded by `wallet`, `perCard` each. The cards' keys
-/// are handed to `keep` (normally `InviteStore.add`) before anything is
-/// paid to them, so a funded key is never lost. Returns their records.
+/// Makes `count` cards funded by `wallet`, `perCard` each. The cards'
+/// records and codes (which hold their keys) are handed to `keep` (normally
+/// `InviteStore.add`, which stores the codes encrypted) before anything is
+/// paid to them, so a funded key is never lost; if `keep` throws, nothing
+/// is paid. Returns their records.
 Future<List<InviteRecord>> createInvitations({
   required MurmurClient client,
   required MurmurWallet wallet,
-  required Future<void> Function(List<InviteRecord>) keep,
+  required Future<void> Function(List<InviteRecord> records, List<String> codes) keep,
   required int count,
   required int perCard,
   required int fundingFee,
@@ -45,23 +47,24 @@ Future<List<InviteRecord>> createInvitations({
   final genesis = client.genesis;
   if (genesis == null) throw const TxProblem(TxProblemKind.notLive);
   final rng = Random.secure();
-  final records = [
-    for (var i = 0; i < count; i++)
-      InviteRecord(
-        code: Invite(
-          network: Uint8List.fromList(genesis.sublist(0, 4)),
-          seed: Uint8List.fromList(List.generate(32, (_) => rng.nextInt(256))),
-        ).code,
-        amount: perCard,
-        serial: i + 1,
-        batch: count,
-        funder: wallet.addressHex,
-      ),
-  ];
-  await keep(records);
+  final records = <InviteRecord>[], codes = <String>[];
+  for (var i = 0; i < count; i++) {
+    final invite = Invite(
+      network: Uint8List.fromList(genesis.sublist(0, 4)),
+      seed: Uint8List.fromList(List.generate(32, (_) => rng.nextInt(256))),
+    );
+    codes.add(invite.code);
+    records.add(InviteRecord(
+      address: (await cardWallet(invite)).addressHex,
+      amount: perCard,
+      serial: i + 1,
+      batch: count,
+      funder: wallet.addressHex,
+    ));
+  }
+  await keep(records, codes);
   for (final r in records) {
-    final card = await MurmurWallet.fromSeed(Invite.parse(r.code)!.seed);
-    await client.submit(wallet: wallet, kind: TxKind.raw, to: card.address, amount: perCard, fee: fundingFee);
+    await client.submit(wallet: wallet, kind: TxKind.raw, to: fromHex(r.address), amount: perCard, fee: fundingFee);
   }
   return records;
 }
@@ -98,7 +101,8 @@ String? inviterOf(MurmurClient client, String cardAddress) {
 /// Where a card stands, from its proven balance.
 enum InviteState { checking, waiting, claimed, cancelled }
 
-InviteState inviteState(MurmurClient client, InviteRecord r, String cardAddress) {
+InviteState inviteState(MurmurClient client, InviteRecord r) {
+  final cardAddress = r.address;
   if (r.tookBack) return InviteState.cancelled;
   final balance = client.availableTo(cardAddress);
   if (balance == null) return InviteState.checking;
@@ -112,6 +116,3 @@ String inviteLink(String base, String code) => '$base/#/invite/$code';
 
 /// The code a route name (a link's `#/invite/<code>`) carries, if any.
 String? inviteInRoute(String? name) => RegExp(r'^/invite/([0-9A-Za-z-]+)$').firstMatch(name ?? '')?.group(1);
-
-/// Hex of the card's address, for watching it.
-Future<String> cardAddressOf(String code) async => toHex((await cardWallet(Invite.parse(code)!)).address);

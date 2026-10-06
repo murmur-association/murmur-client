@@ -258,18 +258,22 @@ void main() {
       final inviter = miner;
       await until(client, () => client.availableTo(inviter.addressHex) != null);
       final costs = invitationCosts(await client.feeInfo());
-      final kept = <InviteRecord>[];
+      final kept = <InviteRecord>[], codes = <String>[];
       final cards = await createInvitations(
         client: client,
         wallet: inviter,
-        keep: (r) async => kept.addAll(r),
+        keep: (r, c) async {
+          kept.addAll(r);
+          codes.addAll(c);
+        },
         count: 2,
         perCard: costs.perCard,
         fundingFee: costs.fundingFee,
       );
       expect(kept, hasLength(2), reason: 'the keys are kept before the cards are funded');
-      final invites = [for (final c in cards) Invite.parse(c.code)!];
+      final invites = [for (final c in codes) Invite.parse(c)!];
       final addresses = [for (final i in invites) (await cardWallet(i)).addressHex];
+      expect([for (final c in cards) c.address], addresses, reason: 'each record names its card');
       await until(client, () => addresses.every((a) => (client.account(a)?.balance ?? 0) == costs.perCard));
       print('2 cards funded with ${costs.perCard} each');
   
@@ -281,7 +285,7 @@ void main() {
       await until(client, () => (client.account(newcomer.addressHex)?.balance ?? 0) > 0);
       await until(client, () => addresses.every((a) => client.account(a)?.balance == 0));
       expect(client.account(newcomer.addressHex)!.balance, costs.perCard - costs.claimFee);
-      expect(inviteState(client, cards[0], addresses[0]), InviteState.claimed);
+      expect(inviteState(client, cards[0]), InviteState.claimed);
       expect(inviterOf(client, addresses[0]), inviter.addressHex);
       print('claimed ${client.account(newcomer.addressHex)!.balance} into a new wallet: '
           '${costs.perCard - costs.claimFee} = five threads');

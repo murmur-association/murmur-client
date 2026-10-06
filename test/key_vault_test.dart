@@ -13,28 +13,7 @@ import 'package:murmur_client/protocol/bytes.dart';
 import 'package:murmur_client/services/key_vault.dart';
 import 'package:murmur_client/services/storage.dart';
 
-class _Prompts implements VaultPrompts {
-  _Prompts(this.setup, this.entered, {this.onPasskeyUnsupported = const []});
-
-  final String? setup;
-  final String? entered;
-
-  /// Answers to "this manager can't encrypt", in turn.
-  final List<bool?> onPasskeyUnsupported;
-  int asked = 0, passkeyAsked = 0;
-
-  @override
-  Future<String?> newPassphrase() async => setup;
-
-  @override
-  Future<String?> passphrase(String reason) async {
-    asked++;
-    return entered;
-  }
-
-  @override
-  Future<bool?> passkeyUnsupported() async => onPasskeyUnsupported[passkeyAsked++];
-}
+import 'support/vault_prompts.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -51,41 +30,57 @@ void main() {
     }
 
     test('lets the user try another manager', () async {
-      final prompts = _Prompts(null, null, onPasskeyUnsupported: [true]);
+      final prompts = TestPrompts(null, null, onPasskeyUnsupported: [true]);
       final stored = await sealSeed(seed, prompts, reason: 'test', device: tries());
       expect(stored, {'protection': 'passkey', 'try': '2'});
       expect(prompts.passkeyAsked, 1);
     });
 
     test('or use a passphrase instead', () async {
-      final prompts = _Prompts('correct horse', null, onPasskeyUnsupported: [false]);
+      final prompts = TestPrompts('correct horse', null, onPasskeyUnsupported: [false]);
       final stored = await sealSeed(seed, prompts, reason: 'test', device: tries());
       expect(stored['protection'], 'passphrase');
     });
 
     test('or cancel, saving nothing', () async {
-      final prompts = _Prompts(null, null, onPasskeyUnsupported: [null]);
+      final prompts = TestPrompts(null, null, onPasskeyUnsupported: [null]);
       await expectLater(sealSeed(seed, prompts, reason: 'test', device: tries()), throwsA(isA<VaultLocked>()));
     });
   });
 
+  test('what is sealed to a key opens only with its secret, and no two sealings look alike', () async {
+    final secret = Uint8List.fromList(List.generate(32, (i) => 255 - i));
+    final public = await sealingKeyOf(secret);
+    final data = Uint8List.fromList('a card\'s code'.codeUnits);
+    final sealed = await sealTo(public, data);
+    expect(sealed.values.join(), isNot(contains(toHex(data))));
+    expect(await openSealed(sealed, secret), data);
+    // Sealing needs no secret, so it can't be told from another sealing.
+    final again = await sealTo(public, data);
+    expect((again['from'], again['box']), isNot((sealed['from'], sealed['box'])));
+    expect(await openSealed(again, secret), data);
+    await expectLater(openSealed(sealed, seed), throwsA(anything), reason: 'another secret');
+    await expectLater(openSealed({...sealed, 'from': again['from']!}, secret), throwsA(anything),
+        reason: 'the sender\'s key is part of it');
+  });
+
   test('the stored record holds no trace of the seed, and only the passphrase opens it', () async {
     final watch = Stopwatch()..start();
-    final stored = await sealWithPassphrase(seed, _Prompts('correct horse', null));
+    final stored = await sealWithPassphrase(seed, TestPrompts('correct horse', null));
     print('seal with $passphraseRounds PBKDF2 rounds: ${watch.elapsedMilliseconds} ms');
     expect(stored['protection'], 'passphrase');
     expect(stored.values.join(), isNot(contains(toHex(seed))));
-    expect(await openSeed(stored, _Prompts(null, 'correct horse'), reason: 'test'), seed);
-    await expectLater(openSeed(stored, _Prompts(null, 'wrong horse'), reason: 'test'),
+    expect(await openSeed(stored, TestPrompts(null, 'correct horse'), reason: 'test'), seed);
+    await expectLater(openSeed(stored, TestPrompts(null, 'wrong horse'), reason: 'test'),
         throwsA(isA<VaultLocked>().having((e) => e.wrongPassphrase, 'wrong passphrase', isTrue)));
-    await expectLater(openSeed(stored, _Prompts(null, null), reason: 'test'),
+    await expectLater(openSeed(stored, TestPrompts(null, null), reason: 'test'),
         throwsA(isA<VaultLocked>().having((e) => e.wrongPassphrase, 'wrong passphrase', isFalse)));
   });
 
   test('a wallet is saved encrypted, and every unlock asks again', () async {
     FlutterSecureStorage.setMockInitialValues({});
     final wallets = WalletController();
-    await wallets.import(toHex(seed), _Prompts('correct horse', null), reason: 'test');
+    await wallets.import(toHex(seed), TestPrompts('correct horse', null), reason: 'test');
     final expected = (await MurmurWallet.fromSeed(seed)).addressHex;
     expect(wallets.wallet!.addressHex, expected);
     expect(wallets.protection, 'passphrase');
@@ -94,7 +89,7 @@ void main() {
     final again = WalletController();
     await again.load();
     expect(again.wallet!.addressHex, expected);
-    final prompts = _Prompts(null, 'correct horse');
+    final prompts = TestPrompts(null, 'correct horse');
     expect((await again.unlock(prompts, reason: 'send')).addressHex, expected);
     expect((await again.unlock(prompts, reason: 'send')).addressHex, expected);
     expect(prompts.asked, 2, reason: 'ask every time');
@@ -105,7 +100,7 @@ void main() {
     final wallets = WalletController();
     await wallets.load();
     expect(wallets.protection, 'legacy');
-    await wallets.unlock(_Prompts('correct horse', null), reason: 'show');
+    await wallets.unlock(TestPrompts('correct horse', null), reason: 'show');
     expect(wallets.protection, 'passphrase');
     const storage = FlutterSecureStorage();
     expect(await storage.read(key: 'murmur_wallet_seed'), isNull, reason: 'the plaintext copy is gone');
