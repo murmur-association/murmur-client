@@ -93,7 +93,7 @@ class NetworkInfo {
     // `murmur-node ctl checkpoint` on a node the project trusts). Refresh it
     // with every release (AGENTS.md, Recipes); the release job checks it
     // against the live network, and test/network_test.dart its form.
-    checkpoint: Checkpoint(21200, '000000171febf4350025ad91656dc8b1d4e95bd1e40a492c94204ca02e6f06af'),
+    checkpoint: Checkpoint(21400, '000002560a638043d6cf113b70889c19ca20b807d27eaa1235140da80bc62eae'),
   );
 
   static const demo = NetworkInfo(

@@ -34,7 +34,53 @@ foreach ($d in $settings, $data) {
   if (Test-Path $d) { Write-Output "${d} exists: the app has been used here, and this test would change its settings. Nothing was touched."; exit 1 }
 }
 
-function Fail($what) { Write-Output "FAILED: $what"; throw 'smoke test failed' }
+# The app's windows, shown or not. A release runner has no desktop to show
+# a window on, but the app still makes its window there, and takes a close
+# request on it: so the window is looked up and closed by its handle, not
+# through the visible "main window" PowerShell knows of.
+Add-Type @"
+using System; using System.Text; using System.Collections.Generic; using System.Runtime.InteropServices;
+public class AppWindows {
+  delegate bool EnumProc(IntPtr h, IntPtr l);
+  [DllImport("user32.dll")] static extern bool EnumWindows(EnumProc f, IntPtr l);
+  [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
+  [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr h);
+  [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetWindowText(IntPtr h, StringBuilder s, int n);
+  [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetClassName(IntPtr h, StringBuilder s, int n);
+  [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr h, uint msg, IntPtr w, IntPtr l);
+  // Each top-level window of the process: handle, title, class, shown.
+  public static List<object[]> Of(int pid) {
+    var found = new List<object[]>();
+    EnumWindows((h, l) => {
+      uint owner; GetWindowThreadProcessId(h, out owner);
+      if (owner == (uint)pid) {
+        var t = new StringBuilder(256); GetWindowText(h, t, 256);
+        var c = new StringBuilder(256); GetClassName(h, c, 256);
+        found.Add(new object[] { h, t.ToString(), c.ToString(), IsWindowVisible(h) });
+      }
+      return true;
+    }, IntPtr.Zero);
+    return found;
+  }
+  public static IntPtr Titled(int pid, string title) {
+    foreach (var w in Of(pid)) if ((string)w[1] == title) return (IntPtr)w[0];
+    return IntPtr.Zero;
+  }
+  public static void Close(IntPtr h) { PostMessage(h, 0x0010 /* WM_CLOSE */, IntPtr.Zero, IntPtr.Zero); }
+}
+"@
+
+# What the app is doing, for a failure's report.
+function Describe-App {
+  if (-not $script:app) { return 'the app was not started' }
+  $p = Get-Process -Id $script:app.Id -ErrorAction SilentlyContinue
+  $state = if ($p) { 'running' } else { "exited with code $($script:app.ExitCode)" }
+  $windows = @([AppWindows]::Of($script:app.Id) | ForEach-Object { "'$($_[1])' ($($_[2]), $(if ($_[3]) { 'shown' } else { 'hidden' }))" }) -join '; '
+  $n = Node-Of $script:app.Id
+  "app $($script:app.Id): $state; its windows: $(if ($windows) { $windows } else { 'none' }); its node: $(if ($n) { $n.ProcessId } else { 'none' }); " +
+    "session $([Diagnostics.Process]::GetCurrentProcess().SessionId), a desktop to show windows on: $([Environment]::UserInteractive)"
+}
+function Fail($what) { Write-Output "FAILED: $what"; Write-Output "  $(Describe-App)"; throw 'smoke test failed' }
 function Wait-For($seconds, $what, [scriptblock]$check) {
   for ($i = 0; $i -lt $seconds * 2; $i++) { if (& $check) { return }; Start-Sleep -Milliseconds 500 }
   Fail $what
@@ -49,12 +95,12 @@ function Bundled-Nodes { @(Get-CimInstance Win32_Process -Filter "Name='murmur-n
 # Starts the app and waits for its window and its node.
 function Start-App {
   $script:app = Start-Process -PassThru $exe
-  Wait-For 30 'no window titled Murmur appeared' { (Get-Process -Id $script:app.Id -ErrorAction SilentlyContinue).MainWindowTitle -eq 'Murmur' }
-  Wait-For 30 "the node didn't start as the app's child" { $null -ne (Node-Of $script:app.Id) }
+  Wait-For 60 'the app made no window titled Murmur' { [AppWindows]::Titled($script:app.Id, 'Murmur') -ne [IntPtr]::Zero }
+  Wait-For 60 "the node didn't start as the app's child" { $null -ne (Node-Of $script:app.Id) }
   $script:node = (Node-Of $script:app.Id).ProcessId
 }
 function Close-App {
-  (Get-Process -Id $script:app.Id).CloseMainWindow() | Out-Null
+  [AppWindows]::Close([AppWindows]::Titled($script:app.Id, 'Murmur'))
   Wait-For 20 "the app didn't exit after its window was closed" { -not (Alive $script:app.Id) }
   Wait-For 10 'the node kept running after the app closed' { -not (Alive $script:node) }
 }
@@ -68,7 +114,7 @@ try {
 
   Write-Output '== 1. start, and stop with the window'
   Start-App
-  Write-Output "window: Murmur"
+  Write-Output "window: $((@([AppWindows]::Of($app.Id) | Where-Object { $_[1] -eq 'Murmur' } | ForEach-Object { "Murmur ($(if ($_[3]) { 'shown' } else { 'hidden: no desktop here' }))" }) -join ', '))"
   Write-Output "node: pid $node, child of the app ($($app.Id))"
   Write-Output "node options: $((Get-CimInstance Win32_Process -Filter "ProcessId=$node").CommandLine -replace '^("[^"]*"|\S+)\s+', '')"
   Close-App

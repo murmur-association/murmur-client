@@ -2,6 +2,13 @@
 
 Newest first. Each release is a `vX.Y.Z` tag matching `version` in `pubspec.yaml`; see [README](README.md#releases-and-deployment). Entries marked **Breaking** need action from users.
 
+## v0.2.4: the Windows app's release test (2026-10-06)
+
+No protocol or network change, and nothing new in the app.
+
+- **Changed: the testnet checkpoint** is now block 21,400.
+- **Fixed: the Windows app's test on the release runner.** v0.2.3 built the app there, but its test looked for a window on screen, and the runner has no desktop to show one on. It now finds and closes the app's window whether it's shown or not, and says what it found when it fails. v0.2.3 has no Windows download either.
+
 ## v0.2.3: the Windows app's release build (2026-10-06)
 
 No protocol or network change.
