@@ -2,6 +2,10 @@
 
 Newest first. Each release is a `vX.Y.Z` tag matching `version` in `pubspec.yaml`; see [README](README.md#releases-and-deployment). Entries marked **Breaking** need action from users.
 
+## Unreleased
+
+- **Changed: one test tries both desktop apps.** `tool/desktop_smoke_test.dart` replaces the two scripts that made the same checks, one for each system. Both release jobs now try the packaged folder, the files a user unpacks, with the same steps.
+
 ## v0.2.12: the Windows wallet check, where Windows allows it (2026-10-06)
 
 No protocol or network change, and nothing new in the app.

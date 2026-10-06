@@ -259,7 +259,7 @@ build-web-testnet:
 # The Windows app for the testnet, as a zip to unpack and run: the app
 # (shown as Murmur, murmur_client.exe), the pinned node beside it
 # (tool/bundle_node.dart), the Visual C++ runtime and the notices
-# (tool/package_desktop.dart), after tool/windows_smoke_test.ps1 has tried it.
+# (tool/package_desktop.dart), after tool/desktop_smoke_test.dart has tried it.
 # On GitLab's Windows runner, like the node's own Windows build. Allowed to
 # fail: it must never hold back the page's release. A failure shows as a
 # warning on the pipeline, and that release then has no Windows download
@@ -317,7 +317,7 @@ build-windows:
   - dart run tool/package_desktop.dart --tag smoke
   - powershell -NoProfile -ExecutionPolicy Bypass -File tool\fetch_test_graphics.ps1 -Into build\desktop-package\murmur-client-smoke-windows-x64
   - if ($LASTEXITCODE -ne 0) { exit 1 }
-  - powershell -NoProfile -ExecutionPolicy Bypass -File tool\windows_smoke_test.ps1 -WalletStorage -Bundle build\desktop-package\murmur-client-smoke-windows-x64
+  - dart run tool/desktop_smoke_test.dart --wallet-storage build\desktop-package\murmur-client-smoke-windows-x64
   - if ($LASTEXITCODE -ne 0) { exit 1 }
   - Remove-Item dist\murmur-client-smoke-windows-x64.zip
   # Then the one that's released: its default node is the testnet's seed.
@@ -339,13 +339,14 @@ build-windows:
 
 # The Linux app for the testnet, as an archive to unpack and run: the app
 # (shown as Murmur, murmur_client), the pinned node beside it and the
-# notices. Before packaging, tool/linux_smoke_test.sh starts it on a virtual
-# display (with a session bus and an unlocked keyring, as a desktop gives
-# it) and checks that its own node starts with it and stops with its window,
-# that a node left by a killed app is replaced, and that a wallet is saved
-# through the real keyring (integration_test/wallet_storage_test.dart);
-# that run uses a build whose own node is on the demo network. Allowed to
-# fail, like the Windows build: it must never hold back the page's release.
+# notices. It's tried first, as packaged, by the same test as the Windows
+# app (tool/desktop_smoke_test.dart): its own node starts with it and stops
+# with its window, a node left by a killed app is replaced, and a wallet is
+# saved through the real keyring (integration_test/wallet_storage_test.dart).
+# tool/linux_smoke_test.sh gives that test a virtual display and a session
+# with an unlocked keyring, as a desktop gives the app; the copy that's
+# tried has its own node on the demo network. Allowed to fail, like the
+# Windows build: it must never hold back the page's release.
 build-linux:
   extends:
   - .flutter
@@ -358,10 +359,13 @@ build-linux:
     DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends
     clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev g++ libsecret-1-dev libjsoncpp-dev
     xvfb openbox wmctrl dbus dbus-x11 gnome-keyring libgl1-mesa-dri libegl1 libgles2 procps
-  # First a build whose own node stays off the public network, to try.
+  # First a build whose own node stays off the public network, to try, as
+  # packaged: the folder a user unpacks.
   - flutter build linux --release --dart-define=MURMUR_LOCAL_NODE_SPEC=demo
   - dart run tool/bundle_node.dart
-  - tool/linux_smoke_test.sh --wallet-storage
+  - dart run tool/package_desktop.dart --tag smoke
+  - tool/linux_smoke_test.sh --wallet-storage build/desktop-package/murmur-client-smoke-linux-x64
+  - rm dist/murmur-client-smoke-linux-*.tar.gz
   # Then the one that's released: its default node is the testnet's seed.
   - >-
     flutter build linux --release

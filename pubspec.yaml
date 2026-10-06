@@ -29,6 +29,8 @@ dev_dependencies:
     sdk: flutter
   flutter_lints: ^4.0.0
   # Runs tests inside the built app, with its real plugins (integration_test/).
+  # Windows calls of tool/desktop_smoke_test.dart (finding and closing the app's window).
+  ffi: ^2.1.0
   integration_test:
     sdk: flutter
 

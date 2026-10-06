@@ -1,14 +1,16 @@
 // Saving a wallet for real: inside the built app, through the platform's
-// own secure storage (the desktop's keyring on Linux), not the in-memory
-// stand-in the unit tests use (test/key_vault_test.dart). Run on a desktop:
+// own secure storage (the desktop's keyring on Linux, data protection on
+// Windows), not the in-memory stand-in the unit tests use
+// (test/key_vault_test.dart). Run on a desktop:
 //
 //   flutter test integration_test/wallet_storage_test.dart -d linux
 //
-// It needs a throwaway session, since it writes and removes the app's
-// wallet record: tool/linux_smoke_test.sh --wallet-storage gives it one (its
-// own home folder, session bus and keyring) and is how the release job runs
-// it. As a guard, it refuses to run where a wallet is already stored, and
-// then touches nothing.
+// It writes and removes the app's wallet record, so it needs a session
+// with no wallet of the user's: tool/desktop_smoke_test.dart
+// --wallet-storage runs it in one (on Linux through
+// tool/linux_smoke_test.sh, which makes a home folder, session bus and
+// keyring of its own), and is how the release jobs run it. As a guard, it
+// refuses to run where a wallet is already stored, and then touches nothing.
 
 import 'dart:typed_data';
 
@@ -49,7 +51,7 @@ void main() {
     await before.load();
     if (before.wallet != null || (await storage.readAll()).isNotEmpty) {
       fail('this session already holds a wallet or other app secrets: run it in a throwaway session '
-          '(tool/linux_smoke_test.sh --wallet-storage). Nothing was changed.');
+          '(tool/desktop_smoke_test.dart --wallet-storage). Nothing was changed.');
     }
 
     // A fixed seed, so the address is known. Never a real wallet's.
