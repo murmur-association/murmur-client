@@ -2,6 +2,12 @@
 
 Newest first. Each release is a `vX.Y.Z` tag matching `version` in `pubspec.yaml`; see [README](README.md#releases-and-deployment). Entries marked **Breaking** need action from users.
 
+## v0.2.9: software Direct3D for the Windows release test (2026-10-06)
+
+No protocol or network change, and nothing new in the app.
+
+- **Fixed: the Windows app can draw on the release runner.** v0.2.8's test kept the engine's words: no Direct3D device, on a server with no graphics card and without Windows' software Direct3D (WARP). The release job now also puts Microsoft's WARP package beside the copy it tries, pinned by its SHA-256 like the OpenGL library, and for the test only. v0.2.8 has no Windows download either.
+
 ## v0.2.8: why the Windows app stops on the release runner (2026-10-06)
 
 No protocol or network change, and nothing new in the app.
