@@ -61,7 +61,7 @@ function Missing-Libraries {
   }
   @($missing.Values | Sort-Object)
 }
-$missing = Missing-Libraries
+$missing = @(Missing-Libraries)
 if ($missing.Count -gt 0) {
   Write-Output "this system lacks libraries the app needs, so the app can't start here and nothing was tried:"
   $missing | ForEach-Object { Write-Output "  $_" }
@@ -195,7 +195,8 @@ try {
   # One node in the end, and it's this app's: looked at over a few seconds,
   # not at one instant, since the app stops the old one and starts its own.
   Wait-For 15 "there isn't exactly one node running, this app's" {
-    $nodes = Bundled-Nodes
+    # As a list: PowerShell gives one result back bare, and a bare process has no count.
+    $nodes = @(Bundled-Nodes)
     $nodes.Count -eq 1 -and $nodes[0].ParentProcessId -eq $script:app.Id
   }
   $node = (Node-Of $app.Id).ProcessId
@@ -216,7 +217,19 @@ try {
     $extra += @(Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\ucrt" -Directory -ErrorAction SilentlyContinue | Sort-Object Name | Select-Object -Last 1 | ForEach-Object FullName)
     Write-Output "also searching for libraries in: $($extra -join '; ')"
     $env:Path = ($extra -join ';') + ';' + $env:Path
-    flutter test integration_test/wallet_storage_test.dart -d windows 2>&1 | Select-Object -Last 12
+    # And beside it, the software graphics the tried copy was given, if any
+    # (tool\fetch_test_graphics.ps1): Windows' Direct3D takes its software
+    # renderer from beside the program, not from the search path. The build
+    # leaves other files in its folder alone. That folder is the debug
+    # one; what's released is built and packaged from the release one.
+    $debugDir = 'build\windows\x64\runner\Debug'
+    $given = @(Get-ChildItem $bundleDir -File | Where-Object { $_.Name -in 'opengl32.dll', 'libgallium_wgl.dll', 'd3d10warp.dll' })
+    if ($given.Count -gt 0) {
+      New-Item -ItemType Directory -Force $debugDir | Out-Null
+      $given | Copy-Item -Destination $debugDir
+      Write-Output "software graphics for the debug build: $(($given | ForEach-Object Name) -join ', ')"
+    }
+    flutter test integration_test/wallet_storage_test.dart -d windows 2>&1 | Select-Object -Last 30
     if ($LASTEXITCODE -ne 0) { Fail 'the wallet storage test' }
   }
   $ok = $true

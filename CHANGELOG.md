@@ -2,6 +2,12 @@
 
 Newest first. Each release is a `vX.Y.Z` tag matching `version` in `pubspec.yaml`; see [README](README.md#releases-and-deployment). Entries marked **Breaking** need action from users.
 
+## v0.2.11: the Windows test's own bug (2026-10-06)
+
+No protocol or network change, and nothing new in the app.
+
+- **Fixed: the Windows test miscounted a single node.** v0.2.10's report showed the app doing the right thing on the release runner: one node, the new app's own. The test still failed, because PowerShell gives a single result back without a count, so "exactly one" was never true. The count is now taken from a list, and was tried here with real node processes: none, one, another app's, two. v0.2.10 has no Windows download either.
+
 ## v0.2.10: the Windows test's count of nodes (2026-10-06)
 
 No protocol or network change, and nothing new in the app.
