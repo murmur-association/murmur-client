@@ -2,6 +2,12 @@
 
 Newest first. Each release is a `vX.Y.Z` tag matching `version` in `pubspec.yaml`; see [README](README.md#releases-and-deployment). Entries marked **Breaking** need action from users.
 
+## v0.2.2: checkpoint refresh (2026-10-06)
+
+No protocol or network change.
+
+- **Changed: the testnet checkpoint** is now block 20,600, refreshed from the live network by the scheduled release.
+
 ## v0.2.1: a checkpoint, desktop apps, lighter on memory (2026-10-05)
 
 No protocol or network change. The client needs nodes on protocol 10, as before.
