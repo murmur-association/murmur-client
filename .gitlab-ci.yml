@@ -303,10 +303,16 @@ build-windows:
   # node starts and stops with it, a node left by a killed app is replaced,
   # and a wallet is saved through Windows' own secure storage. The runner's
   # profile is a clean one, which the test needs (it refuses any other).
+  # It's tried as packaged, the folder a user unpacks: the runner has no
+  # Visual C++ runtime of its own, so the app starts only with the copies
+  # the package carries (v0.2.4's test started it from the build folder,
+  # and it couldn't load them).
   - flutter build windows --release --dart-define=MURMUR_LOCAL_NODE_SPEC=demo
   - dart run tool/bundle_node.dart
-  - powershell -NoProfile -ExecutionPolicy Bypass -File tool\windows_smoke_test.ps1 -WalletStorage
+  - dart run tool/package_desktop.dart --tag smoke
+  - powershell -NoProfile -ExecutionPolicy Bypass -File tool\windows_smoke_test.ps1 -WalletStorage -Bundle build\desktop-package\murmur-client-smoke-windows-x64
   - if ($LASTEXITCODE -ne 0) { exit 1 }
+  - Remove-Item dist\murmur-client-smoke-windows-x64.zip
   # Then the one that's released: its default node is the testnet's seed.
   - >-
     flutter build windows --release

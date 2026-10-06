@@ -112,6 +112,12 @@ try {
   New-Item -ItemType Directory -Force (Join-Path $settings 'Murmur') | Out-Null
   '{"flutter.run_local_node":true}' | Out-File -Encoding ascii (Join-Path $settings 'Murmur\shared_preferences.json')
 
+  # The Visual C++ runtime the app needs: beside it in a package, or the
+  # system's. Without either the app can't start (exit code -1073741515).
+  $bundleDir = Split-Path $exe
+  Write-Output ("runtime: " + (@('msvcp140.dll', 'vcruntime140.dll', 'vcruntime140_1.dll') | ForEach-Object {
+    "$_ $(if (Test-Path (Join-Path $bundleDir $_)) { 'beside the app' } elseif (Test-Path (Join-Path $env:SystemRoot "System32\$_")) { 'in the system' } else { 'MISSING' })" }) -join ', ')
+
   Write-Output '== 1. start, and stop with the window'
   Start-App
   Write-Output "window: $((@([AppWindows]::Of($app.Id) | Where-Object { $_[1] -eq 'Murmur' } | ForEach-Object { "Murmur ($(if ($_[3]) { 'shown' } else { 'hidden: no desktop here' }))" }) -join ', '))"
@@ -134,6 +140,18 @@ try {
 
   if ($WalletStorage) {
     Write-Output '== 3. a wallet through the real secure storage'
+    # This builds and runs a debug app, which needs the debug runtime: on a
+    # machine with only the build tools, that's in their folders, not the
+    # system's. Make it findable (and the release one, from the package).
+    $extra = @($bundleDir)
+    $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+    if (Test-Path $vswhere) {
+      $vs = & $vswhere -latest -products * -property installationPath
+      $extra += @(Get-ChildItem "$vs\VC\Redist\MSVC\*\debug_nonredist\x64\Microsoft.VC*.DebugCRT" -Directory -ErrorAction SilentlyContinue | ForEach-Object FullName)
+    }
+    $extra += @(Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\ucrt" -Directory -ErrorAction SilentlyContinue | Sort-Object Name | Select-Object -Last 1 | ForEach-Object FullName)
+    Write-Output "also searching for libraries in: $($extra -join '; ')"
+    $env:Path = ($extra -join ';') + ';' + $env:Path
     flutter test integration_test/wallet_storage_test.dart -d windows 2>&1 | Select-Object -Last 12
     if ($LASTEXITCODE -ne 0) { Fail 'the wallet storage test' }
   }

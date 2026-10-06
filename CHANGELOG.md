@@ -2,6 +2,12 @@
 
 Newest first. Each release is a `vX.Y.Z` tag matching `version` in `pubspec.yaml`; see [README](README.md#releases-and-deployment). Entries marked **Breaking** need action from users.
 
+## v0.2.5: the Windows app, tried as packaged (2026-10-06)
+
+No protocol or network change, and nothing new in the app.
+
+- **Fixed: the Windows app's test on the release runner, again.** v0.2.4's test started the app from the build folder, where it couldn't load the Visual C++ runtime the runner lacks. It now tries the packaged folder, which carries that runtime: the same files a user unpacks. v0.2.4 has no Windows download either.
+
 ## v0.2.4: the Windows app's release test (2026-10-06)
 
 No protocol or network change, and nothing new in the app.
