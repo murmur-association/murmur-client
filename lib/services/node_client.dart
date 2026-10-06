@@ -363,6 +363,9 @@ class MurmurClient extends ChangeNotifier {
 
   final Set<String> _wantedTxids = {};
 
+  /// Those the node is being asked for right now (see `_fetchTxs`).
+  Set<String> _txAsking = const {};
+
   /// Txids the node placed below the headers checked so far: asked again
   /// once the headers back to genesis are in.
   final Set<String> _deferredTxids = {};
@@ -683,7 +686,8 @@ class MurmurClient extends ChangeNotifier {
 
   /// Asks the node for a transaction the client doesn't have (GetTx).
   void requestTx(String txid) {
-    if (lookupTx(txid) != null || _txUnknown.contains(txid) || !_wantedTxids.add(txid)) return;
+    if (lookupTx(txid) != null || _txUnknown.contains(txid) || _txAsking.contains(txid)) return;
+    if (!_wantedTxids.add(txid)) return;
     _wake();
   }
 
@@ -883,6 +887,12 @@ class MurmurClient extends ChangeNotifier {
   /// Threads, most recently active first (a new reply bumps its thread).
   /// With `upTo`, only what's in blocks up to that height: the Threads tab's
   /// fixed view, which grows only as older blocks arrive.
+  ///
+  /// That view never moves a thread it has shown. A reply can arrive before
+  /// its thread, which is older and so in a block not fetched yet: the
+  /// thread is asked for by id at once, and the threads less recent than
+  /// that reply wait for it ([threadsHeldBack]), instead of showing first
+  /// and being pushed down.
   List<ThreadSummary> threads({int? upTo}) {
     if (upTo == null) return _messages.threads;
     var fetchedBelow = 0;
@@ -897,8 +907,24 @@ class MurmurClient extends ChangeNotifier {
       _snapshotIndex = MessageIndex.build(_messagesKnown(upTo: upTo));
       _snapshotKey = key;
     }
-    return _snapshotIndex!.threads;
+    final index = _snapshotIndex!;
+    index.missingParents.keys.forEach(requestTx);
+    final settled = index.settledThreads(_stillComing);
+    _threadsHeldBack = settled.held;
+    return settled.threads;
   }
+
+  /// Whether the last `threads(upTo:)` left threads out, waiting for a more
+  /// recently active one that's on its way.
+  bool get threadsHeldBack => _threadsHeldBack;
+  bool _threadsHeldBack = false;
+
+  /// Whether a transaction asked of the node may still arrive: not while
+  /// offline, not once the node said it doesn't know it, and not while it
+  /// waits for the headers below a checkpoint (that can take minutes, and
+  /// the list shouldn't).
+  bool _stillComing(String txid) =>
+      isOnline && lookupTx(txid) == null && !_txUnknown.contains(txid) && !_deferredTxids.contains(txid);
 
   int replyCountOf(TxView v) => _messages.replyCountOf(v);
 
@@ -2245,7 +2271,13 @@ class MurmurClient extends ChangeNotifier {
     final ids = _wantedTxids.take(maxTxRequest).toList();
     if (ids.isEmpty) return false;
     _wantedTxids.removeAll(ids);
-    final reply = await _request(_txWaiter = Completer<Tx>(), GetTx([for (final id in ids) fromHex(id)]));
+    _txAsking = ids.toSet();
+    final Tx reply;
+    try {
+      reply = await _request(_txWaiter = Completer<Tx>(), GetTx([for (final id in ids) fromHex(id)]));
+    } finally {
+      _txAsking = const {};
+    }
     if (gen != _generation) throw _Aborted();
     final answered = <String>{};
     for (final (txid, lookup) in reply.entries) {

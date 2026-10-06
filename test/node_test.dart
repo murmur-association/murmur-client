@@ -152,7 +152,8 @@ void main() {
     });
 
     test('sends with proven nonces and gets transactions mined', () async {
-      final client = await (await short(mining: true)).connect(MurmurClient());
+      final node = await short(mining: true);
+      final client = await node.connect(MurmurClient());
       final wallet = miner;
       final me = wallet.addressHex;
       await until(client, () => client.availableTo(me) != null);
@@ -219,6 +220,29 @@ void main() {
       expect(client.liveContent(withdrawn), isNull);
       expect(client.contentExpected(withdrawn.tx), isFalse);
       expect(client.liveContent(client.lookupTx(reply.id)!), isNotNull);
+
+      // Another device opens its Threads tab on this chain: while its blocks
+      // arrive, newest first, no thread it has listed is ever moved. New
+      // ones only join at the end.
+      final reader = await node.connect(MurmurClient());
+      final upTo = reader.height;
+      var listed = <String>[];
+      void check() {
+        final now = [for (final t in reader.threads(upTo: upTo)) t.root.tx.id];
+        expect(now.take(listed.length), listed, reason: 'a listed thread moved');
+        listed = now;
+        reader.requestOlder(); // as the list does while it has room
+      }
+
+      reader.addListener(check);
+      check();
+      await until(reader, what: 'every thread listed', () => !reader.canLoadOlder && !reader.threadsHeldBack);
+      reader.removeListener(check);
+      check();
+      expect(listed, containsAll([orphan.id, older.id]));
+      // And it ends as the list of the device that saw them being sent,
+      // which got them in another order.
+      expect(listed, [for (final t in client.threads(upTo: upTo)) t.root.tx.id]);
     }, timeout: const Timeout(Duration(minutes: 3)));
   
     test('invitations: funded cards are claimed by a new wallet, or taken back', () async {

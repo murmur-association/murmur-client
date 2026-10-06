@@ -63,6 +63,13 @@ class MessageIndex {
   /// Most recently active first.
   final threads = <ThreadSummary>[];
 
+  /// Messages that replies point to (directly, or up a chain of replies)
+  /// and that aren't known: each with the time of the newest reply under
+  /// it. One of these may be an older thread that such a reply has just
+  /// made the most recently active; where it belongs in [threads] isn't
+  /// known until it's fetched.
+  final missingParents = <String, int>{};
+
   /// `address`'s possible alias transactions (Section 7.8) among what's
   /// known, latest first: mined Orphans with `content_size` 87.
   List<TxView> aliasCandidatesOf(String address) => _aliasCandidates[address] ?? const [];
@@ -100,6 +107,26 @@ class MessageIndex {
       list.sort((a, b) => activityTime(a).compareTo(activityTime(b)));
     }
 
+    // Replies whose thread isn't known yet: up each chain of valid replies
+    // to a message that's missing. (A reply that isn't part of a thread, a
+    // payment under Section 2.4, leads nowhere.)
+    for (final v in ix._byTxid.values) {
+      if (v.tx.kind != TxKind.reply) continue;
+      var cur = v;
+      for (var depth = 0; depth < 10000 && cur.tx.kind == TxKind.reply; depth++) {
+        final ref = cur.tx.referenceId;
+        if (ref == null) break;
+        final target = ix._byTxid[ref];
+        if (target == null) {
+          final t = activityTime(v);
+          if (t > (ix.missingParents[ref] ?? -1)) ix.missingParents[ref] = t;
+          break;
+        }
+        if (!ix._parentOf.containsKey(cur.tx.id)) break;
+        cur = target;
+      }
+    }
+
     // Alias candidates (Section 7.8): mined Orphans of the alias length, by
     // sender, latest first (the input's order).
     for (final v in newestFirst) {
@@ -123,8 +150,37 @@ class MessageIndex {
       }
       ix.threads.add(ThreadSummary(v, lastActivity: last, replies: replies, flags: ix.flagCountOf(v)));
     }
-    ix.threads.sort((a, b) => b.lastActivity.compareTo(a.lastActivity));
+    // Ties (a block's messages share its time) are settled by the threads
+    // themselves, never by the order they arrived in: the list must come
+    // out the same however it was loaded.
+    ix.threads.sort((a, b) {
+      final byActivity = b.lastActivity.compareTo(a.lastActivity);
+      if (byActivity != 0) return byActivity;
+      final byStart = activityTime(b.root).compareTo(activityTime(a.root));
+      return byStart != 0 ? byStart : a.root.tx.id.compareTo(b.root.tx.id);
+    });
     return ix;
+  }
+
+  /// [threads] as far as their order is settled: most recently active
+  /// first, stopping above the newest reply whose thread is missing but
+  /// `stillComing` (asked of the node, not answered yet). That thread will
+  /// take its place at that reply's time, so showing the less recent ones
+  /// now would only have them pushed down when it arrives. `held` says
+  /// whether any are held back.
+  ({List<ThreadSummary> threads, bool held}) settledThreads(bool Function(String txid) stillComing) {
+    var hold = -1;
+    missingParents.forEach((txid, time) {
+      if (time > hold && stillComing(txid)) hold = time;
+    });
+    if (hold < 0) return (threads: threads, held: false);
+    // Threads more recent than that reply are in their place already. (One
+    // of the same time isn't: the missing thread may sort before it.)
+    final settled = [
+      for (final t in threads)
+        if (t.lastActivity > hold) t,
+    ];
+    return (threads: settled, held: settled.length < threads.length);
   }
 
   /// Valid direct replies to this message, oldest first.

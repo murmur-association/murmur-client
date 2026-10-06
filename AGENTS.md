@@ -193,6 +193,8 @@ A TxStatus of invalid or refused takes the transaction out of nonce and balance 
 5. `submit`, with exactly the values the summary showed.
 
 **Threads tab.** It shows a snapshot: `threads(upTo: height)` fixes the order at one block. Own sent messages are always included. A new snapshot is taken on Refresh, when the tab comes into view (`refreshToken`), and when returning from a pushed page (`RouteAware.didPopNext`). Message text is read live (`messageOrUnavailable`), because content arrives after the list.
+- **A listed thread never moves** (the user asked for it). Blocks arrive newest first, so a reply can be known before its thread, which is older. `MessageIndex.missingParents` names such threads; `threads(upTo:)` asks for each by id (`requestTx`) and returns only the threads more recent than the newest such reply (`settledThreads`), until its thread arrives or the node says it has none. `threadsHeldBack` keeps the list's loading line meanwhile. A thread proven only below a checkpoint's headers isn't waited for (the back-fill takes minutes).
+- **Ties** (a block's messages share its time) are ordered by the threads themselves: the one started later first, then by txid. Never by arrival order, or the same list would differ between loads.
 
 **The user's own view** (`Preferences`, all on the device, never sent):
 - **Thread languages:** detected by `services/language.dart`. The script settles Arabic, Japanese and Chinese; Latin-script text is scored by common words and telltale letters. Short, mixed or other-language text is "undetected" rather than guessed. Detection is by the thread's first message, cached per txid.

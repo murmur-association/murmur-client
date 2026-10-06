@@ -101,7 +101,8 @@ class _ThreadsTabState extends State<ThreadsTab> {
         fetch: (n) => shown.length > n ? shown.sublist(0, n) : shown,
         itemBuilder: (context, t) => _ThreadTile(t),
         empty: EmptyState(icon: Glyph.thread, text: query.isEmpty ? l.noThreads : l.noMatches),
-        loadingMore: client.canLoadOlder,
+        // Also while threads wait for a more recently active one to arrive.
+        loadingMore: client.canLoadOlder || client.threadsHeldBack,
         onNeedMore: client.requestOlder,
         header: [
           SliverToBoxAdapter(
