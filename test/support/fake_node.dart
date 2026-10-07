@@ -8,6 +8,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:cryptography/cryptography.dart';
+import 'package:murmur_client/protocol/bytes.dart';
 import 'package:murmur_client/protocol/network.dart';
 import 'package:murmur_client/protocol/wire.dart';
 import 'package:murmur_client/services/secure_channel.dart';
@@ -50,7 +51,7 @@ class FakeNode {
           socket.add(sender.sealFrame(encodePayload(Hello(
             version: version,
             genesis: NetworkInfo.demo.genesisHeader().hash,
-            nonce: 42,
+            nonce: u64Bytes(42),
             listenPort: 7878,
             height: 0,
             work: BigInt.zero,

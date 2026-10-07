@@ -40,7 +40,7 @@ List<BlockHeader> generateChain(int count, {void Function(int done)? progress}) 
         historyRoot: root,
         timestamp: net.genesisTimestamp + height * net.targetBlockSecs,
         target: target,
-        nonce: nonce,
+        nonce: u64Bytes(nonce),
         miner: Uint8List(32),
       );
       if (header.meetsTarget) break;

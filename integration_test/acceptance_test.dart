@@ -20,9 +20,14 @@ import 'package:murmur_client/ui/thread_page.dart';
 import 'package:murmur_client/ui/threads_tab.dart';
 
 import 'support/app_driver.dart';
+import 'support/header_nonce_checks.dart';
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+
+  // What numbers do differs between a browser and the rest: the header
+  // vectors that each once got wrong, on the flavour at hand.
+  group('header nonces', headerNonceTests);
 
   // Told apart from any other run's on the same chain.
   final stamp = DateTime.now().millisecondsSinceEpoch;

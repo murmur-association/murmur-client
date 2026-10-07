@@ -51,7 +51,10 @@ class Hello extends Message {
 
   final int version;
   final Uint8List genesis;
-  final int nonce;
+
+  /// Random, 8 bytes: a node tells its own connection by it. Kept as bytes
+  /// (it may be any 64-bit value); the client only passes it on.
+  final Uint8List nonce;
   final int listenPort;
   final int height;
   final BigInt work;
@@ -375,7 +378,7 @@ void _encodeHeader(ByteWriter w, BlockHeader h) {
     ..bytes(h.historyRoot)
     ..u64(h.timestamp)
     ..u128(h.target)
-    ..u64(h.nonce)
+    ..bytes(h.nonce)
     ..bytes(h.miner);
 }
 
@@ -388,7 +391,7 @@ BlockHeader _decodeHeader(ByteReader r) => BlockHeader(
       historyRoot: r.hash32(),
       timestamp: r.u64(),
       target: r.u128(),
-      nonce: r.u64(),
+      nonce: r.take(8),
       miner: r.hash32(),
     );
 
@@ -607,7 +610,7 @@ Uint8List encodePayload(Message message) {
         ..u8(0)
         ..u32(msg.version)
         ..bytes(msg.genesis)
-        ..u64(msg.nonce)
+        ..bytes(msg.nonce)
         ..u16(msg.listenPort)
         ..u64(msg.height)
         ..u128(msg.work);
@@ -780,7 +783,7 @@ Message decodeMessage(Uint8List payload) {
       msg = Hello(
         version: r.u32(),
         genesis: r.hash32(),
-        nonce: r.u64(),
+        nonce: r.take(8),
         listenPort: r.u16(),
         height: r.u64(),
         work: r.u128(),

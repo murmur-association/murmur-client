@@ -134,7 +134,7 @@ class NetworkInfo {
         historyRoot: Uint8List(32), // no earlier blocks
         timestamp: genesisTimestamp,
         target: genesisTarget,
-        nonce: 0,
+        nonce: u64Bytes(0),
         miner: Uint8List(32),
       );
 
