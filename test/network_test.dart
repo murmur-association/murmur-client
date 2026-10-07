@@ -3,6 +3,7 @@
 // browsers use the right WebSocket URL.
 
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:murmur_client/protocol/network.dart';
@@ -149,6 +150,65 @@ void main() {
             minPerAddress: const Duration(milliseconds: 300)),
         throwsA(isA<TransportException>()
             .having((e) => e.detail, 'detail', allOf(contains('192.0.2.1'), contains('127.0.0.1')))),
+      );
+    });
+  });
+
+  group('port 443 is a WebSocket natively too, as in a browser', () {
+    /// A WebSocket server on this machine that sends back what it gets,
+    /// and a text message when asked to misbehave (a single zero byte).
+    Future<HttpServer> echo(InternetAddress address, int port) async {
+      final server = await HttpServer.bind(address, port);
+      server.transform(WebSocketTransformer()).listen((ws) {
+        ws.listen((data) => data is List<int> && data.length == 1 && data[0] == 0 ? ws.add('text') : ws.add(data));
+      });
+      return server;
+    }
+
+    test('only port 443: every other port is a node\'s own, over TCP', () {
+      expect(usesWebSocket(443), isTrue);
+      expect([7878, 7880, 80, 8443].any(usesWebSocket), isFalse);
+    });
+
+    test('bytes go both ways, and the peer is the address reached', () async {
+      final server = await echo(InternetAddress.loopbackIPv4, 0);
+      addTearDown(() => server.close(force: true));
+      final url = Uri(scheme: 'ws', host: 'localhost', port: server.port, path: '/');
+      final transport = await openWebSocket(url, [InternetAddress.loopbackIPv4], const Duration(seconds: 5));
+      addTearDown(transport.close);
+      expect(transport.peer, '127.0.0.1:${server.port}');
+      final got = <List<int>>[];
+      Object? failure;
+      transport.incoming.listen(got.add, onError: (Object e) => failure = e);
+      transport.add(Uint8List.fromList([1, 2, 3]));
+      await _until(() => got.isNotEmpty);
+      expect(got.single, [1, 2, 3]);
+      // A node never sends text: that's bad data, not a lost link.
+      transport.add(Uint8List.fromList([0]));
+      await _until(() => failure != null);
+      expect(failure, isA<FormatException>());
+    });
+
+    test('an address that takes the connection but speaks no WebSocket is passed over', () async {
+      final (broken, accepted) = await _brokenNode(InternetAddress('127.0.0.2'), 0);
+      addTearDown(broken.close);
+      final server = await echo(InternetAddress.loopbackIPv4, broken.port);
+      addTearDown(() => server.close(force: true));
+      final url = Uri(scheme: 'ws', host: 'localhost', port: broken.port, path: '/');
+      final transport = await openWebSocket(
+          url, [InternetAddress('127.0.0.2'), InternetAddress.loopbackIPv4], const Duration(seconds: 6));
+      addTearDown(transport.close);
+      expect(accepted, isNotEmpty, reason: 'the broken one was tried first');
+      expect(transport.peer, '127.0.0.1:${broken.port}');
+    });
+
+    test('with none answering, every address is reported', () async {
+      final (broken, _) = await _brokenNode(InternetAddress.loopbackIPv4, 0);
+      addTearDown(broken.close);
+      final url = Uri(scheme: 'ws', host: 'localhost', port: broken.port, path: '/');
+      await expectLater(
+        openWebSocket(url, [InternetAddress.loopbackIPv4], const Duration(seconds: 3)),
+        throwsA(isA<TransportException>().having((e) => e.detail, 'detail', contains('127.0.0.1'))),
       );
     });
   });

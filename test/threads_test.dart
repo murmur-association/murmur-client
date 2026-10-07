@@ -127,6 +127,34 @@ void _settledOrder() {
     expect(ids(all.threads).take(waiting.threads.length), ids(waiting.threads));
   });
 
+  test('nothing shows that is as old as a block still missing', () {
+    // Fetched out of order: the newest blocks, and an old one (a filter
+    // match, or the local copy from genesis up). Block 50 isn't in yet.
+    final old = txAt(TxKind.orphan, 10, text: 'old, fetched early');
+    final recent = txAt(TxKind.orphan, 80, text: 'recent');
+    final newest = txAt(TxKind.orphan, 95, text: 'newest');
+    final missingBlock = activityTime(txAt(TxKind.orphan, 50));
+    final loading = indexOf([old, recent, newest]);
+    expect(loading.missingParents, isEmpty);
+    final waiting = loading.settledThreads((id) => fail('nothing is missing'), floor: missingBlock);
+    expect(ids(waiting.threads), ids([newest, recent]), reason: 'block 50 may hold a reply to the old thread');
+    expect(waiting.held, isTrue);
+
+    // It does: the old thread goes above `recent`'s neighbours below, and
+    // what showed keeps its place.
+    final between = txAt(TxKind.orphan, 50, text: 'in the missing block');
+    final loaded = indexOf([old, between, replyTo(old, 50), recent, newest]);
+    final all = loaded.settledThreads((id) => fail('nothing is missing'));
+    expect(ids(all.threads).take(2), ids(waiting.threads));
+    expect(ids(all.threads).skip(2), unorderedEquals(ids([old, between])));
+    expect(all.held, isFalse);
+
+    // The later of the two, a waiting reply and a missing block, decides.
+    final reply = replyTo(txAt(TxKind.orphan, 5, text: 'not at hand'), 90);
+    final both = indexOf([old, recent, reply, newest]).settledThreads((id) => true, floor: missingBlock);
+    expect(ids(both.threads), ids([newest]));
+  });
+
   test('a missing thread that is not coming holds nothing back', () {
     final thread = txAt(TxKind.orphan, 70, text: 'here');
     final unknown = txAt(TxKind.orphan, 10, text: 'the node does not have it');
@@ -187,6 +215,85 @@ void _settledOrder() {
       [reply, old, twin, sameBlock],
     ]) {
       expect(ids(MessageIndex.build(arrival).threads), expected);
+    }
+  });
+
+  test('a thread and its reply in one block, beside a reply to an old thread: the old one waits its turn', () {
+    final old = txAt(TxKind.orphan, 10, text: 'old');
+    final fresh = txAt(TxKind.orphan, 90, text: 'new, answered in its own block');
+    final toFresh = replyTo(fresh, 90);
+    final toOld = replyTo(old, 90);
+    final below = txAt(TxKind.orphan, 80, text: 'below');
+
+    // Block 90 alone: all three threads are active at its time, so even the
+    // new one, complete with its reply, can't show before the old one.
+    final waiting = indexOf([below, fresh, toFresh, toOld]).settledThreads((id) => true);
+    expect(waiting.threads, isEmpty);
+    expect(waiting.held, isTrue);
+
+    // Same time: the one started later first.
+    final all = indexOf([old, below, fresh, toFresh, toOld]);
+    expect(ids(all.settledThreads((id) => true).threads), ids([fresh, old, below]));
+    expect(all.threads.first.replies, 1);
+  });
+
+  test('however the chain is loaded, the list only grows at its end, and ends the same', () {
+    // Threads answered in their own block, replies to older threads beside
+    // new threads in one block, and a reply to a reply.
+    final a = txAt(TxKind.orphan, 5, text: 'a');
+    final b = txAt(TxKind.orphan, 10, text: 'b');
+    final c = txAt(TxKind.orphan, 20, text: 'c, answered in its block');
+    final toC = replyTo(c, 20);
+    final d = txAt(TxKind.orphan, 30, text: 'd');
+    final toA = replyTo(a, 40);
+    final e = txAt(TxKind.orphan, 50, text: 'e, answered in its block');
+    final toE = replyTo(e, 50);
+    final toB = replyTo(b, 50);
+    final f = txAt(TxKind.orphan, 60, text: 'f');
+    final underC = replyTo(toC, 70, from: carol);
+    final g = txAt(TxKind.orphan, 80, text: 'g');
+    final toD = replyTo(d, 80);
+    final h = txAt(TxKind.orphan, 90, text: 'h');
+    final chain = [a, b, c, toC, d, toA, e, toE, toB, f, underC, g, toD, h];
+    final heights = {for (final v in chain) v.height!}.toList()..sort();
+    final timeOf = {for (final v in chain) v.height!: v.blockTime!};
+    final byId = {for (final v in chain) v.tx.id: v};
+    final expected = ids(indexOf(chain).threads);
+
+    /// Loads blocks in `order`. With `askById`, each missing parent arrives
+    /// alone (GetTx) one step after the reply that names it; otherwise only
+    /// with its block.
+    void load(List<int> order, {required bool askById}) {
+      final blocks = <int>{}, loose = <String>{};
+      var listed = <String>[];
+      void check(String step) {
+        final known = [
+          for (final v in chain)
+            if (blocks.contains(v.height) || loose.contains(v.tx.id)) v,
+        ];
+        final ix = indexOf(known);
+        final missing = heights.where((at) => !blocks.contains(at));
+        final floor = missing.isEmpty ? null : timeOf[missing.last];
+        final now = ids(ix.settledThreads((id) => true, floor: floor).threads);
+        expect(now.take(listed.length), listed, reason: 'a listed thread moved after $step ($order)');
+        listed = now;
+        if (askById) loose.addAll(ix.missingParents.keys.where(byId.containsKey));
+      }
+
+      for (final height in order) {
+        blocks.add(height);
+        check('block $height');
+        check('what block $height referenced');
+        check('what that referenced');
+      }
+      expect(listed, expected, reason: 'loaded as $order');
+    }
+
+    for (final askById in [true, false]) {
+      load(heights.reversed.toList(), askById: askById); // newest first, as the list asks
+      load(heights, askById: askById); // oldest first, as the local copy fills
+      load([90, 5, 80, 20, 50, 10, 70, 40, 60, 30], askById: askById); // newest first with filter matches between
+      load([50, 90, 20, 80, 70, 5, 60, 10, 40, 30], askById: askById);
     }
   });
 }

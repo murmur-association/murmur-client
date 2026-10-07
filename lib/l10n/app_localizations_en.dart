@@ -304,7 +304,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get connectHelpNative =>
-      'The peer-to-peer address of a murmur-node (its --port, 7878 by default). The control port (7879) will not work.';
+      'The peer-to-peer address of a murmur-node (its --port, 7878 by default). The control port (7879) will not work. Port 443 reaches a node behind a secure WebSocket, such as node.murmur.info.';
 
   @override
   String get host => 'Host';
@@ -1199,7 +1199,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get localNodeStarting => 'Starting the node…';
 
   @override
-  String get localNodeRunning => 'The node is running, and the app uses it.';
+  String localNodeRunning(String address) {
+    return 'The node is running at $address. The app keeps reading from the node you chose.';
+  }
 
   @override
   String localNodeFailed(String reason) {
@@ -1221,8 +1223,41 @@ class AppLocalizationsEn extends AppLocalizations {
       'Create a wallet first: mining pays its address.';
 
   @override
+  String localNodeMinesTo(String name) {
+    return 'Mining pays **$name**';
+  }
+
+  @override
   String localNodeCpu(int pct) {
     return 'Up to $pct% of one processor core';
+  }
+
+  @override
+  String get localNodeGpu => 'Mine on the graphics card';
+
+  @override
+  String get localNodeGpuNote =>
+      'Much faster than the processor, and it uses more electricity. When the card can\'t be used, mining goes on with the processor.';
+
+  @override
+  String get localNodeGpuStarting =>
+      'Starting the graphics card. The processor mines meanwhile.';
+
+  @override
+  String localNodeGpuMining(String device) {
+    return 'Mining on **$device**';
+  }
+
+  @override
+  String get localNodeGpuMiningAny => 'Mining on **the graphics card**';
+
+  @override
+  String get localNodeGpuUnavailable =>
+      'The graphics card can\'t be used: **mining goes on with the processor**.';
+
+  @override
+  String localNodeGpuDetail(String reason) {
+    return 'What the node says: $reason';
   }
 
   @override
@@ -1494,8 +1529,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get passphraseNewTitle => 'Choose a passphrase';
 
   @override
-  String get passphraseNewBody =>
-      'It encrypts your wallet key on this device. You\'ll type it to send, to show the seed or to remove the wallet. If you forget it, only your seed backup can bring the wallet back.';
+  String get passphraseNewWhat =>
+      '**One passphrase for this app.** It encrypts your wallet key and your invitation cards\' codes on this device.';
+
+  @override
+  String get passphraseNewWhen =>
+      'You\'ll type it **every time** you send, show the seed or remove the wallet, and to show, print or cancel a card.';
+
+  @override
+  String get passphraseNewForget =>
+      'If you forget it, only your **seed backup** brings the wallet back, and cards not yet handed over can no longer be shown or cancelled.';
 
   @override
   String get passphraseField => 'Passphrase';
@@ -1888,10 +1931,6 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get authReasonCards =>
       'Confirm it\'s you to unlock the invitation cards';
-
-  @override
-  String get passphraseNewBodyCards =>
-      'It encrypts your invitation cards\' codes on this device. You\'ll type it to show, print or cancel a card. If you forget it, cards not yet handed over can no longer be shown or cancelled.';
 
   @override
   String get inviteLockedPoint =>

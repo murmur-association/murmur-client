@@ -305,7 +305,7 @@ class AppLocalizationsNl extends AppLocalizations {
 
   @override
   String get connectHelpNative =>
-      'Het peer-to-peer-adres van een murmur-node (zijn --port, standaard 7878). De beheerpoort (7879) werkt niet.';
+      'Het peer-to-peer-adres van een murmur-node (zijn --port, standaard 7878). De beheerpoort (7879) werkt niet. Poort 443 bereikt een node achter een beveiligde WebSocket, zoals node.murmur.info.';
 
   @override
   String get host => 'Host';
@@ -1201,7 +1201,9 @@ class AppLocalizationsNl extends AppLocalizations {
   String get localNodeStarting => 'De node start…';
 
   @override
-  String get localNodeRunning => 'De node draait en de app gebruikt hem.';
+  String localNodeRunning(String address) {
+    return 'De node draait op $address. De app blijft lezen van de node die je hebt gekozen.';
+  }
 
   @override
   String localNodeFailed(String reason) {
@@ -1223,8 +1225,41 @@ class AppLocalizationsNl extends AppLocalizations {
       'Maak eerst een wallet: minen betaalt aan zijn adres.';
 
   @override
+  String localNodeMinesTo(String name) {
+    return 'Het minen betaalt aan **$name**';
+  }
+
+  @override
   String localNodeCpu(int pct) {
     return 'Tot $pct% van één processorkern';
+  }
+
+  @override
+  String get localNodeGpu => 'Minen met de grafische kaart';
+
+  @override
+  String get localNodeGpuNote =>
+      'Veel sneller dan de processor, en het verbruikt meer stroom. Kan de kaart niet worden gebruikt, dan gaat het minen door met de processor.';
+
+  @override
+  String get localNodeGpuStarting =>
+      'De grafische kaart wordt gestart. Intussen mint de processor.';
+
+  @override
+  String localNodeGpuMining(String device) {
+    return 'Minen op **$device**';
+  }
+
+  @override
+  String get localNodeGpuMiningAny => 'Minen op **de grafische kaart**';
+
+  @override
+  String get localNodeGpuUnavailable =>
+      'De grafische kaart kan niet worden gebruikt: **het minen gaat door met de processor**.';
+
+  @override
+  String localNodeGpuDetail(String reason) {
+    return 'Wat de node meldt: $reason';
   }
 
   @override
@@ -1497,8 +1532,16 @@ class AppLocalizationsNl extends AppLocalizations {
   String get passphraseNewTitle => 'Kies een wachtzin';
 
   @override
-  String get passphraseNewBody =>
-      'Die versleutelt de sleutel van je wallet op dit apparaat. Je typt hem om te versturen, de seed te tonen of de wallet te verwijderen. Vergeet je hem, dan kan alleen je seed-back-up de wallet terugbrengen.';
+  String get passphraseNewWhat =>
+      '**Eén wachtwoordzin voor deze app.** Hij versleutelt je walletsleutel en de codes van je uitnodigingskaarten op dit apparaat.';
+
+  @override
+  String get passphraseNewWhen =>
+      'Je typt hem **elke keer** dat je verstuurt, de seed toont of de wallet verwijdert, en om een kaart te tonen, af te drukken of te annuleren.';
+
+  @override
+  String get passphraseNewForget =>
+      'Als je hem vergeet, brengt alleen je **seed-back-up** de wallet terug, en kaarten die nog niet zijn overhandigd kunnen niet meer worden getoond of geannuleerd.';
 
   @override
   String get passphraseField => 'Wachtzin';
@@ -1901,10 +1944,6 @@ class AppLocalizationsNl extends AppLocalizations {
   @override
   String get authReasonCards =>
       'Bevestig dat jij het bent om de uitnodigingskaarten te ontgrendelen';
-
-  @override
-  String get passphraseNewBodyCards =>
-      'Ze versleutelt de codes van je uitnodigingskaarten op dit apparaat. Je typt ze om een kaart te tonen, af te drukken of te annuleren. Als je ze vergeet, kunnen nog niet overhandigde kaarten niet meer getoond of geannuleerd worden.';
 
   @override
   String get inviteLockedPoint =>

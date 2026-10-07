@@ -36,8 +36,8 @@ Future<void> main(List<String> args) async {
       ? 'build${_sep}windows${_sep}x64${_sep}runner${_sep}Release'
       : 'build${_sep}linux$_sep$arch${_sep}release${_sep}bundle');
   final needed = Platform.isWindows
-      ? ['murmur_client.exe', 'murmur-node.exe', 'flutter_windows.dll', 'data']
-      : ['murmur_client', 'murmur-node', 'lib', 'data'];
+      ? ['murmur_client.exe', 'murmur-node.exe', 'murmur-miner.exe', 'flutter_windows.dll', 'data']
+      : ['murmur_client', 'murmur-node', 'murmur-miner', 'lib', 'data'];
   for (final name in needed) {
     if (FileSystemEntity.typeSync('${built.path}$_sep$name') == FileSystemEntityType.notFound) {
       _fail('$name is missing from ${built.path}: build the app and bundle the node first');

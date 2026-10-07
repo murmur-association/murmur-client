@@ -27,6 +27,9 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  # The host's end of a browser run of integration_test/ (test_driver/).
+  flutter_driver:
+    sdk: flutter
   flutter_lints: ^4.0.0
   # Runs tests inside the built app, with its real plugins (integration_test/).
   # Windows calls of tool/desktop_smoke_test.dart (finding and closing the app's window).

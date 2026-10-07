@@ -307,7 +307,7 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get connectHelpNative =>
-      'Die Peer-to-Peer-Adresse eines murmur-node (sein --port, standardmäßig 7878). Der Steuerport (7879) funktioniert nicht.';
+      'Die Peer-to-Peer-Adresse eines murmur-node (sein --port, standardmäßig 7878). Der Steuerport (7879) funktioniert nicht. Port 443 erreicht einen Knoten hinter einem sicheren WebSocket, etwa node.murmur.info.';
 
   @override
   String get host => 'Host';
@@ -1207,7 +1207,9 @@ class AppLocalizationsDe extends AppLocalizations {
   String get localNodeStarting => 'Knoten wird gestartet…';
 
   @override
-  String get localNodeRunning => 'Der Knoten läuft, und die App nutzt ihn.';
+  String localNodeRunning(String address) {
+    return 'Der Knoten läuft unter $address. Die App liest weiter von dem Knoten, den du gewählt hast.';
+  }
 
   @override
   String localNodeFailed(String reason) {
@@ -1229,8 +1231,41 @@ class AppLocalizationsDe extends AppLocalizations {
       'Lege zuerst eine Wallet an: Mining zahlt an ihre Adresse.';
 
   @override
+  String localNodeMinesTo(String name) {
+    return 'Das Mining zahlt an **$name**';
+  }
+
+  @override
   String localNodeCpu(int pct) {
     return 'Bis zu $pct % eines Prozessorkerns';
+  }
+
+  @override
+  String get localNodeGpu => 'Mit der Grafikkarte minen';
+
+  @override
+  String get localNodeGpuNote =>
+      'Viel schneller als der Prozessor und mit höherem Stromverbrauch. Kann die Karte nicht genutzt werden, läuft das Mining mit dem Prozessor weiter.';
+
+  @override
+  String get localNodeGpuStarting =>
+      'Die Grafikkarte wird gestartet. Solange mint der Prozessor.';
+
+  @override
+  String localNodeGpuMining(String device) {
+    return 'Mining läuft auf **$device**';
+  }
+
+  @override
+  String get localNodeGpuMiningAny => 'Mining läuft auf **der Grafikkarte**';
+
+  @override
+  String get localNodeGpuUnavailable =>
+      'Die Grafikkarte kann nicht genutzt werden: **das Mining läuft mit dem Prozessor weiter**.';
+
+  @override
+  String localNodeGpuDetail(String reason) {
+    return 'Der Knoten meldet: $reason';
   }
 
   @override
@@ -1506,8 +1541,16 @@ class AppLocalizationsDe extends AppLocalizations {
   String get passphraseNewTitle => 'Passphrase wählen';
 
   @override
-  String get passphraseNewBody =>
-      'Sie verschlüsselt den Schlüssel deiner Wallet auf diesem Gerät. Du gibst sie ein, um zu senden, den Seed anzuzeigen oder die Wallet zu entfernen. Wenn du sie vergisst, kann nur deine Seed-Sicherung die Wallet zurückholen.';
+  String get passphraseNewWhat =>
+      '**Eine Passphrase für diese App.** Sie verschlüsselt deinen Wallet-Schlüssel und die Codes deiner Einladungskarten auf diesem Gerät.';
+
+  @override
+  String get passphraseNewWhen =>
+      'Du gibst sie **jedes Mal** ein, wenn du sendest, den Seed anzeigst oder das Wallet entfernst, und um eine Karte anzuzeigen, zu drucken oder zu stornieren.';
+
+  @override
+  String get passphraseNewForget =>
+      'Wenn du sie vergisst, bringt nur deine **Seed-Sicherung** das Wallet zurück, und noch nicht übergebene Karten lassen sich nicht mehr anzeigen oder stornieren.';
 
   @override
   String get passphraseField => 'Passphrase';
@@ -1911,10 +1954,6 @@ class AppLocalizationsDe extends AppLocalizations {
   @override
   String get authReasonCards =>
       'Bestätige, dass du es bist, um die Einladungskarten zu entsperren';
-
-  @override
-  String get passphraseNewBodyCards =>
-      'Sie verschlüsselt die Codes deiner Einladungskarten auf diesem Gerät. Du gibst sie ein, um eine Karte anzuzeigen, zu drucken oder zu stornieren. Wenn du sie vergisst, lassen sich noch nicht übergebene Karten nicht mehr anzeigen oder stornieren.';
 
   @override
   String get inviteLockedPoint =>

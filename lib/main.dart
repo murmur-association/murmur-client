@@ -31,7 +31,7 @@ Future<void> main() async {
   // their own; it's stopped when the app closes.
   final localNode = LocalNode();
   if (localNode.available) {
-    final link = LocalNodeLink(node: localNode, prefs: prefs, wallets: wallets, client: client);
+    final link = LocalNodeLink(node: localNode, prefs: prefs, wallets: wallets);
     AppLifecycleListener(onExitRequested: () async {
       await link.close();
       return AppExitResponse.exit;

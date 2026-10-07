@@ -21,6 +21,19 @@ import 'package:shared_preferences/shared_preferences.dart';
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
+  test('a device in none of the app\'s languages gets English, and one of them its own', () {
+    Locale shown(List<Locale> device) => basicLocaleListResolution(device, AppLocalizations.supportedLocales);
+    // The first supported language is the fallback: once it was Arabic, the
+    // first by its code, on every French or Korean device.
+    expect(shown(const [Locale('fr', 'FR')]), const Locale('en'));
+    expect(shown(const [Locale('ko')]), const Locale('en'));
+    expect(shown(const []), const Locale('en'));
+    expect(shown(const [Locale('fr'), Locale('de', 'CH')]), const Locale('de'));
+    for (final code in languageNames.keys) {
+      expect(shown([Locale(code)]), Locale(code));
+    }
+  });
+
   testWidgets('every language builds the tabs', (tester) async {
     for (final code in languageNames.keys) {
       await tester.pumpWidget(MaterialApp(

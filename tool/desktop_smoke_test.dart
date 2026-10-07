@@ -4,10 +4,12 @@
 // so its node stays off the public network:
 //
 //   dart run tool/desktop_smoke_test.dart [--wallet-storage] <folder>
-//   tool/linux_smoke_test.sh [--wallet-storage] <folder>     # on Linux
+//   tool/linux_session.sh dart run tool/desktop_smoke_test.dart [--wallet-storage] <folder>     # on Linux
 //
 // 1. The app starts, makes its window, and runs its own node as a child
-//    when that's switched on; closing the window stops both.
+//    when that's switched on; closing the window stops both. The app
+//    never connects to that node: it reads from the node the user chose,
+//    and its own only takes part in the network.
 // 2. After the app is killed, its node is left running; the next start
 //    stops that one and runs a new one.
 // 3. With --wallet-storage (needs flutter, in the project folder): a wallet
@@ -21,7 +23,7 @@
 //
 // The test switches the app's own node on in its settings and may store a
 // wallet, so it must not run over a user's own: on Linux it runs in a
-// throwaway home folder and session (linux_smoke_test.sh makes them, and
+// throwaway home folder and session (linux_session.sh makes them, and
 // this refuses without); Windows has no such thing, so there it refuses
 // where the app's folders exist, and removes them when done.
 //
@@ -60,6 +62,14 @@ Future<void> main(List<String> args) async {
     final pid = int.parse(rest[1]);
     print('window of $pid titled "${rest[2]}": ${desktop.window(pid, rest[2])}');
     desktop.closeWindow(pid, rest[2]);
+    return;
+  }
+  if (rest.length == 2 && rest[0] == '--clients-of') {
+    // Who is connected to the ports this process listens on, as the test
+    // looks for the app among its node's clients.
+    final ports = await desktop.listening(int.parse(rest[1]));
+    print('ports ${rest[1]} listens on: $ports');
+    print('processes connected to them from this machine: ${await desktop.connectedTo(ports)}');
     return;
   }
   if (rest.length != 1) {
@@ -181,8 +191,35 @@ class _SmokeTest {
     final node = await _start();
     print('window: Murmur (${desktop.window(_app!.pid, 'Murmur')})');
     print('node: pid $node, child of the app (${_app!.pid})');
+    await _leftAlone(node);
     await _close(node);
     print('closing the window stopped the app and its node');
+  }
+
+  /// The app never connects to its own node, which keeps nobody else's
+  /// messages: the client reads from the node the user chose. Watched for
+  /// a while after the node listens, which is when an app that did would
+  /// connect.
+  Future<void> _leftAlone(int node) async {
+    var ports = <int>{};
+    await _waitFor(30, "the app's node listens on no port", () async => (ports = await desktop.listening(node)).isNotEmpty);
+    // A connection of this test's own must be seen, or seeing none of the
+    // app's would say nothing.
+    final probe = await Socket.connect(InternetAddress.loopbackIPv4, ports.first);
+    try {
+      await _waitFor(10, "a connection to the node's port ${ports.first} isn't seen, so the app's couldn't be either",
+          () async => (await desktop.connectedTo(ports)).contains(pid));
+    } finally {
+      probe.destroy();
+    }
+    final until = DateTime.now().add(const Duration(seconds: 10));
+    while (DateTime.now().isBefore(until)) {
+      if ((await desktop.connectedTo(ports)).contains(_app!.pid)) {
+        throw _Failed('the app connected to its own node (ports $ports) instead of leaving it alone');
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+    }
+    print('the node listens on $ports, and the app never connected to it');
   }
 
   Future<void> leftoverNode() async {
@@ -275,6 +312,13 @@ abstract class Desktop {
   /// The running processes of the program `node`.
   Future<List<Proc>> nodes(String node);
 
+  /// The TCP ports the process `pid` listens on.
+  Future<Set<int>> listening(int pid);
+
+  /// The processes with a connection from this machine (127.0.0.1) to one
+  /// of `ports`.
+  Future<Set<int>> connectedTo(Set<int> ports);
+
   /// The window of `pid` titled `title`, as "shown" or "hidden", or null.
   String? window(int pid, String title);
 
@@ -308,8 +352,8 @@ class _Linux extends Desktop {
       File('${Platform.environment['XDG_DATA_HOME']}/info.murmur.client/shared_preferences.json');
 
   @override
-  String? refusal() => Platform.environment['MURMUR_SMOKE_SESSION'] == null
-      ? 'Run this through tool/linux_smoke_test.sh, which gives it a home folder, session and keyring of its own.'
+  String? refusal() => Platform.environment['MURMUR_TEST_SESSION'] == null
+      ? 'Run this through tool/linux_session.sh, which gives it a home folder, session and keyring of its own.'
       : _settings.existsSync()
           ? "${_settings.path} exists: this isn't a fresh home folder."
           : null;
@@ -320,7 +364,7 @@ class _Linux extends Desktop {
     ..writeAsStringSync('{"flutter.run_local_node":true}');
 
   @override
-  void cleanUp() {} // linux_smoke_test.sh removes the whole home folder
+  void cleanUp() {} // linux_session.sh removes the whole home folder
 
   @override
   Future<List<Proc>> nodes(String node) async {
@@ -339,6 +383,56 @@ class _Linux extends Desktop {
       }
     }
     return found;
+  }
+
+  /// The sockets (inode numbers) each process holds, of those this account
+  /// may look at.
+  Map<String, int> _socketOwners() {
+    final owners = <String, int>{};
+    for (final dir in Directory('/proc').listSync().whereType<Directory>()) {
+      final pid = int.tryParse(dir.uri.pathSegments.lastWhere((s) => s.isNotEmpty));
+      if (pid == null) continue;
+      try {
+        for (final fd in Directory('${dir.path}/fd').listSync()) {
+          final m = RegExp(r'^socket:\[(\d+)\]$').firstMatch(Link(fd.path).targetSync());
+          if (m != null) owners[m.group(1)!] = pid;
+        }
+      } on FileSystemException {
+        // Gone meanwhile, or not ours to read.
+      }
+    }
+    return owners;
+  }
+
+  /// The system's TCP sockets over IPv4: "sl local remote state … inode",
+  /// addresses as hex "address:port". State 0A listens, 01 is connected.
+  Iterable<({String local, String remote, String state, String inode})> _tcp() sync* {
+    for (final line in File('/proc/net/tcp').readAsLinesSync().skip(1)) {
+      final f = line.trim().split(RegExp(r'\s+'));
+      if (f.length > 9) yield (local: f[1], remote: f[2], state: f[3], inode: f[9]);
+    }
+  }
+
+  static int _port(String hexAddress) => int.parse(hexAddress.split(':').last, radix: 16);
+
+  @override
+  Future<Set<int>> listening(int pid) async {
+    final owners = _socketOwners();
+    return {
+      for (final s in _tcp())
+        if (s.state == '0A' && owners[s.inode] == pid) _port(s.local),
+    };
+  }
+
+  @override
+  Future<Set<int>> connectedTo(Set<int> ports) async {
+    final owners = _socketOwners();
+    return {
+      for (final s in _tcp())
+        // 127.0.0.1, in the kernel's byte order.
+        if (s.state == '01' && s.remote.startsWith('0100007F:') && ports.contains(_port(s.remote)))
+          if (owners[s.inode] case final pid?) pid,
+    };
   }
 
   /// The window's id, from the window manager's list: "id desktop pid host title".
@@ -365,7 +459,7 @@ class _Linux extends Desktop {
   @override
   Future<List<String>> missingLibraries(String bundle) async => const [];
 
-  // linux_smoke_test.sh gives the session an unlocked keyring.
+  // linux_session.sh gives the session an unlocked keyring.
   @override
   Future<String?> walletStorageRefusal() async => null;
 
@@ -432,6 +526,24 @@ class _Windows extends Desktop {
           Proc(int.parse(pid), int.parse(parent), program),
     ];
   }
+
+  Set<int> _numbers(String out) => {
+        for (final line in const LineSplitter().convert(out))
+          if (int.tryParse(line.trim()) case final n?) n,
+      };
+
+  @override
+  Future<Set<int>> listening(int pid) async => _numbers(await _powershell(
+      'Get-NetTCPConnection -State Listen -OwningProcess $pid -ErrorAction SilentlyContinue | '
+      r'ForEach-Object { $_.LocalPort }'));
+
+  @override
+  Future<Set<int>> connectedTo(Set<int> ports) async => ports.isEmpty
+      ? const {}
+      : _numbers(await _powershell('\$ports = ${ports.join(',')}; '
+          r"Get-NetTCPConnection -State Established -ErrorAction SilentlyContinue | "
+          r"Where-Object { $_.RemoteAddress -eq '127.0.0.1' -and $ports -contains $_.RemotePort } | "
+          r'ForEach-Object { $_.OwningProcess }'));
 
   static final _user32 = DynamicLibrary.open('user32.dll');
   static final _findWindowEx = _user32.lookupFunction<

@@ -297,7 +297,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get connectHelpNative =>
-      'murmur-node 的点对点地址（其 --port，默认 7878）。控制端口（7879）无法使用。';
+      'murmur-node 的点对点地址（其 --port，默认 7878）。控制端口（7879）无法使用。端口 443 连接位于安全 WebSocket 之后的节点，例如 node.murmur.info。';
 
   @override
   String get host => '主机';
@@ -1173,7 +1173,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get localNodeStarting => '正在启动节点…';
 
   @override
-  String get localNodeRunning => '节点正在运行，应用正在使用它。';
+  String localNodeRunning(String address) {
+    return '节点正在 $address 运行。应用仍从你选择的节点读取。';
+  }
 
   @override
   String localNodeFailed(String reason) {
@@ -1193,8 +1195,38 @@ class AppLocalizationsZh extends AppLocalizations {
   String get localNodeMineNeedsWallet => '请先创建钱包：挖矿收益付给它的地址。';
 
   @override
+  String localNodeMinesTo(String name) {
+    return '挖矿收益付给 **$name**';
+  }
+
+  @override
   String localNodeCpu(int pct) {
     return '最多使用一个处理器核心的 $pct%';
+  }
+
+  @override
+  String get localNodeGpu => '用显卡挖矿';
+
+  @override
+  String get localNodeGpuNote => '比处理器快得多，也更耗电。显卡无法使用时，改用处理器继续挖矿。';
+
+  @override
+  String get localNodeGpuStarting => '正在启动显卡。此时由处理器挖矿。';
+
+  @override
+  String localNodeGpuMining(String device) {
+    return '正在用 **$device** 挖矿';
+  }
+
+  @override
+  String get localNodeGpuMiningAny => '正在用**显卡**挖矿';
+
+  @override
+  String get localNodeGpuUnavailable => '显卡无法使用：**改用处理器继续挖矿**。';
+
+  @override
+  String localNodeGpuDetail(String reason) {
+    return '节点的说明：$reason';
   }
 
   @override
@@ -1451,8 +1483,13 @@ class AppLocalizationsZh extends AppLocalizations {
   String get passphraseNewTitle => '设置口令';
 
   @override
-  String get passphraseNewBody =>
-      '它会在此设备上加密你的钱包密钥。发送、显示种子或移除钱包时都需要输入。如果忘记，只有种子备份能找回钱包。';
+  String get passphraseNewWhat => '**此应用只用一个口令。**它在本设备上加密你的钱包密钥和邀请卡的代码。';
+
+  @override
+  String get passphraseNewWhen => '**每次**发送、显示种子或移除钱包，以及显示、打印或取消邀请卡时，都要输入它。';
+
+  @override
+  String get passphraseNewForget => '如果忘记，只有**种子备份**能恢复钱包，尚未交出的邀请卡将无法再显示或取消。';
 
   @override
   String get passphraseField => '口令';
@@ -1824,10 +1861,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get authReasonCards => '请确认是您本人以解锁邀请卡';
-
-  @override
-  String get passphraseNewBodyCards =>
-      '它用于加密此设备上邀请卡的代码。显示、打印或取消邀请卡时需要输入。如果忘记，尚未交出的邀请卡将无法再显示或取消。';
 
   @override
   String get inviteLockedPoint => '**代码以加密方式保存。** 显示、打印或取消邀请卡时需要**解锁**。';

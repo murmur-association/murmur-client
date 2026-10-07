@@ -687,6 +687,8 @@ class MurmurClient extends ChangeNotifier {
   /// Asks the node for a transaction the client doesn't have (GetTx).
   void requestTx(String txid) {
     if (lookupTx(txid) != null || _txUnknown.contains(txid) || _txAsking.contains(txid)) return;
+    // Below a checkpoint's headers: asked again by itself once they're in.
+    if (_deferredTxids.contains(txid)) return;
     if (!_wantedTxids.add(txid)) return;
     _wake();
   }
@@ -858,7 +860,8 @@ class MurmurClient extends ChangeNotifier {
   int _dataVersion = 0;
   int _indexVersion = -1;
   MessageIndex? _index;
-  (int, int, int, int, int, int)? _snapshotKey;
+  (int, int, int, int, int, int, int)? _snapshotKey;
+  int _snapshotFloor = -1;
 
   /// Txids of transactions this device sent this session.
   final Set<String> _sentHere = {};
@@ -888,11 +891,17 @@ class MurmurClient extends ChangeNotifier {
   /// With `upTo`, only what's in blocks up to that height: the Threads tab's
   /// fixed view, which grows only as older blocks arrive.
   ///
-  /// That view never moves a thread it has shown. A reply can arrive before
-  /// its thread, which is older and so in a block not fetched yet: the
-  /// thread is asked for by id at once, and the threads less recent than
-  /// that reply wait for it ([threadsHeldBack]), instead of showing first
-  /// and being pushed down.
+  /// That view never moves a thread it has shown, and never adds one above
+  /// another it has shown: a thread is listed only once nothing still to
+  /// arrive could sort before it ([threadsHeldBack] meanwhile).
+  /// - A reply can arrive before its thread, which is older and so in a
+  ///   block not fetched yet. The reply reserves the thread's place: the
+  ///   thread is asked for by id at once, and nothing less recent than the
+  ///   reply shows until it's here, however long that takes (below a
+  ///   checkpoint's headers, until they're checked).
+  /// - Blocks aren't only fetched newest first (a filter match, a page, the
+  ///   local copy from genesis up): nothing shows that's as old as a block
+  ///   still missing, whose threads and replies could change the order.
   List<ThreadSummary> threads({int? upTo}) {
     if (upTo == null) return _messages.threads;
     var fetchedBelow = 0;
@@ -902,29 +911,47 @@ class MurmurClient extends ChangeNotifier {
     // Own messages count too: sent (pending), and mined since.
     final ownPending = _pending.values.where((p) => p.mine && _inPlay(p)).length;
     final ownMined = _sentHere.where((id) => _txIndex.containsKey(id) || _loose.containsKey(id)).length;
-    final key = (upTo, fetchedBelow, _loose.length, _reorgs, ownPending, ownMined);
+    final key = (upTo, fetchedBelow, _loose.length, _reorgs, ownPending, ownMined, _low);
     if (_snapshotIndex == null || _snapshotKey != key) {
       _snapshotIndex = MessageIndex.build(_messagesKnown(upTo: upTo));
+      _snapshotFloor = _unfetchedFloor(min(upTo, height));
       _snapshotKey = key;
     }
     final index = _snapshotIndex!;
     index.missingParents.keys.forEach(requestTx);
-    final settled = index.settledThreads(_stillComing);
+    final settled = index.settledThreads(_stillComing, floor: _arriving ? _snapshotFloor : null);
     _threadsHeldBack = settled.held;
     return settled.threads;
   }
 
-  /// Whether the last `threads(upTo:)` left threads out, waiting for a more
-  /// recently active one that's on its way.
+  /// Whether the last `threads(upTo:)` left threads out, waiting for what
+  /// may sort before them: a thread that's on its way, or older blocks.
   bool get threadsHeldBack => _threadsHeldBack;
   bool _threadsHeldBack = false;
 
-  /// Whether a transaction asked of the node may still arrive: not while
-  /// offline, not once the node said it doesn't know it, and not while it
-  /// waits for the headers below a checkpoint (that can take minutes, and
-  /// the list shouldn't).
-  bool _stillComing(String txid) =>
-      isOnline && lookupTx(txid) == null && !_txUnknown.contains(txid) && !_deferredTxids.contains(txid);
+  /// The time of the newest block up to `limit` that isn't fetched, or -1
+  /// when all are. Block times needn't rise with the height, so it's the
+  /// latest among them. Blocks below the headers known (a checkpoint start)
+  /// are taken to be no later than the lowest of those.
+  int _unfetchedFloor(int limit) {
+    var floor = -1;
+    for (var h = limit; h >= _low && h >= 1; h--) {
+      if (_blocks[h - 1] != null) continue;
+      final time = _headers.timestampAt(h - 1)!;
+      if (time > floor) floor = time;
+    }
+    if (_low > 1 && limit >= _low) floor = max(floor, _headers.timestampAt(_low - 1)!);
+    return floor;
+  }
+
+  /// Whether what's missing can still arrive: connected, or about to try
+  /// again by itself. After the user's Disconnect, or a failure that isn't
+  /// retried, the list shows all it has.
+  bool get _arriving => isOnline || retryAt != null;
+
+  /// Whether a transaction asked of the node may still arrive: not once the
+  /// node said it doesn't know it.
+  bool _stillComing(String txid) => _arriving && lookupTx(txid) == null && !_txUnknown.contains(txid);
 
   int replyCountOf(TxView v) => _messages.replyCountOf(v);
 

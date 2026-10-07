@@ -30,6 +30,9 @@ String? _findBinary() {
 
 String _dataDir() {
   final env = Platform.environment;
+  // Another folder, for tests of the app that must leave the user's alone.
+  final override = env['MURMUR_NODE_DATA'];
+  if (override != null) return override;
   final base = env['APPDATA'] ??
       env['XDG_DATA_HOME'] ??
       (env['HOME'] == null ? null : '${env['HOME']}/.local/share') ??
@@ -54,7 +57,20 @@ class ProcessLocalNode extends LocalNode {
   Process? _process;
   int? _port;
   String? _problem;
+  GpuMining? _gpu;
   bool _stopping = false;
+
+  @override
+  GpuMining? get gpu => _gpu;
+
+  // murmur-miner, which the node runs from its own folder.
+  @override
+  bool get canMineOnGpu {
+    final bin = binary;
+    if (bin == null) return false;
+    final miner = Platform.isWindows ? 'murmur-miner.exe' : 'murmur-miner';
+    return File('${File(bin).parent.path}${Platform.pathSeparator}$miner').existsSync();
+  }
 
   @override
   LocalNodeState get state => _state;
@@ -79,6 +95,8 @@ class ProcessLocalNode extends LocalNode {
     await stop();
     _problem = null;
     _port = null;
+    // Asked to mine on the card: starting, until the node says more.
+    _gpu = args.contains('--gpu') ? const GpuMining(GpuMiningState.starting) : null;
     _set(LocalNodeState.starting);
     await Directory(dataDir).create(recursive: true);
     // A node left running by a session that crashed would share this data
@@ -96,10 +114,16 @@ class ProcessLocalNode extends LocalNode {
     _stopping = false;
     await _pidFile.writeAsString('${process.pid}');
     process.stdout.transform(utf8.decoder).transform(const LineSplitter()).listen((line) {
+      if (!identical(_process, process)) return;
       final p = listeningPort(line);
-      if (p != null && identical(_process, process)) {
+      if (p != null) {
         _port = p;
         _set(LocalNodeState.running);
+      }
+      final gpu = _gpu == null ? null : gpuMiningOf(line);
+      if (gpu != null && gpu != _gpu) {
+        _gpu = gpu;
+        notifyListeners();
       }
     });
     process.stderr.transform(utf8.decoder).transform(const LineSplitter()).listen((line) {
@@ -113,6 +137,7 @@ class ProcessLocalNode extends LocalNode {
     if (!identical(_process, process)) return;
     _process = null;
     _port = null;
+    _gpu = null;
     try {
       _pidFile.deleteSync();
     } on FileSystemException {

@@ -2,6 +2,19 @@
 
 Newest first. Each release is a `vX.Y.Z` tag matching `version` in `pubspec.yaml`; see [README](README.md#releases-and-deployment). Entries marked **Breaking** need action from users.
 
+## Unreleased
+
+- **Added: mining on the graphics card, in the desktop apps.** With the app's own node mining, "Mine on the graphics card" has the node mine through the card's OpenCL driver, far faster than on the processor. The card says which card mines; when it can't be used, mining goes on with the processor and the reason is shown. Off by default. The apps now ship `murmur-miner` beside `murmur-node`, both from node release v0.10.5.
+- **Fixed: Arabic on devices in other languages.** A device set to a language the app doesn't have (French, Korean, or none at all) got the app in Arabic, the first in its list. It now gets English, as intended.
+- **Added: acceptance tests.** One suite does what a user does (a wallet, a thread, a reply, an invitation card, a restart) inside the built app, the same on Windows, Linux and in a browser, against a node of its own. The browser runs it twice, with a passphrase and with a passkey (a virtual authenticator); the desktops also try the app's own node and its mining.
+- **Changed: one passphrase, or one passkey, for the app.** Invitation cards no longer get a passphrase or passkey of their own: making the first cards asks for the wallet's, and a wallet made while cards are kept takes theirs. Cards already under a second passphrase keep it.
+- **Fixed: the dialog that makes invitation cards follows the balance.** "Not enough" and the button now update when a block or a transfer changes what the wallet can spend, without reopening the dialog.
+- **Changed: the desktop app no longer reads from its own node.** With "Run a Murmur node on this computer" on, the app used to connect to that node, which keeps nobody else's messages, so threads came up without their text. The app now stays on the node you chose, and its own node only takes part in the network, mining or not. The Chain tab shows where that node listens (`127.0.0.1` and its port).
+- **Fixed: `node.murmur.info` in the desktop app.** Port 443 is now reached as a secure WebSocket in every build, as in a browser. The Node dialog also no longer starts from the app's own node's port, which made a typed address fail.
+
+- **Fixed: listed threads still moved in some cases.** A reply now keeps its thread's place until the thread is loaded, even when the thread is older than the checkpoint and has to wait for the headers below it; nothing less recent shows before. Threads also wait for every block more recent than them, so one loaded early can't be overtaken later.
+
+
 ## v0.3.1: scheduled release, with what was waiting (2026-10-07)
 
 - **Changed: the testnet checkpoint** is now block 23,500, refreshed from the live network by the scheduled release.

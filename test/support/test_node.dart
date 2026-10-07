@@ -93,8 +93,9 @@ class TestNode {
   }
 
   /// Starts the node on the chain (on the port it had, if it ran before),
-  /// mining on top to `mineTo` if given.
-  Future<void> start({Uint8List? mineTo}) async {
+  /// mining on top to `mineTo` if given. With `webSocketPort` it also takes
+  /// WebSocket connections there (`--ws-port`), as browsers need.
+  Future<void> start({Uint8List? mineTo, int? webSocketPort}) async {
     await node.start([
       '--daemon',
       '--spec', 'demo',
@@ -102,6 +103,7 @@ class TestNode {
       '--port', '127.0.0.1:${_port ?? 0}',
       '--rpc-port', '0',
       '--no-dns-seed',
+      if (webSocketPort != null) ...['--ws-port', '127.0.0.1:$webSocketPort'],
       // At 1% of a core: the demo target starts easy, and a node mining
       // flat out races ahead of its clock (its timestamps follow the median
       // time past) until it waits out the future-timestamp limit, up to a

@@ -8,7 +8,7 @@
 // It writes and removes the app's wallet record, so it needs a session
 // with no wallet of the user's: tool/desktop_smoke_test.dart
 // --wallet-storage runs it in one (on Linux through
-// tool/linux_smoke_test.sh, which makes a home folder, session bus and
+// tool/linux_session.sh, which makes a home folder, session bus and
 // keyring of its own), and is how the release jobs run it. As a guard, it
 // refuses to run where a wallet is already stored, and then touches nothing.
 

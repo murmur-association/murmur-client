@@ -21,6 +21,11 @@ variables:
   SECRET_DETECTION_ENABLED: 'true'
   # The Flutter SDK every job builds with (cloned at this tag, and cached).
   FLUTTER_VERSION: "3.47.5"
+  # What building the Linux app needs, and what its tests need to run it
+  # without a desktop: a display, a window manager, a session and a keyring.
+  LINUX_APP_PACKAGES: >-
+    clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev g++ libsecret-1-dev libjsoncpp-dev
+    xvfb openbox wmctrl dbus dbus-x11 gnome-keyring libgl1-mesa-dri libegl1 libgles2 procps
 
 # No merge request pipelines (pushes are checked as branch pipelines), and a
 # scheduled pipeline holds the scheduled release alone: the scanners are
@@ -101,6 +106,35 @@ test:
   # without MURMUR_NODE.
   - dart run tool/bundle_node.dart --for-tests
   - flutter test
+
+# The acceptance tests: what a user does with the app (a wallet, a thread,
+# a reply, an invitation card, a restart), inside the built app and against
+# a node of its own on a demo chain. One test file
+# (integration_test/acceptance_test.dart), run once per flavour by
+# tool/acceptance_test.dart: here the Linux app (with its own node, and
+# mining on a graphics card this runner doesn't have), and a browser (the
+# pinned Chrome for Testing) with a passphrase and again with a passkey.
+# Windows and Android run the same file where there's a machine for them. New, so allowed to fail until it has run green here:
+# it must not stop the scheduled release before then.
+acceptance:
+  extends:
+  - .flutter
+  - .checks
+  stage: test
+  allow_failure: true
+  variables:
+    MURMUR_REQUIRE_NODE: "1"
+  parallel:
+    matrix:
+    - ACCEPTANCE_DEVICE: [linux, chrome, chrome-passkey]
+  script:
+  - apt-get update -qq
+  - DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends $LINUX_APP_PACKAGES libnss3 libgbm1
+  - dart run tool/bundle_node.dart --for-tests
+  - case "$ACCEPTANCE_DEVICE" in chrome*) dart run tool/fetch_test_browser.dart;; esac
+  # The same session for both: the Linux app needs its display, and the
+  # browser is none the worse for it.
+  - tool/linux_session.sh flutter test tool/acceptance_test.dart
 
 build-web:
   extends:
@@ -343,7 +377,7 @@ build-windows:
 # app (tool/desktop_smoke_test.dart): its own node starts with it and stops
 # with its window, a node left by a killed app is replaced, and a wallet is
 # saved through the real keyring (integration_test/wallet_storage_test.dart).
-# tool/linux_smoke_test.sh gives that test a virtual display and a session
+# tool/linux_session.sh gives that test a virtual display and a session
 # with an unlocked keyring, as a desktop gives the app; the copy that's
 # tried has its own node on the demo network. Allowed to fail, like the
 # Windows build: it must never hold back the page's release.
@@ -355,16 +389,13 @@ build-linux:
   allow_failure: true
   script:
   - apt-get update -qq
-  - >-
-    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends
-    clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev g++ libsecret-1-dev libjsoncpp-dev
-    xvfb openbox wmctrl dbus dbus-x11 gnome-keyring libgl1-mesa-dri libegl1 libgles2 procps
+  - DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends $LINUX_APP_PACKAGES
   # First a build whose own node stays off the public network, to try, as
   # packaged: the folder a user unpacks.
   - flutter build linux --release --dart-define=MURMUR_LOCAL_NODE_SPEC=demo
   - dart run tool/bundle_node.dart
   - dart run tool/package_desktop.dart --tag smoke
-  - tool/linux_smoke_test.sh --wallet-storage build/desktop-package/murmur-client-smoke-linux-x64
+  - tool/linux_session.sh dart run tool/desktop_smoke_test.dart --wallet-storage build/desktop-package/murmur-client-smoke-linux-x64
   - rm dist/murmur-client-smoke-linux-*.tar.gz
   # Then the one that's released: its default node is the testnet's seed.
   - >-

@@ -1,33 +1,34 @@
 // Keeps the app's own node (local_node.dart) in line with the user's
-// settings and wallet, and the client connected to it while it runs:
-// - "run a node on this computer" on: start it; off: stop it, and go back
-//   to the node the user chose (NodeSettings);
-// - a different wallet, or mining settings: restart it with new options
-//   (the app never uses the node's control port, AGENTS.md rule 1);
-// - once it reports its port: connect the client to it.
+// settings and wallet:
+// - "run a node on this computer" on: start it; off: stop it;
+// - a different wallet, or mining settings (on or off, the processor's
+//   share, the graphics card): restart it with new options
+//   (the app never uses the node's control port, AGENTS.md rule 1).
+//
+// The node only takes part in the network beside the app. The client never
+// connects to it: it keeps reading from the node the user chose
+// (NodeSettings), like every other build. The app's node keeps nobody's
+// messages but the user's own, so a client reading from it had no text to
+// show.
 
 import 'dart:async';
 
 import 'local_node.dart';
-import 'node_client.dart';
 import 'storage.dart';
 
 class LocalNodeLink {
-  LocalNodeLink({required this.node, required this.prefs, required this.wallets, required this.client}) {
+  LocalNodeLink({required this.node, required this.prefs, required this.wallets}) {
     prefs.addListener(_update);
     wallets.addListener(_update);
-    node.addListener(_follow);
     _update();
   }
 
   final LocalNode node;
   final Preferences prefs;
   final WalletController wallets;
-  final MurmurClient client;
 
   /// The options the node runs with; null while it shouldn't run.
   List<String>? _running;
-  int? _connectedPort;
   Future<void> _last = Future.value();
 
   static bool _same(List<String>? a, List<String>? b) =>
@@ -43,38 +44,18 @@ class LocalNodeLink {
             address: address,
             mine: prefs.localNodeMining,
             cpuPct: prefs.localNodeCpu,
+            gpu: prefs.localNodeGpu && node.canMineOnGpu,
           )
         : null;
     if (_same(wanted, _running)) return;
     _running = wanted;
-    _last = _last.then((_) async {
-      if (wanted != null) {
-        await node.start(wanted);
-      } else {
-        await node.stop();
-        if (_connectedPort != null) {
-          _connectedPort = null;
-          final (host, port) = await NodeSettings.load();
-          await client.connect(host, port);
-        }
-      }
-    });
-  }
-
-  /// Connects the client to the node once it's listening.
-  void _follow() {
-    final port = node.port;
-    if (node.state == LocalNodeState.running && port != null && port != _connectedPort) {
-      _connectedPort = port;
-      unawaited(client.connect('127.0.0.1', port));
-    }
+    _last = _last.then((_) => wanted != null ? node.start(wanted) : node.stop());
   }
 
   /// Stops the node (the app is closing).
   Future<void> close() async {
     prefs.removeListener(_update);
     wallets.removeListener(_update);
-    node.removeListener(_follow);
     await _last;
     await node.stop();
   }

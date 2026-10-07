@@ -5,6 +5,7 @@ import '../services/local_node.dart';
 import '../services/node_client.dart';
 import '../services/storage.dart';
 import 'block_page.dart';
+import 'brand.dart';
 import 'common.dart';
 import 'paged_list.dart';
 import 'glyphs.dart';
@@ -249,7 +250,7 @@ class _LocalNodeCardState extends State<_LocalNodeCard> {
         final hasWallet = scope.wallets.wallet != null;
         final status = switch (node.state) {
           LocalNodeState.starting => l.localNodeStarting,
-          LocalNodeState.running => l.localNodeRunning,
+          LocalNodeState.running => l.localNodeRunning('127.0.0.1:${node.port}'),
           LocalNodeState.failed => node.problem == null ? l.localNodeFailedUnknown : l.localNodeFailed(node.problem!),
           LocalNodeState.stopped || LocalNodeState.unavailable => null,
         };
@@ -278,6 +279,46 @@ class _LocalNodeCardState extends State<_LocalNodeCard> {
                   onChanged: hasWallet ? prefs.setLocalNodeMining : null,
                 ),
                 if (hasWallet && prefs.localNodeMining) ...[
+                  // Where the rewards go, in full: the node is started with
+                  // this address (`--mine-to`), and holds no key.
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: AddressAvatar(scope.wallets.wallet!.addressHex),
+                    title: Emphasized(
+                        l.localNodeMinesTo(Emphasized.safe(nameOf(context, scope.wallets.wallet!.addressHex)))),
+                    subtitle: HashText(scope.wallets.wallet!.addressHex),
+                  ),
+                  // The graphics card, where the node has its miner.
+                  if (node.canMineOnGpu) ...[
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(l.localNodeGpu),
+                      subtitle: Text(l.localNodeGpuNote),
+                      value: prefs.localNodeGpu,
+                      onChanged: prefs.setLocalNodeGpu,
+                    ),
+                    if (prefs.localNodeGpu)
+                      ...switch (node.gpu) {
+                        null => const <Widget>[],
+                        GpuMining(state: GpuMiningState.mining, :final device) => [
+                            InfoPoint(Glyph.fee,
+                                device == null ? l.localNodeGpuMiningAny : l.localNodeGpuMining(Emphasized.safe(device)),
+                                style: small),
+                          ],
+                        // Starting again after the miner stopped says why.
+                        GpuMining(state: GpuMiningState.starting, :final reason) => [
+                            InfoPoint(Glyph.pending, l.localNodeGpuStarting, style: small),
+                            if (reason != null) Text(l.localNodeGpuDetail(reason), style: small),
+                          ],
+                        // Still on: the node tries the card again by itself.
+                        GpuMining(state: GpuMiningState.unavailable, :final reason) => [
+                            InfoPoint(Glyph.warning, l.localNodeGpuUnavailable,
+                                color: StatusColors.of(context).pending, style: small),
+                            if (reason != null) Text(l.localNodeGpuDetail(reason), style: small),
+                          ],
+                      },
+                    const SizedBox(height: 8),
+                  ],
                   Text(l.localNodeCpu(cpu.round()), style: small),
                   Slider(
                     value: cpu,

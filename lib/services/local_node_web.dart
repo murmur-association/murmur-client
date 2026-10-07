@@ -20,6 +20,12 @@ class _NoLocalNode extends LocalNode {
   String get dataDir => '';
 
   @override
+  bool get canMineOnGpu => false;
+
+  @override
+  GpuMining? get gpu => null;
+
+  @override
   Future<void> start(List<String> args) async {}
 
   @override

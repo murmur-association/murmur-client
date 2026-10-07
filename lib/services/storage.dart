@@ -168,6 +168,9 @@ class Preferences extends ChangeNotifier {
   bool localNodeMining = false;
   int localNodeCpu = defaultLocalNodeCpu;
 
+  /// Whether it mines on the graphics card, where its miner is there.
+  bool localNodeGpu = false;
+
   /// Per wallet address, the newest reply time (Unix seconds) the user has
   /// seen in the Messages tab: what the new-reply badge counts from.
   Map<String, int> messagesSeen = {};
@@ -184,6 +187,7 @@ class Preferences extends ChangeNotifier {
     runLocalNode = prefs.getBool('run_local_node') ?? false;
     localNodeMining = prefs.getBool('local_node_mining') ?? false;
     localNodeCpu = prefs.getInt('local_node_cpu') ?? defaultLocalNodeCpu;
+    localNodeGpu = prefs.getBool('local_node_gpu') ?? false;
     messagesSeen = _jsonMap(prefs.getString('messages_seen')).map((k, v) => MapEntry(k, v is int ? v : 0));
   }
 
@@ -263,6 +267,12 @@ class Preferences extends ChangeNotifier {
     localNodeMining = value;
     notifyListeners();
     await (await SharedPreferences.getInstance()).setBool('local_node_mining', value);
+  }
+
+  Future<void> setLocalNodeGpu(bool value) async {
+    localNodeGpu = value;
+    notifyListeners();
+    await (await SharedPreferences.getInstance()).setBool('local_node_gpu', value);
   }
 
   Future<void> setLocalNodeCpu(int value) async {
@@ -349,9 +359,10 @@ class InviteRecord {
 
 /// The invitations this device made. A card's code holds a spendable key,
 /// so the codes are kept encrypted, like the wallet's seed: each is sealed
-/// to a key whose secret is in the vault (`VaultSlot.invitations`), under
-/// its own protection. That key isn't the wallet's: cards stay on the device
-/// when the wallet changes.
+/// to a key whose secret is in the vault (`VaultSlot.invitations`). That
+/// key isn't the wallet's: cards stay on the device when the wallet
+/// changes. Its passphrase or passkey is the wallet's, though (one for the
+/// app): whichever of the two records is made second takes the first's.
 /// - **Listing and making cards asks nothing:** addresses are public, and
 ///   sealing needs only the public key.
 /// - **Reading a code asks every time** ([unlock]): to show its QR code or
@@ -359,6 +370,19 @@ class InviteRecord {
 class InviteStore extends ChangeNotifier {
   static const _key = 'murmur_invitations';
   final _storage = const FlutterSecureStorage();
+
+  /// The vault's record of the cards' key as stored now, if any: what a
+  /// new wallet goes alongside.
+  static Future<Map<String, String>?> storedVault() async {
+    try {
+      final json = await const FlutterSecureStorage().read(key: _key);
+      final decoded = json == null ? null : jsonDecode(json);
+      final key = decoded is Map ? decoded['key'] : null;
+      return key is Map ? key.map((k, v) => MapEntry('$k', '$v')) : null;
+    } on FormatException {
+      return null;
+    }
+  }
 
   List<InviteRecord> invites = [];
 
@@ -416,7 +440,8 @@ class InviteStore extends ChangeNotifier {
   Future<Uint8List?> _protect(VaultPrompts prompts, String reason) async {
     if (_vault != null) return null;
     final secret = randomBytes(32);
-    final sealed = await sealSeed(secret, prompts, reason: reason, slot: VaultSlot.invitations);
+    final sealed = await sealSeed(secret, prompts,
+        reason: reason, slot: VaultSlot.invitations, alongside: await WalletController.storedVault());
     final public = await sealingKeyOf(secret);
     for (final r in invites) {
       final code = r.plainCode;
@@ -475,6 +500,11 @@ class WalletController extends ChangeNotifier {
   static const _key = 'murmur_wallet';
   final _storage = const FlutterSecureStorage();
 
+  /// The vault's record of the wallet as stored now, if any: what the
+  /// cards' key goes alongside.
+  static Future<Map<String, String>?> storedVault() async =>
+      decodeStored(await const FlutterSecureStorage().read(key: _key));
+
   WalletId? wallet;
   Map<String, String>? _stored;
   bool _legacy = false;
@@ -518,7 +548,7 @@ class WalletController extends ChangeNotifier {
       _save(await MurmurWallet.fromSeed(fromHex(seedHex)), prompts, reason);
 
   Future<void> _save(MurmurWallet w, VaultPrompts prompts, String reason) async {
-    final sealed = await sealSeed(w.seed, prompts, reason: reason);
+    final sealed = await sealSeed(w.seed, prompts, reason: reason, alongside: await InviteStore.storedVault());
     final stored = {...sealed, 'address': toHex(w.address), 'publicKey': toHex(w.publicKey)};
     await _storage.write(key: _key, value: encodeStored(stored));
     await _storage.delete(key: _legacyKey);

@@ -101,9 +101,9 @@ abstract class AppLocalizations {
 
   /// A list of this localizations delegate's supported locales.
   static const List<Locale> supportedLocales = <Locale>[
+    Locale('en'),
     Locale('ar'),
     Locale('de'),
-    Locale('en'),
     Locale('es'),
     Locale('it'),
     Locale('ja'),
@@ -499,7 +499,7 @@ abstract class AppLocalizations {
   /// No description provided for @connectHelpNative.
   ///
   /// In en, this message translates to:
-  /// **'The peer-to-peer address of a murmur-node (its --port, 7878 by default). The control port (7879) will not work.'**
+  /// **'The peer-to-peer address of a murmur-node (its --port, 7878 by default). The control port (7879) will not work. Port 443 reaches a node behind a secure WebSocket, such as node.murmur.info.'**
   String get connectHelpNative;
 
   /// No description provided for @host.
@@ -1672,11 +1672,11 @@ abstract class AppLocalizations {
   /// **'Starting the node…'**
   String get localNodeStarting;
 
-  /// No description provided for @localNodeRunning.
+  /// address: where the app's own node listens for peers, as host:port
   ///
   /// In en, this message translates to:
-  /// **'The node is running, and the app uses it.'**
-  String get localNodeRunning;
+  /// **'The node is running at {address}. The app keeps reading from the node you chose.'**
+  String localNodeRunning(String address);
 
   /// No description provided for @localNodeFailed.
   ///
@@ -1708,11 +1708,59 @@ abstract class AppLocalizations {
   /// **'Create a wallet first: mining pays its address.'**
   String get localNodeMineNeedsWallet;
 
+  /// name: the wallet the app's own node mines to, as shown everywhere (a name, or a short address)
+  ///
+  /// In en, this message translates to:
+  /// **'Mining pays **{name}**'**
+  String localNodeMinesTo(String name);
+
   /// No description provided for @localNodeCpu.
   ///
   /// In en, this message translates to:
   /// **'Up to {pct}% of one processor core'**
   String localNodeCpu(int pct);
+
+  /// No description provided for @localNodeGpu.
+  ///
+  /// In en, this message translates to:
+  /// **'Mine on the graphics card'**
+  String get localNodeGpu;
+
+  /// No description provided for @localNodeGpuNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Much faster than the processor, and it uses more electricity. When the card can\'t be used, mining goes on with the processor.'**
+  String get localNodeGpuNote;
+
+  /// No description provided for @localNodeGpuStarting.
+  ///
+  /// In en, this message translates to:
+  /// **'Starting the graphics card. The processor mines meanwhile.'**
+  String get localNodeGpuStarting;
+
+  /// device: the graphics card's name, as its driver gives it
+  ///
+  /// In en, this message translates to:
+  /// **'Mining on **{device}**'**
+  String localNodeGpuMining(String device);
+
+  /// No description provided for @localNodeGpuMiningAny.
+  ///
+  /// In en, this message translates to:
+  /// **'Mining on **the graphics card**'**
+  String get localNodeGpuMiningAny;
+
+  /// No description provided for @localNodeGpuUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'The graphics card can\'t be used: **mining goes on with the processor**.'**
+  String get localNodeGpuUnavailable;
+
+  /// reason: an English sentence from the node, shown as it is
+  ///
+  /// In en, this message translates to:
+  /// **'What the node says: {reason}'**
+  String localNodeGpuDetail(String reason);
 
   /// Threads left out by the language filter, mutes or own flags
   ///
@@ -2110,11 +2158,23 @@ abstract class AppLocalizations {
   /// **'Choose a passphrase'**
   String get passphraseNewTitle;
 
-  /// No description provided for @passphraseNewBody.
+  /// First of three points under the title Choose a passphrase: what it protects. The passphrase is shared by the wallet and the invitation cards.
   ///
   /// In en, this message translates to:
-  /// **'It encrypts your wallet key on this device. You\'ll type it to send, to show the seed or to remove the wallet. If you forget it, only your seed backup can bring the wallet back.'**
-  String get passphraseNewBody;
+  /// **'**One passphrase for this app.** It encrypts your wallet key and your invitation cards\' codes on this device.'**
+  String get passphraseNewWhat;
+
+  /// No description provided for @passphraseNewWhen.
+  ///
+  /// In en, this message translates to:
+  /// **'You\'ll type it **every time** you send, show the seed or remove the wallet, and to show, print or cancel a card.'**
+  String get passphraseNewWhen;
+
+  /// No description provided for @passphraseNewForget.
+  ///
+  /// In en, this message translates to:
+  /// **'If you forget it, only your **seed backup** brings the wallet back, and cards not yet handed over can no longer be shown or cancelled.'**
+  String get passphraseNewForget;
 
   /// No description provided for @passphraseField.
   ///
@@ -2733,12 +2793,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Confirm it\'s you to unlock the invitation cards'**
   String get authReasonCards;
-
-  /// Under the title Choose a passphrase, when it protects the invitation cards' codes, not the wallet
-  ///
-  /// In en, this message translates to:
-  /// **'It encrypts your invitation cards\' codes on this device. You\'ll type it to show, print or cancel a card. If you forget it, cards not yet handed over can no longer be shown or cancelled.'**
-  String get passphraseNewBodyCards;
 
   /// Invitations page, one of the points on how cards work. **…** marks the key words
   ///

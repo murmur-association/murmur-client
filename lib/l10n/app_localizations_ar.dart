@@ -307,7 +307,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get connectHelpNative =>
-      'عنوان النظير إلى النظير لعقدة murmur-node (منفذها ‎--port، وهو 7878 افتراضيًا). منفذ التحكم (7879) لن يعمل.';
+      'عنوان النظير إلى النظير لعقدة murmur-node (منفذها ‎--port، وهو 7878 افتراضيًا). منفذ التحكم (7879) لن يعمل. المنفذ 443 يصل إلى عقدة خلف WebSocket آمن، مثل node.murmur.info.';
 
   @override
   String get host => 'المضيف';
@@ -1226,7 +1226,9 @@ class AppLocalizationsAr extends AppLocalizations {
   String get localNodeStarting => 'جارٍ تشغيل العقدة…';
 
   @override
-  String get localNodeRunning => 'العقدة تعمل، والتطبيق يستخدمها.';
+  String localNodeRunning(String address) {
+    return 'العقدة تعمل على $address. ويواصل التطبيق القراءة من العقدة التي اخترتها.';
+  }
 
   @override
   String localNodeFailed(String reason) {
@@ -1248,8 +1250,41 @@ class AppLocalizationsAr extends AppLocalizations {
       'أنشئ محفظة أولًا: التعدين يدفع إلى عنوانها.';
 
   @override
+  String localNodeMinesTo(String name) {
+    return 'التعدين يدفع إلى **$name**';
+  }
+
+  @override
   String localNodeCpu(int pct) {
     return 'حتى $pct٪ من نواة معالج واحدة';
+  }
+
+  @override
+  String get localNodeGpu => 'التعدين ببطاقة الرسوميات';
+
+  @override
+  String get localNodeGpuNote =>
+      'أسرع بكثير من المعالج، ويستهلك كهرباء أكثر. إذا تعذّر استخدام البطاقة، يستمر التعدين بالمعالج.';
+
+  @override
+  String get localNodeGpuStarting =>
+      'جارٍ تشغيل بطاقة الرسوميات. يعدّن المعالج في هذه الأثناء.';
+
+  @override
+  String localNodeGpuMining(String device) {
+    return 'التعدين جارٍ على **$device**';
+  }
+
+  @override
+  String get localNodeGpuMiningAny => 'التعدين جارٍ على **بطاقة الرسوميات**';
+
+  @override
+  String get localNodeGpuUnavailable =>
+      'تعذّر استخدام بطاقة الرسوميات: **يستمر التعدين بالمعالج**.';
+
+  @override
+  String localNodeGpuDetail(String reason) {
+    return 'ما تقوله العقدة: $reason';
   }
 
   @override
@@ -1527,8 +1562,16 @@ class AppLocalizationsAr extends AppLocalizations {
   String get passphraseNewTitle => 'اختر عبارة مرور';
 
   @override
-  String get passphraseNewBody =>
-      'تشفّر مفتاح محفظتك على هذا الجهاز. ستكتبها للإرسال أو لعرض البذرة أو لإزالة المحفظة. إذا نسيتها فلن تستعيد المحفظة إلا نسخة البذرة الاحتياطية.';
+  String get passphraseNewWhat =>
+      '**عبارة مرور واحدة لهذا التطبيق.** تشفّر مفتاح محفظتك ورموز بطاقات الدعوة على هذا الجهاز.';
+
+  @override
+  String get passphraseNewWhen =>
+      'ستكتبها **في كل مرة** ترسل فيها أو تعرض البذرة أو تزيل المحفظة، ولعرض بطاقة أو طباعتها أو إلغائها.';
+
+  @override
+  String get passphraseNewForget =>
+      'إذا نسيتها، فلن يعيد المحفظة إلا **النسخة الاحتياطية للبذرة**، ولن يمكن بعدها عرض البطاقات التي لم تُسلَّم أو إلغاؤها.';
 
   @override
   String get passphraseField => 'عبارة المرور';
@@ -1923,10 +1966,6 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get authReasonCards => 'أكّد أنك أنت لفتح بطاقات الدعوة';
-
-  @override
-  String get passphraseNewBodyCards =>
-      'تشفّر رموز بطاقات الدعوة على هذا الجهاز. ستكتبها لعرض بطاقة أو طباعتها أو إلغائها. إذا نسيتها فلن يمكن بعد ذلك عرض البطاقات التي لم تُسلَّم ولا إلغاؤها.';
 
   @override
   String get inviteLockedPoint =>

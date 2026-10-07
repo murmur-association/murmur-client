@@ -29,7 +29,7 @@ Future<Map<String, String>?> unlockCards(BuildContext context, List<InviteRecord
   final l = context.l10n;
   try {
     final codes =
-        await inviteStore.unlock(records, DialogPrompts(context, forCards: true), reason: l.authReasonCards);
+        await inviteStore.unlock(records, DialogPrompts(context), reason: l.authReasonCards);
     return {for (final (i, r) in records.indexed) r.address: codes[i]};
   } on VaultLocked catch (e) {
     if (context.mounted) showSnack(context, e.wrongPassphrase ? l.wrongPassphrase : l.authFailed);
@@ -102,7 +102,7 @@ class _InvitationsPageState extends State<InvitationsPage> {
   }
 
   Future<void> _create() async {
-    final records = await showAppDialog<List<InviteRecord>>(context: context, builder: (_) => const _CreateDialog());
+    final records = await showAppDialog<List<InviteRecord>>(context: context, builder: (_) => const CreateInvitationsDialog());
     if (records == null || !mounted) return;
     // The new cards come selected, ready to print.
     setState(() => _selected
@@ -652,14 +652,14 @@ class _InviteDetails extends StatelessWidget {
 }
 
 /// How many cards, what they cost, and the button that funds them.
-class _CreateDialog extends StatefulWidget {
-  const _CreateDialog();
+class CreateInvitationsDialog extends StatefulWidget {
+  const CreateInvitationsDialog({super.key});
 
   @override
-  State<_CreateDialog> createState() => _CreateDialogState();
+  State<CreateInvitationsDialog> createState() => _CreateInvitationsDialogState();
 }
 
-class _CreateDialogState extends State<_CreateDialog> {
+class _CreateInvitationsDialogState extends State<CreateInvitationsDialog> {
   int _count = 5;
   ({int perCard, int fundingFee, int claimFee})? _costs;
   bool _funding = false;
@@ -677,12 +677,13 @@ class _CreateDialogState extends State<_CreateDialog> {
     final scope = AppScope.of(context);
     final l = context.l10n;
     final costs = _costs!;
-    // Asked only the first time cards are made, to protect their codes.
-    final prompts = DialogPrompts(context, forCards: true);
+    // The first cards also put their codes' key under the wallet's
+    // passphrase: asked once for both, as funding is one action.
+    final prompts = OneAnswer(DialogPrompts(context));
     setState(() => _funding = true);
     try {
       // One unlock for the batch: funding the cards is one action.
-      final wallet = await unlockWallet(context, reason: l.authReasonInvite);
+      final wallet = await unlockWallet(context, reason: l.authReasonInvite, prompts: prompts);
       if (wallet == null) return;
       final records = await createInvitations(
         client: scope.client,
@@ -695,16 +696,20 @@ class _CreateDialogState extends State<_CreateDialog> {
       if (mounted) Navigator.pop(context, records);
     } on TxProblem catch (e) {
       if (mounted) showSnack(context, txProblemText(l, e));
-    } on VaultLocked {
+    } on VaultLocked catch (e) {
       // The codes' protection wasn't set up: nothing was made or paid.
-      if (mounted) showSnack(context, l.authFailed);
+      if (mounted) showSnack(context, e.wrongPassphrase ? l.wrongPassphrase : l.authFailed);
     } finally {
       if (mounted) setState(() => _funding = false);
     }
   }
 
+  // Rebuilt with the client: what the wallet can spend follows new blocks
+  // and transactions, so "not enough" and the button do too.
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => AppBuilder(builder: (context, _, __) => _dialog(context));
+
+  Widget _dialog(BuildContext context) {
     final l = context.l10n;
     final scope = AppScope.of(context);
     final costs = _costs;

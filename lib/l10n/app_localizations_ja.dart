@@ -297,7 +297,7 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get connectHelpNative =>
-      'murmur-node のピアツーピアアドレス（その --port、既定は 7878）。制御ポート（7879）では接続できません。';
+      'murmur-node のピアツーピアアドレス（その --port、既定は 7878）。制御ポート（7879）では接続できません。ポート 443 は、node.murmur.info のようにセキュア WebSocket の背後にあるノードに接続します。';
 
   @override
   String get host => 'ホスト';
@@ -1178,7 +1178,9 @@ class AppLocalizationsJa extends AppLocalizations {
   String get localNodeStarting => 'ノードを起動しています…';
 
   @override
-  String get localNodeRunning => 'ノードが動作中で、アプリはこれを使っています。';
+  String localNodeRunning(String address) {
+    return 'ノードは $address で動作中です。アプリは引き続き、選択したノードから読み込みます。';
+  }
 
   @override
   String localNodeFailed(String reason) {
@@ -1200,8 +1202,39 @@ class AppLocalizationsJa extends AppLocalizations {
       'まずウォレットを作成してください。マイニングの報酬はそのアドレスに支払われます。';
 
   @override
+  String localNodeMinesTo(String name) {
+    return 'マイニングの支払い先：**$name**';
+  }
+
+  @override
   String localNodeCpu(int pct) {
     return 'プロセッサーコア 1 つの最大 $pct%';
+  }
+
+  @override
+  String get localNodeGpu => 'グラフィックカードでマイニングする';
+
+  @override
+  String get localNodeGpuNote =>
+      'プロセッサよりはるかに高速ですが、電力も多く使います。カードが使えないときは、プロセッサでマイニングを続けます。';
+
+  @override
+  String get localNodeGpuStarting => 'グラフィックカードを起動しています。その間はプロセッサでマイニングします。';
+
+  @override
+  String localNodeGpuMining(String device) {
+    return '**$device** でマイニング中';
+  }
+
+  @override
+  String get localNodeGpuMiningAny => '**グラフィックカード**でマイニング中';
+
+  @override
+  String get localNodeGpuUnavailable => 'グラフィックカードを使えません。**プロセッサでマイニングを続けます**。';
+
+  @override
+  String localNodeGpuDetail(String reason) {
+    return 'ノードからの報告：$reason';
   }
 
   @override
@@ -1459,8 +1492,16 @@ class AppLocalizationsJa extends AppLocalizations {
   String get passphraseNewTitle => 'パスフレーズを設定';
 
   @override
-  String get passphraseNewBody =>
-      'この端末でウォレットの鍵を暗号化します。送信、シードの表示、ウォレットの削除のたびに入力します。忘れた場合、ウォレットを戻せるのはシードのバックアップだけです。';
+  String get passphraseNewWhat =>
+      '**このアプリのパスフレーズは 1 つです。**このデバイス上で、ウォレットの鍵と招待カードのコードを暗号化します。';
+
+  @override
+  String get passphraseNewWhen =>
+      '送信、シードの表示、ウォレットの削除、カードの表示・印刷・取り消しの**たびに**入力します。';
+
+  @override
+  String get passphraseNewForget =>
+      '忘れた場合、ウォレットを戻せるのは**シードのバックアップ**だけで、まだ渡していないカードは表示も取り消しもできなくなります。';
 
   @override
   String get passphraseField => 'パスフレーズ';
@@ -1840,10 +1881,6 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get authReasonCards => '招待カードのロックを解除するには本人確認をしてください';
-
-  @override
-  String get passphraseNewBodyCards =>
-      'この端末上の招待カードのコードを暗号化します。カードの表示、印刷、取り消しのたびに入力します。忘れると、まだ渡していないカードは表示も取り消しもできなくなります。';
 
   @override
   String get inviteLockedPoint =>

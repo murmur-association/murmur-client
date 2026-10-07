@@ -48,12 +48,22 @@ Future<void> main(List<String> args) async {
   final target = Directory(into ?? _buildDir());
   if (!await target.exists()) _usage('no build at ${target.path}: run flutter build first, or give --into');
   final name = Platform.isWindows ? 'murmur-node.exe' : 'murmur-node';
+  // The node's GPU miner, which it runs from its own folder (--gpu).
+  final miner = Platform.isWindows ? 'murmur-miner.exe' : 'murmur-miner';
 
   // Which release is there (none for a binary at hand), so the tests can
   // tell a stale download from the pinned one.
   final versionFile = File('${target.path}/murmur-node.version');
   if (from != null) {
     await File(from).copy('${target.path}/$name');
+    // Its miner, if it's beside it; else none, and the app offers no GPU.
+    final minerBeside = File('${File(from).parent.path}/$miner');
+    final minerThere = File('${target.path}/$miner');
+    if (await minerBeside.exists()) {
+      await minerBeside.copy(minerThere.path);
+    } else if (await minerThere.exists()) {
+      await minerThere.delete();
+    }
     if (await versionFile.exists()) await versionFile.delete();
   } else {
     final triple = _triple();
@@ -75,8 +85,8 @@ Future<void> main(List<String> args) async {
         stderr.writeln('could not unpack $archive: ${r.stderr}');
         exit(1);
       }
-      for (final f in [name, 'LICENSE', 'NOTICE', 'THIRD-PARTY-NOTICES.txt']) {
-        final dest = f == name ? name : 'murmur-node-$f';
+      for (final f in [name, miner, 'LICENSE', 'NOTICE', 'THIRD-PARTY-NOTICES.txt']) {
+        final dest = f == name || f == miner ? f : 'murmur-node-$f';
         await File('${tmp.path}/$f').copy('${target.path}/$dest');
       }
       await versionFile.writeAsString('$version\n');
@@ -84,7 +94,9 @@ Future<void> main(List<String> args) async {
       await tmp.delete(recursive: true);
     }
   }
-  if (!Platform.isWindows) await Process.run('chmod', ['755', '${target.path}/$name']);
+  if (!Platform.isWindows) {
+    await Process.run('chmod', ['755', '${target.path}/$name', if (File('${target.path}/$miner').existsSync()) '${target.path}/$miner']);
+  }
   stdout.writeln('murmur-node is in ${target.path}');
 }
 

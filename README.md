@@ -118,7 +118,7 @@ flutter build windows --dart-define=MURMUR_NODE_HOST=testnet-seed.murmur.info --
 ```
 
 - **Web:** the client opens `wss://` on port 443, and on any page served over HTTPS; the URL is `wss://node.murmur.info:443/`.
-- **Native:** the client resolves the name and tries each address in turn, in random order. It moves on from a node that doesn't answer, drops the connection, fails the encrypted handshake or runs another protocol version, so one bad node doesn't stop it.
+- **Native:** port 443 is a secure WebSocket here too, so `node.murmur.info:443` works in the desktop and phone apps; any other port is a node's own peer-to-peer port (7878 by default). The client resolves the name and tries each address in turn, in random order. It moves on from a node that doesn't answer, drops the connection, fails the encrypted handshake or runs another protocol version, so one bad node doesn't stop it.
 - **Both:** when the connection is lost, or can't be made, the client tries again by itself, waiting 2 s, then 4, 8… up to a minute. The banner shows the countdown, and everything already downloaded is kept.
 
 **Web: limits.** A web page can't see which addresses a name stands for, or choose among them: the browser does that. Browsers resolve `node.murmur.info` once, cache the answer, and keep using the same address.
@@ -148,7 +148,7 @@ A tag of the form `vX.Y.Z` runs these jobs, in order, after the usual checks (an
 - `check-checkpoint` stops the release if the shipped checkpoint isn't on the live testnet's chain, or is over a week old.
 - `public-node-tests` runs a short read-only test of the client against the live testnet.
 - `build-web-testnet` stops if the tag isn't `v` plus the version in `pubspec.yaml`. Otherwise it builds the testnet page as above, with `--base-href /`.
-- `build-windows` and `build-linux` build the desktop apps for the testnet and archive each with its own node and the notices (and on Windows the Visual C++ runtime), as `murmur-client-vX.Y.Z-windows-x64.zip` and `murmur-client-vX.Y.Z-linux-x64.tar.gz`. Each first tries the packaged app with the same test (`tool/desktop_smoke_test.dart --wallet-storage`; on Linux through `tool/linux_smoke_test.sh`, which gives it a virtual display and a keyring): its node starts and stops with it, a node left by a killed app is replaced, and a wallet is saved through the real keyring. If one fails, the release goes on without that download.
+- `build-windows` and `build-linux` build the desktop apps for the testnet and archive each with its own node and the notices (and on Windows the Visual C++ runtime), as `murmur-client-vX.Y.Z-windows-x64.zip` and `murmur-client-vX.Y.Z-linux-x64.tar.gz`. Each first tries the packaged app with the same test (`tool/desktop_smoke_test.dart --wallet-storage`; on Linux inside `tool/linux_session.sh`, which gives it a virtual display and a keyring): its node starts and stops with it, a node left by a killed app is replaced, and a wallet is saved through the real keyring. If one fails, the release goes on without that download.
 - `package` zips the page with LICENSE and NOTICE as `murmur-web-vX.Y.Z.zip`, writes one `SHA256SUMS` for the page and the Windows app, and uploads them to the project's package registry, so anyone can check the live page or a download against a release, or host the page themselves.
 - `deploy-web` uploads the page with `wrangler pages deploy` to the Pages project `murmur-app` (`CF_PAGES_PROJECT` in `.gitlab-ci.yml`).
 - `release` then creates the GitLab Release "Murmur client vX.Y.Z", linking the archives, `SHA256SUMS` and the live page.
@@ -189,7 +189,7 @@ Then start the client, which connects to `127.0.0.1:7878` by default. To spend t
 
 ## A node on this computer (desktop)
 
-Desktop builds can run a Murmur node of their own: **Chain → Run a Murmur node on this computer**. The app then starts `murmur-node` in the background, connects to it, and stops it when it closes. The computer checks the chain itself and helps relay it. Mining can be switched on, paying the wallet's address, with a limit on how much of one processor core it uses.
+Desktop builds can run a Murmur node of their own: **Chain → Run a Murmur node on this computer**. The app then starts `murmur-node` in the background and stops it when it closes. The app doesn't read from it: it stays connected to the node chosen under **Node**, since its own keeps nobody else's messages. The computer checks the chain itself and helps relay it. Mining can be switched on, paying the wallet's address, with a limit on how much of one processor core it uses, or on the graphics card (**Mine on the graphics card**: the node runs `murmur-miner`, shipped beside it, through the card's OpenCL driver, and mines on the processor whenever the card can't be used).
 
 The node is set up to keep the user out of hosting other people's content: it listens only on this machine (`--port 127.0.0.1:0`), keeps message content only for the one-hour check (`--prune-content`) except the user's own messages (`--keep-author`), and deletes withdrawn messages (`--prune-retracted`). It holds no key. Its data is in `murmur-client/node` in the user's application data folder.
 
@@ -218,7 +218,10 @@ For how the code works, the rules it keeps, recipes and known gaps, see [AGENTS.
 | `tool/refresh_checkpoint.dart` | Refreshes the testnet checkpoint from the live network, before a release |
 | `tool/check_checkpoint.dart` | Checks the shipped checkpoint against the live network (the release job runs it) |
 | `tool/package_desktop.dart` | Archives the built Windows or Linux app with its node and the notices (the release jobs run it) |
-| `tool/desktop_smoke_test.dart` | Tries the packaged desktop app, the same on Windows and Linux: its own node starts and stops with it, a node left by a crash is replaced, a wallet is saved through the system's secure storage (`tool/linux_smoke_test.sh` runs it on Linux, in a session of its own) |
+| `tool/desktop_smoke_test.dart` | Tries the packaged desktop app, the same on Windows and Linux: its own node starts and stops with it, a node left by a crash is replaced, a wallet is saved through the system's secure storage (on Linux inside `tool/linux_session.sh`, a session of its own) |
+| `integration_test/acceptance_test.dart` | The acceptance tests: a wallet, a thread, a reply, an invitation card and a restart, inside the built app, the same on every flavour |
+| `tool/acceptance_test.dart` | Runs them on one flavour (this desktop, `ACCEPTANCE_DEVICE=chrome`, `chrome-passkey` with a virtual passkey, or an Android emulator) against a node of its own on a demo chain |
+| `tool/fetch_test_browser.dart` | The pinned Chrome for Testing the browser run uses; never in a release |
 | `tool/fetch_test_graphics.ps1` | Software graphics for the copy tried on the Windows release runner; never in a release |
 | `lib/protocol/commitments.dart` | The state tree, block filter and header history verifiers (PROTOCOL.md Section 3.6) |
 | `lib/protocol/consensus.dart` | The header rules the client checks: median-time-past and the difficulty retarget (Sections 3.5 and 4) |

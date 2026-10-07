@@ -4,3 +4,5 @@ arb-dir: lib/l10n
 template-arb-file: app_en.arb
 output-localization-file: app_localizations.dart
 nullable-getter: false
+# English first: it is what a device in none of these languages gets.
+preferred-supported-locales: [en]

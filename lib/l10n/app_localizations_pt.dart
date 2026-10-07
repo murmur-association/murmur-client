@@ -304,7 +304,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get connectHelpNative =>
-      'O endereço peer-to-peer de um murmur-node (a sua --port, 7878 por omissão). A porta de controlo (7879) não funciona.';
+      'O endereço peer-to-peer de um murmur-node (a sua --port, 7878 por omissão). A porta de controlo (7879) não funciona. A porta 443 chega a um nó atrás de um WebSocket seguro, como node.murmur.info.';
 
   @override
   String get host => 'Host';
@@ -1201,7 +1201,9 @@ class AppLocalizationsPt extends AppLocalizations {
   String get localNodeStarting => 'A iniciar o nó…';
 
   @override
-  String get localNodeRunning => 'O nó está a funcionar e a app usa-o.';
+  String localNodeRunning(String address) {
+    return 'O nó está a funcionar em $address. A app continua a ler do nó que escolheu.';
+  }
 
   @override
   String localNodeFailed(String reason) {
@@ -1223,8 +1225,41 @@ class AppLocalizationsPt extends AppLocalizations {
       'Crie primeiro uma carteira: a mineração paga ao seu endereço.';
 
   @override
+  String localNodeMinesTo(String name) {
+    return 'A mineração paga a **$name**';
+  }
+
+  @override
   String localNodeCpu(int pct) {
     return 'Até $pct% de um núcleo do processador';
+  }
+
+  @override
+  String get localNodeGpu => 'Minerar com a placa gráfica';
+
+  @override
+  String get localNodeGpuNote =>
+      'Muito mais rápido do que o processador, e gasta mais eletricidade. Se a placa não puder ser usada, a mineração continua com o processador.';
+
+  @override
+  String get localNodeGpuStarting =>
+      'A iniciar a placa gráfica. Entretanto minera o processador.';
+
+  @override
+  String localNodeGpuMining(String device) {
+    return 'A minerar com **$device**';
+  }
+
+  @override
+  String get localNodeGpuMiningAny => 'A minerar com **a placa gráfica**';
+
+  @override
+  String get localNodeGpuUnavailable =>
+      'A placa gráfica não pode ser usada: **a mineração continua com o processador**.';
+
+  @override
+  String localNodeGpuDetail(String reason) {
+    return 'O que o nó diz: $reason';
   }
 
   @override
@@ -1497,8 +1532,16 @@ class AppLocalizationsPt extends AppLocalizations {
   String get passphraseNewTitle => 'Escolha uma frase-passe';
 
   @override
-  String get passphraseNewBody =>
-      'Cifra a chave da sua carteira neste dispositivo. Vai escrevê-la para enviar, mostrar a semente ou remover a carteira. Se a esquecer, só a cópia da semente pode recuperar a carteira.';
+  String get passphraseNewWhat =>
+      '**Uma só frase-passe para esta app.** Cifra a chave da sua carteira e os códigos dos seus cartões de convite neste dispositivo.';
+
+  @override
+  String get passphraseNewWhen =>
+      'Vai escrevê-la **sempre** que enviar, mostrar a semente ou remover a carteira, e para mostrar, imprimir ou cancelar um cartão.';
+
+  @override
+  String get passphraseNewForget =>
+      'Se a esquecer, só a sua **cópia da semente** recupera a carteira, e os cartões ainda não entregues deixam de poder ser mostrados ou cancelados.';
 
   @override
   String get passphraseField => 'Frase-passe';
@@ -1900,10 +1943,6 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String get authReasonCards =>
       'Confirme que é você para desbloquear os cartões de convite';
-
-  @override
-  String get passphraseNewBodyCards =>
-      'Cifra os códigos dos seus cartões de convite neste dispositivo. Vai escrevê-la para mostrar, imprimir ou cancelar um cartão. Se a esquecer, os cartões ainda não entregues deixam de poder ser mostrados ou cancelados.';
 
   @override
   String get inviteLockedPoint =>

@@ -114,6 +114,28 @@ Future<Map<String, String>?> sealWithDevice(Uint8List seed, String reason, Vault
   }
 }
 
+/// `seed` under the passkey that protects `other`: the same passkey, asked
+/// with a salt of this record's own, so each record has its own key and no
+/// second passkey is made. Throws [VaultLocked] when the user dismisses
+/// the check, or the passkey gives nothing.
+Future<Map<String, String>> sealWithSamePasskey(Uint8List seed, Map<String, String> other, String reason) async {
+  try {
+    final salt = randomBytes(32);
+    final secret = await _prf(fromHex(other['credential']!), salt);
+    if (secret == null) throw const VaultLocked(false);
+    return {
+      'protection': 'passkey',
+      'credential': other['credential']!,
+      'salt': toHex(salt),
+      ...await seal(seed, SecretKey(secret)),
+    };
+  } on VaultLocked {
+    rethrow;
+  } catch (_) {
+    throw const VaultLocked(false);
+  }
+}
+
 Future<Uint8List> openWithDevice(Map<String, String> stored, String reason) async {
   try {
     final secret = await _prf(fromHex(stored['credential']!), fromHex(stored['salt']!));

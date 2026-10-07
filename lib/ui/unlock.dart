@@ -8,6 +8,7 @@ import '../crypto/wallet.dart';
 import '../services/key_vault.dart';
 import 'common.dart';
 import 'glyphs.dart';
+import 'brand.dart';
 
 /// "Are you sure": `title`, `body`, and the `action` button (red when
 /// `destructive`).
@@ -37,19 +38,16 @@ Future<bool> confirmAction(BuildContext context,
 
 /// Passphrase dialogs, for devices where the vault uses one.
 class DialogPrompts implements VaultPrompts {
-  DialogPrompts(this.context, {this.forCards = false});
+  DialogPrompts(this.context);
 
   final BuildContext context;
-
-  /// Whether it's the invitation cards' codes being protected, not the
-  /// wallet: a new passphrase is then explained as theirs.
-  final bool forCards;
 
   @override
   Future<String?> newPassphrase() {
     final l = context.l10n;
     final first = TextEditingController(), second = TextEditingController();
     final form = GlobalKey<FormState>();
+    final small = Theme.of(context).textTheme.bodyMedium;
     return showAppDialog<String>(
       context: context,
       barrierDismissible: false,
@@ -60,7 +58,10 @@ class DialogPrompts implements VaultPrompts {
         content: Form(
           key: form,
           child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Text(forCards ? l.passphraseNewBodyCards : l.passphraseNewBody),
+            // One passphrase for the app: the wallet's and the cards'.
+            InfoPoint(Glyph.key, l.passphraseNewWhat, style: small),
+            InfoPoint(Glyph.pending, l.passphraseNewWhen, style: small),
+            InfoPoint(Glyph.warning, l.passphraseNewForget, color: StatusColors.of(context).pending, style: small),
             const SizedBox(height: 16),
             TextFormField(
               controller: first,
@@ -150,12 +151,34 @@ class DialogPrompts implements VaultPrompts {
   }
 }
 
+/// Asks the passphrase once for one action that needs it twice: funding
+/// the first invitation cards signs with the wallet's key and puts the
+/// cards' key under the same passphrase. The answer is handed to the second
+/// question and lives no longer than the action (this object); nothing
+/// stays unlocked.
+class OneAnswer implements VaultPrompts {
+  OneAnswer(this._prompts);
+
+  final VaultPrompts _prompts;
+  String? _answer;
+
+  @override
+  Future<String?> newPassphrase() async => _answer = await _prompts.newPassphrase();
+
+  @override
+  Future<String?> passphrase(String reason) async => _answer ??= await _prompts.passphrase(reason);
+
+  @override
+  Future<bool?> passkeyUnsupported() => _prompts.passkeyUnsupported();
+}
+
 /// The wallet with its key, for one use, after the device's check or the
-/// passphrase; null (and a note) if that doesn't happen.
-Future<MurmurWallet?> unlockWallet(BuildContext context, {required String reason}) async {
+/// passphrase; null (and a note) if that doesn't happen. `prompts` replaces
+/// the dialogs' own, for an action that shares one answer ([OneAnswer]).
+Future<MurmurWallet?> unlockWallet(BuildContext context, {required String reason, VaultPrompts? prompts}) async {
   final l = context.l10n;
   try {
-    return await AppScope.of(context).wallets.unlock(DialogPrompts(context), reason: reason);
+    return await AppScope.of(context).wallets.unlock(prompts ?? DialogPrompts(context), reason: reason);
   } on VaultLocked catch (e) {
     if (context.mounted) showSnack(context, e.wrongPassphrase ? l.wrongPassphrase : l.authFailed);
     return null;
@@ -168,8 +191,10 @@ Future<bool> protectWallet(BuildContext context, Future<void> Function(VaultProm
   try {
     await save(DialogPrompts(context));
     return true;
-  } on VaultLocked {
-    if (context.mounted) showSnack(context, context.l10n.authFailed);
+  } on VaultLocked catch (e) {
+    // A wrong passphrase: the one the invitation cards are under, which a
+    // new wallet shares.
+    if (context.mounted) showSnack(context, e.wrongPassphrase ? context.l10n.wrongPassphrase : context.l10n.authFailed);
     return false;
   }
 }

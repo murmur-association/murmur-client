@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
-# Runs tool/desktop_smoke_test.dart on Linux, in a session of its own: a
-# throwaway home folder, a session bus with an unlocked keyring, and a
-# display without a screen. The checks themselves are in that file, the
-# same for Windows. Run on the packaged folder (package_desktop.dart):
+# Runs a command on Linux in a session of its own: a throwaway home folder,
+# a session bus with an unlocked keyring, and a display without a screen.
+# What the tests of the Linux app run in, each of them the same test as on
+# the other systems:
 #
-#   tool/linux_smoke_test.sh [--wallet-storage] <app folder>
+#   tool/linux_session.sh dart run tool/desktop_smoke_test.dart [--wallet-storage] <app folder>
+#   tool/linux_session.sh flutter test tool/acceptance_test.dart
 #
 # Needs xvfb, openbox, wmctrl, dbus and gnome-keyring: a display, a window
 # manager to pass the close request on, a way to send it, and a session
@@ -15,8 +16,8 @@
 set -euo pipefail
 
 # Everything below runs inside a session bus of its own.
-if [ -z "${MURMUR_SMOKE_SESSION:-}" ]; then
-  MURMUR_SMOKE_SESSION=1 exec dbus-run-session -- "$0" "$@"
+if [ -z "${MURMUR_TEST_SESSION:-}" ]; then
+  MURMUR_TEST_SESSION=1 exec dbus-run-session -- "$0" "$@"
 fi
 
 # Downloaded packages stay where they are; everything else moves.
@@ -38,4 +39,4 @@ openbox >/dev/null 2>&1 & wm=$!
 sleep 1
 echo -n smoke | gnome-keyring-daemon --unlock --components=secrets >/dev/null 2>&1
 
-dart run tool/desktop_smoke_test.dart "$@"
+"$@"

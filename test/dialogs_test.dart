@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:murmur_client/services/node_client.dart';
 import 'package:murmur_client/services/storage.dart';
+import 'package:murmur_client/ui/brand.dart';
 import 'package:murmur_client/ui/common.dart';
 import 'package:murmur_client/ui/unlock.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -142,6 +143,7 @@ void main() {
       wallets: WalletController(),
       prefs: Preferences(),
       child: MaterialApp(
+        theme: lightTheme,
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         home: Builder(builder: (c) {
@@ -193,6 +195,7 @@ void main() {
       wallets: WalletController(),
       prefs: Preferences(),
       child: MaterialApp(
+        theme: lightTheme,
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         home: Builder(builder: (c) {

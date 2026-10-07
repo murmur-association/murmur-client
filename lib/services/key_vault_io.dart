@@ -50,6 +50,10 @@ Future<Map<String, String>?> sealWithDevice(Uint8List seed, String reason, Vault
   }
 }
 
+/// Passkeys are the browser's: no native record is under one.
+Future<Map<String, String>> sealWithSamePasskey(Uint8List seed, Map<String, String> other, String reason) async =>
+    throw const VaultLocked(false);
+
 Future<Uint8List> openWithDevice(Map<String, String> stored, String reason) async {
   try {
     final hex = await (await _storage(_fileIn(stored))).read(promptInfo: _prompt(reason));

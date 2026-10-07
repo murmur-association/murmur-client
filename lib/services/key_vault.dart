@@ -17,9 +17,14 @@
 // Losing the device key or forgetting the passphrase makes the stored seed
 // unreadable: the seed backup is then the only way back.
 //
-// The vault has a second slot, with a protection of its own: the key of the
-// invitation cards this device made (see [VaultSlot.invitations]). Cards
-// outlive the wallet that funded them, so their key can't hang on its seed.
+// The vault has a second slot: the key of the invitation cards this device
+// made (see [VaultSlot.invitations]). Cards outlive the wallet that funded
+// them, so their key can't hang on its seed: it's a record of its own.
+//
+// One passphrase, or one passkey, for the app (the user asked for it: a
+// second passphrase for the cards was one too many). Whichever record is
+// made second takes the first one's: [sealSeed] with `alongside`. Both
+// still ask every time.
 
 import 'dart:convert';
 import 'dart:typed_data';
@@ -61,7 +66,7 @@ class VaultLocked implements Exception {
 }
 
 /// What a vault record protects. Each has its own entry in the device's key
-/// store, or its own passkey or passphrase.
+/// store; a passphrase or a passkey is shared between them.
 enum VaultSlot {
   /// The wallet's seed.
   wallet,
@@ -75,10 +80,22 @@ enum VaultSlot {
 /// returns what to store (never the seed). May prompt. When the chosen
 /// passkey manager can't encrypt, the user picks: another try, or a
 /// passphrase. `device` replaces the platform's own protection in tests.
+///
+/// `alongside` is the other slot's record, if there is one. When that one
+/// is under a passphrase or a passkey, this one goes under the same: the
+/// passphrase is asked for (not a new one) and must open that record, or
+/// the same passkey is asked. Throws [VaultLocked] otherwise.
 Future<Map<String, String>> sealSeed(Uint8List seed, VaultPrompts prompts,
     {required String reason,
     VaultSlot slot = VaultSlot.wallet,
+    Map<String, String>? alongside,
     Future<Map<String, String>?> Function(Uint8List, String)? device}) async {
+  switch (alongside?['protection']) {
+    case 'passphrase':
+      return sealWithSamePassphrase(seed, alongside!, prompts, reason);
+    case 'passkey':
+      return impl.sealWithSamePasskey(seed, alongside!, reason);
+  }
   final seal = device ?? (Uint8List seed, String reason) => impl.sealWithDevice(seed, reason, slot);
   while (true) {
     try {
@@ -127,6 +144,22 @@ Future<Map<String, String>> sealWithPassphrase(Uint8List seed, VaultPrompts prom
   final salt = randomBytes(16);
   final key = await _stretch(passphrase, salt, passphraseRounds);
   return {'protection': 'passphrase', 'rounds': '$passphraseRounds', 'salt': toHex(salt), ...await seal(seed, key)};
+}
+
+/// `seed` under the passphrase that opens `other`, which is asked for and
+/// checked against it. The key is the same one (same salt and rounds), so
+/// the passphrase is stretched once. Throws [VaultLocked].
+Future<Map<String, String>> sealWithSamePassphrase(
+    Uint8List seed, Map<String, String> other, VaultPrompts prompts, String reason) async {
+  final passphrase = await prompts.passphrase(reason);
+  if (passphrase == null) throw const VaultLocked(false);
+  final key = await _stretch(passphrase, fromHex(other['salt']!), int.parse(other['rounds']!));
+  try {
+    await open(other, key);
+  } on SecretBoxAuthenticationError {
+    throw const VaultLocked(true);
+  }
+  return {'protection': 'passphrase', 'rounds': other['rounds']!, 'salt': other['salt']!, ...await seal(seed, key)};
 }
 
 Future<Uint8List> openWithPassphrase(Map<String, String> stored, VaultPrompts prompts, String reason) async {

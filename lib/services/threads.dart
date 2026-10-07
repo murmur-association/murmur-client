@@ -169,19 +169,24 @@ class MessageIndex {
   }
 
   /// [threads] as far as their order is settled: most recently active
-  /// first, stopping above the newest reply whose thread is missing but
-  /// `stillComing` (asked of the node, not answered yet). That thread will
-  /// take its place at that reply's time, so showing the less recent ones
-  /// now would only have them pushed down when it arrives. `held` says
-  /// whether any are held back.
-  ({List<ThreadSummary> threads, bool held}) settledThreads(bool Function(String txid) stillComing) {
-    var hold = -1;
+  /// first, stopping where something not at hand yet could still take a
+  /// place. Two things reserve one:
+  /// - a reply whose thread is missing but `stillComing` (asked of the node,
+  ///   not answered yet): that thread belongs at the reply's time;
+  /// - `floor`, the time of the newest block not fetched yet, if any: its
+  ///   threads belong there, and so may a thread already at hand that a
+  ///   reply in it will bump.
+  ///
+  /// Showing anything less recent now would only have it pushed down, or
+  /// moved up, later. `held` says whether any threads are held back.
+  ({List<ThreadSummary> threads, bool held}) settledThreads(bool Function(String txid) stillComing, {int? floor}) {
+    var hold = floor ?? -1;
     missingParents.forEach((txid, time) {
       if (time > hold && stillComing(txid)) hold = time;
     });
     if (hold < 0) return (threads: threads, held: false);
-    // Threads more recent than that reply are in their place already. (One
-    // of the same time isn't: the missing thread may sort before it.)
+    // Threads more recent than that are in their place already. (One of the
+    // same time isn't: what's missing may sort before it.)
     final settled = [
       for (final t in threads)
         if (t.lastActivity > hold) t,
