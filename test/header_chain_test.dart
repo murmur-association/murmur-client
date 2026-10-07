@@ -18,7 +18,7 @@ BlockHeader _header(int height) => BlockHeader(
       historyRoot: _filled(height + 4000),
       timestamp: 0x100000000 + height * 30,
       target: (BigInt.one << 120) + BigInt.from(height),
-      nonce: 0x200000000 + height,
+      nonce: u64Bytes(0x200000000 + height),
       miner: _filled(height % 3),
     );
 

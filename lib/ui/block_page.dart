@@ -60,7 +60,7 @@ class BlockPage extends StatelessWidget {
                 InfoRow(l.merkleRoot, HashText(toHex(block.header.merkleRoot))),
                 InfoRow(l.target,
                     SelectableText(block.header.target.toRadixString(16).padLeft(32, '0'), style: mono)),
-                InfoRow(l.nonce, Text('${block.header.nonce}')),
+                InfoRow(l.nonce, Text('${bigIntFromBytes(block.header.nonce)}')),
                 const Divider(height: 32),
                 Text(l.txCount(block.transactions.length), style: Theme.of(context).textTheme.titleMedium),
                 for (final tx in block.transactions) TxTile(client.lookupTx(tx.id)!),

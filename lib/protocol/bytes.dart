@@ -1,4 +1,4 @@
-﻿// Byte-level helpers: hex, SHA-256, and cursor-style readers/writers for the
+// Byte-level helpers: hex, SHA-256, and cursor-style readers/writers for the
 // node's binary formats. Wire integers are big-endian; the signing and header
 // preimages (see models.dart) use little-endian, matching the Rust core.
 
@@ -9,6 +9,7 @@ import 'package:crypto/crypto.dart' as crypto;
 final _hexPattern = RegExp(r'^[0-9a-fA-F]*$');
 final _u128Mask = (BigInt.one << 128) - BigInt.one;
 const _two32 = 0x100000000;
+const _twoTo21 = 0x200000;
 
 String toHex(List<int> bytes) {
   final sb = StringBuffer();
@@ -63,6 +64,11 @@ Uint8List _u128Bytes(BigInt v, Endian endian) {
 /// A big-endian unsigned integer from bytes, through hex (see _u128Bytes).
 BigInt bigIntFromBytes(List<int> bytes) => bytes.isEmpty ? BigInt.zero : BigInt.parse(toHex(bytes), radix: 16);
 
+/// `v` as the 8 bytes of a u64, big-endian (as on the wire): for a value
+/// that is kept as its bytes, such as a header's nonce, when it's a small
+/// number at hand (0 in a genesis block, a counter in a test).
+Uint8List u64Bytes(int v) => (ByteWriter()..u64(v)).take();
+
 class ByteWriter {
   final _b = BytesBuilder();
   final _scratch = ByteData(8);
@@ -81,7 +87,8 @@ class ByteWriter {
 
   /// Written as two u32 halves: ByteData's 64-bit accessors don't exist on
   /// the web, where ints are doubles (exact up to 2^53, plenty for amounts,
-  /// heights, timestamps and nonces).
+  /// heights, timestamps and account nonces). A u64 that may hold any value
+  /// (a header's nonce, a Hello's) is never an `int`: it stays its 8 bytes.
   void u64(int v, [Endian endian = Endian.big]) {
     final hi = v ~/ _two32;
     final lo = v % _two32;
@@ -152,11 +159,16 @@ class ByteReader {
     return v;
   }
 
-  /// See ByteWriter.u64. Values above 2^53 (only ever a peer's random
-  /// Hello nonce, which the client ignores) lose precision on the web.
+  /// See ByteWriter.u64. A value of 2^53 or more is refused, not rounded:
+  /// an `int` can't hold it on the web, and what the consensus rules count
+  /// (heights, times, amounts, fees, account nonces) stays far below. The
+  /// two u64s that may hold anything, a header's nonce and a Hello's, are
+  /// read as their 8 bytes instead (`take(8)`).
   int u64() {
     _need(8);
-    final v = _view.getUint32(_pos) * _two32 + _view.getUint32(_pos + 4);
+    final hi = _view.getUint32(_pos);
+    if (hi >= _twoTo21) throw const FormatException('a number too large to be valid here');
+    final v = hi * _two32 + _view.getUint32(_pos + 4);
     _pos += 8;
     return v;
   }

@@ -136,7 +136,7 @@ void main() {
     final hello = encodePayload(Hello(
       version: protocolVersion,
       genesis: Uint8List(32),
-      nonce: 1,
+      nonce: u64Bytes(1),
       listenPort: 0,
       height: 0,
       work: BigInt.zero,
@@ -252,7 +252,7 @@ void main() {
             historyRoot: Uint8List(32),
             timestamp: 1000 + 30 * i,
             target: max128 >> (8 + i % 3),
-            nonce: i,
+            nonce: u64Bytes(i),
             miner: Uint8List(32),
           ),
       ];
@@ -311,7 +311,7 @@ void main() {
           historyRoot: Uint8List(32),
           timestamp: timestamp,
           target: target,
-          nonce: 0,
+          nonce: u64Bytes(0),
           miner: Uint8List(32),
         );
 
@@ -431,7 +431,7 @@ void main() {
         historyRoot: genesis.hash,
         timestamp: 1790208002,
         target: genesis.target,
-        nonce: 42,
+        nonce: u64Bytes(42),
         miner: w.address,
       ),
       [tx],

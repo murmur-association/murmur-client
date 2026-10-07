@@ -1396,11 +1396,12 @@ class MurmurClient extends ChangeNotifier {
     state = LinkState.disconnected;
   }
 
-  static int _randomNonce() {
+  static Uint8List _randomNonce() {
     final rng = Random.secure();
-    // 50 random bits, never 0 (the node treats 0 as "no handshake"). Kept
-    // below 2^53 and built without shifts so it's exact on the web too.
-    return rng.nextInt(1 << 30) * (1 << 20) + rng.nextInt(1 << 20) + 1;
+    // 8 random bytes, never all zero (the node treats 0 as "no handshake").
+    final nonce = Uint8List.fromList([for (var i = 0; i < 8; i++) rng.nextInt(256)]);
+    nonce[7] |= 1;
+    return nonce;
   }
 
   static LinkError _describe(Object e) => switch (e) {

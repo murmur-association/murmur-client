@@ -196,7 +196,13 @@ class BlockHeader {
   final Uint8List historyRoot;
   final int timestamp;
   final BigInt target;
-  final int nonce;
+
+  /// The 8 bytes of the nonce, as on the wire (big-endian). Any 64-bit
+  /// value: a miner may start anywhere (murmur-miner picks at random), so
+  /// it's never held as an `int`, which rounds from 2^53 on the web and
+  /// wraps from 2^63 elsewhere. A header read that way hashed to something
+  /// else, and a valid block was refused.
+  final Uint8List nonce;
   final Uint8List miner;
 
   Uint8List _preimage() {
@@ -209,7 +215,8 @@ class BlockHeader {
           ..bytes(historyRoot)
           ..u64(timestamp, Endian.little)
           ..u128(target, Endian.little)
-          ..u64(nonce, Endian.little)
+          // Little-endian in the preimage (PROTOCOL.md Section 3.1).
+          ..bytes(nonce.reversed.toList())
           ..bytes(miner))
         .take();
   }
