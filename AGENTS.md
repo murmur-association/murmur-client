@@ -331,6 +331,7 @@ A TxStatus of invalid or refused takes the transaction out of nonce and balance 
   4. **The scheduled release** publishes the default branch unreviewed. Decide whether that still suits a network whose tokens aren't for testing, or whether mainnet releases need a person.
   5. **The public-node tests:** `live_node_test.dart` and its documented command name the testnet's seed; run the read-only checks against mainnet's nodes too. Sending stays on chains the tests build themselves: never send on a public network from tests without the user asking.
   6. **The docs and defaults:** README's build commands and node names, the default node of release builds, and `tool/header_bench` (it generates a chain with the testnet's parameters).
+     - **Each flavour has its own default node, on purpose** (the user asked to keep this in mind for mainnet). Desktop and phone apps default to the network's seed name on the peer-to-peer port (today `testnet-seed.murmur.info:7878`): it lists every node, so the app can try each and fail over. The web page defaults to the secure WebSocket name on 443 (today `node.murmur.info:443`), the only way a browser reaches a node. Mainnet needs both names: a seed, and a WebSocket name behind TLS. Native builds can use the 443 name too, but then depend on what that one name resolves to.
 - **New language:**
   1. Copy `app_en.arb` to `app_<code>.arb` and translate the values; keep the placeholders and ICU plural forms.
   2. Add the code to `languageNames` in `lib/ui/l10n.dart`.
