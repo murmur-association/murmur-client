@@ -2,8 +2,9 @@
 
 Newest first. Each release is a `vX.Y.Z` tag matching `version` in `pubspec.yaml`; see [README](README.md#releases-and-deployment). Entries marked **Breaking** need action from users.
 
-## Unreleased
+## v0.3.1: scheduled release, with what was waiting (2026-10-07)
 
+- **Changed: the testnet checkpoint** is now block 23,500, refreshed from the live network by the scheduled release.
 ## v0.3.0: seed words, encrypted invitation cards, addresses as QR codes (2026-10-06)
 
 No protocol or network change. The testnet checkpoint moves to block 22,700.
