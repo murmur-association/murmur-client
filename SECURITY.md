@@ -6,7 +6,7 @@ Please report vulnerabilities privately, not in a public issue: use GitLab's **c
 
 We'll acknowledge the report within 7 days, keep you updated while we work on a fix, and credit you when the fix is released, unless you'd rather not be named. Please give us a reasonable time to release a fix before you disclose the issue publicly.
 
-Issues in the node or the protocol itself belong to the [murmur repository](https://gitlab.com/elc4no/murmur/-/blob/main/SECURITY.md).
+Issues in the node or the protocol itself belong to the [murmur repository](https://gitlab.com/murmur-association/murmur/-/blob/main/SECURITY.md).
 
 ## What counts
 

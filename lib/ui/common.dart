@@ -87,7 +87,7 @@ String addressLink(String address) => '$appBaseUrl/#/address/$address';
 String? addressInRoute(String? name) => RegExp(r'^/address/([0-9a-f]{64})$').firstMatch(name ?? '')?.group(1);
 
 /// The node's repository: its code, PROTOCOL.md and the whitepaper.
-const nodeRepositoryUrl = 'https://gitlab.com/elc4no/murmur';
+const nodeRepositoryUrl = 'https://gitlab.com/murmur-association/murmur';
 const whitepaperUrl = '$nodeRepositoryUrl/-/blob/main/murmur-whitepaper.md';
 
 /// Opens `url` outside the app (a new browser tab on the web). Only ever

@@ -1,6 +1,6 @@
 # Murmur client
 
-A Flutter light client for the Murmur chain, speaking **protocol 10** (networks `murmur-demo-9` and `murmur-testnet-9`, which keep their names). The node, the whitepaper and the protocol specification live in the [murmur repository](https://gitlab.com/elc4no/murmur); section numbers below refer to its [PROTOCOL.md](https://gitlab.com/elc4no/murmur/-/blob/main/PROTOCOL.md). With the client you can:
+A Flutter light client for the Murmur chain, speaking **protocol 10** (networks `murmur-demo-9` and `murmur-testnet-9`, which keep their names). The node, the whitepaper and the protocol specification live in the [murmur repository](https://gitlab.com/murmur-association/murmur); section numbers below refer to its [PROTOCOL.md](https://gitlab.com/murmur-association/murmur/-/blob/main/PROTOCOL.md). With the client you can:
 
 - read threads and their replies, newest activity first, with reply and flag counts;
 - browse blocks, transactions and addresses, and search by height, txid, block hash or address;
@@ -180,7 +180,7 @@ After `dart run tool/bundle_node.dart --for-tests`, which downloads the pinned `
 ## Trying it locally
 
 ```
-git clone https://gitlab.com/elc4no/murmur.git && cd murmur
+git clone https://gitlab.com/murmur-association/murmur.git && cd murmur
 cargo run --release -p murmur-node -- keygen                     # writes murmur.key, prints its address
 cargo run --release -p murmur-node -- --spec demo --mine-to <that address>
 ```

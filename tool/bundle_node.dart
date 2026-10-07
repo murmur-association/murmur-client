@@ -20,7 +20,7 @@ import 'package:crypto/crypto.dart';
 
 import 'node_release.dart';
 
-const _releases = 'https://gitlab.com/api/v4/projects/elc4no%2Fmurmur/packages/generic/murmur-node';
+const _releases = 'https://gitlab.com/api/v4/projects/murmur-association%2Fmurmur/packages/generic/murmur-node';
 
 Future<void> main(List<String> args) async {
   String? version, from, into;
