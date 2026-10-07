@@ -4,7 +4,6 @@
 // a QR code to scan. Nothing goes anywhere unless the user picks where.
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import 'common.dart';
 import 'glyphs.dart';
@@ -14,8 +13,12 @@ import 'share_io.dart' if (dart.library.js_interop) 'share_web.dart' as impl;
 /// Whether this platform has a system share sheet.
 bool get canShareToApps => impl.canShareToApps;
 
-void _copy(BuildContext context, String text) {
-  Clipboard.setData(ClipboardData(text: text));
+/// Copies `text` and says so. Call it from the tap itself, never after
+/// something awaited or a menu's closing: browsers (Safari on iPhones
+/// above all) let a page write to the clipboard only while the user's tap
+/// is being handled.
+void copyText(BuildContext context, String text) {
+  impl.copyText(text);
   showSnack(context, context.l10n.copied);
 }
 
@@ -49,24 +52,28 @@ class ShareButton extends StatelessWidget {
         icon: icon,
         tooltip: l.copy,
         visualDensity: VisualDensity.compact,
-        onPressed: () => _copy(context, text),
+        onPressed: () => copyText(context, text),
       );
     }
-    PopupMenuItem<_Way> item(_Way way, Glyph glyph, String label) => PopupMenuItem(
+    // Copying and sharing happen in the item's own tap (`onTap`), not once
+    // the menu has closed (`onSelected` comes after its animation): by then
+    // the browser no longer takes the tap for the user's, and an iPhone
+    // refuses both the clipboard and the share sheet.
+    PopupMenuItem<_Way> item(_Way way, Glyph glyph, String label, {VoidCallback? onTap}) => PopupMenuItem(
           value: way,
+          onTap: onTap,
           child: Row(children: [MurmurIcon(glyph, size: 18), const SizedBox(width: 12), Text(label)]),
         );
     return PopupMenuButton<_Way>(
       icon: icon,
       tooltip: l.share,
-      onSelected: (way) => switch (way) {
-        _Way.copy => _copy(context, text),
-        _Way.apps => impl.shareToApps(text, subject: subject),
-        _Way.qr => showQr(context, qr!, caption: qrCaption, subject: subject),
+      onSelected: (way) {
+        if (way == _Way.qr) showQr(context, qr!, caption: qrCaption, subject: subject);
       },
-      itemBuilder: (context) => [
-        item(_Way.copy, Glyph.copy, l.copy),
-        if (canShareToApps) item(_Way.apps, Glyph.share, l.share),
+      itemBuilder: (_) => [
+        item(_Way.copy, Glyph.copy, l.copy, onTap: () => copyText(context, text)),
+        if (canShareToApps)
+          item(_Way.apps, Glyph.share, l.share, onTap: () => impl.shareToApps(text, subject: subject)),
         if (qr != null) item(_Way.qr, Glyph.qr, l.qrCode),
       ],
     );

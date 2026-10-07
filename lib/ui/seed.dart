@@ -10,6 +10,7 @@ import '../crypto/seed_phrase.dart';
 import '../crypto/wallet.dart';
 import 'common.dart';
 import 'glyphs.dart';
+import 'share.dart';
 import 'unlock.dart';
 
 /// The seed in both forms. Left-to-right in every language: the words are
@@ -19,10 +20,7 @@ class SeedView extends StatelessWidget {
 
   final MurmurWallet wallet;
 
-  void _copy(BuildContext context, String text) {
-    Clipboard.setData(ClipboardData(text: text));
-    showSnack(context, context.l10n.copied);
-  }
+  void _copy(BuildContext context, String text) => copyText(context, text);
 
   @override
   Widget build(BuildContext context) {

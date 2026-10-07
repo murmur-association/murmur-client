@@ -83,6 +83,28 @@ void main() {
     expect(copied, [addressLink(address)]);
   });
 
+  testWidgets('"Copy" in the menu copies in its own tap, before the menu has closed', (tester) async {
+    // A browser lets a page write to the clipboard only while the tap is
+    // being handled: an iPhone copied nothing when this waited for the
+    // menu's closing.
+    final copied = <String>[];
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+      if (call.method == 'Clipboard.setData') copied.add((call.arguments as Map)['text'] as String);
+      return null;
+    });
+    addTearDown(() => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, null));
+    await pumpApp(tester, HashText(address, qr: addressLink(address)));
+    final l = tester.element(find.byType(HashText)).l10n;
+    await tester.tap(find.byTooltip(l.share));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(l.copy));
+    // No frame has passed: the menu is still on screen, closing.
+    expect(copied, [address]);
+    await tester.pumpAndSettle();
+    expect(copied, [address], reason: 'once, not again when the menu is gone');
+    expect(find.text(l.copied), findsOneWidget);
+  });
+
   testWidgets('a hash that is not an address keeps its plain copy button', (tester) async {
     await pumpApp(tester, HashText('cd' * 32));
     final l = tester.element(find.byType(HashText)).l10n;

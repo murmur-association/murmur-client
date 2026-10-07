@@ -4,6 +4,8 @@ Newest first. Each release is a `vX.Y.Z` tag matching `version` in `pubspec.yaml
 
 ## Unreleased
 
+- **Fixed: "Copy" copied nothing in an iPhone's browser.** The share menu copied, and opened the share sheet, only once the menu had closed; by then Safari no longer takes the tap for the user's and refuses both. They now happen in the tap itself, and copying in a browser first uses the way every browser takes there.
+
 ## v0.4.1: the Windows app of v0.4.0 (2026-10-07)
 
 No protocol or network change, and the same testnet checkpoint (block 24,800).
