@@ -278,6 +278,7 @@ A TxStatus of invalid or refused takes the transaction out of nonce and balance 
 - **Where the system has a real share sheet**, the button offers "Copy" and "Share…": Android, iOS and macOS through `share_plus`, and browsers with the Web Share API through `navigator.share`.
 - **Elsewhere it simply copies.** That's Windows and Linux, where the plugin would fall back to a mail link, and Firefox on desktop.
 - **A QR code where a link opens something on another device:** `ShareButton(qr:)` adds "QR code" to the menu, and `showQr` shows the link large with a share button under it to pass it on again. Addresses have it (`HashText(qr: addressLink(address))`: scanning opens the address's page) and invitation cards use the same dialog.
+- **Copy and share inside the tap** (`copyText`, the menu items' `onTap`): browsers allow the clipboard and the share sheet only while the user's tap is being handled. A menu's `onSelected` comes after its closing animation, and an iPhone's Safari then refuses both, which is how "Copy" once copied nothing there. Never call them after an `await`.
 - **The wallet seed** keeps a plain copy button on purpose: it must never be offered to other apps.
 
 **Links** (`routeOfLink` in `main.dart`): `#/thread/<txid>` opens a thread over the home page (`threadInRoute`), `#/address/<address>` an address's page (`addressInRoute`), `#/invite/<code>` an invitation. An unknown root is asked for by id (GetTx). Native builds share `https://app.murmur.info/#/thread/<txid>`.
