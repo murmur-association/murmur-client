@@ -4,6 +4,10 @@ Newest first. Each release is a `vX.Y.Z` tag matching `version` in `pubspec.yaml
 
 ## Unreleased
 
+## v0.4.0: mining on the graphics card, one passphrase, threads that stay put (2026-10-07)
+
+No protocol or network change. The testnet checkpoint moves to block 24,800. The desktop apps now ship node release v0.10.5.
+
 - **Added: mining on the graphics card, in the desktop apps.** With the app's own node mining, "Mine on the graphics card" has the node mine through the card's OpenCL driver, far faster than on the processor. The card says which card mines; when it can't be used, mining goes on with the processor and the reason is shown. Off by default. The apps now ship `murmur-miner` beside `murmur-node`, both from node release v0.10.5.
 - **Fixed: Arabic on devices in other languages.** A device set to a language the app doesn't have (French, Korean, or none at all) got the app in Arabic, the first in its list. It now gets English, as intended.
 - **Added: acceptance tests.** One suite does what a user does (a wallet, a thread, a reply, an invitation card, a restart) inside the built app, the same on Windows, Linux and in a browser, against a node of its own. The browser runs it twice, with a passphrase and with a passkey (a virtual authenticator); the desktops also try the app's own node and its mining.
@@ -14,10 +18,10 @@ Newest first. Each release is a `vX.Y.Z` tag matching `version` in `pubspec.yaml
 
 - **Fixed: listed threads still moved in some cases.** A reply now keeps its thread's place until the thread is loaded, even when the thread is older than the checkpoint and has to wait for the headers below it; nothing less recent shows before. Threads also wait for every block more recent than them, so one loaded early can't be overtaken later.
 
-
 ## v0.3.1: scheduled release, with what was waiting (2026-10-07)
 
 - **Changed: the testnet checkpoint** is now block 23,500, refreshed from the live network by the scheduled release.
+
 ## v0.3.0: seed words, encrypted invitation cards, addresses as QR codes (2026-10-06)
 
 No protocol or network change. The testnet checkpoint moves to block 22,700.
