@@ -4,6 +4,10 @@ Newest first. Each release is a `vX.Y.Z` tag matching `version` in `pubspec.yaml
 
 ## Unreleased
 
+## v0.4.2: large header nonces, and copying on an iPhone (2026-10-07)
+
+No protocol or network change, and the same testnet checkpoint (block 24,800). **Update: earlier versions can be taken off the chain by one valid block.**
+
 - **Fixed: a valid block could take the app off the chain.** A header's nonce can be any 64-bit number, and the app read it as a number of its own: a browser rounded nonces from 2^53 up, the desktop apps wrapped those from 2^63 up, and the block was then refused as not meeting its proof of work. Blocks mined on a graphics card start from a random nonce, and on 2026-10-07 testnet block 27802 stopped every browser. The nonce is now carried as its bytes, unchanged.
 - **Fixed: "Copy" copied nothing in an iPhone's browser.** The share menu copied, and opened the share sheet, only once the menu had closed; by then Safari no longer takes the tap for the user's and refuses both. They now happen in the tap itself, and copying in a browser first uses the way every browser takes there.
 
