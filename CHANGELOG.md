@@ -4,6 +4,12 @@ Newest first. Each release is a `vX.Y.Z` tag matching `version` in `pubspec.yaml
 
 ## Unreleased
 
+## v0.4.1: the Windows app of v0.4.0 (2026-10-07)
+
+No protocol or network change, and the same testnet checkpoint (block 24,800).
+
+- **Fixed: v0.4.0 came without its Windows app.** The project moved to `gitlab.com/murmur-association` while that release was being built, and the Windows build could not download the node from the old address. The node's releases are now fetched from the new one, and the links to the node's repository follow it.
+
 ## v0.4.0: mining on the graphics card, one passphrase, threads that stay put (2026-10-07)
 
 No protocol or network change. The testnet checkpoint moves to block 24,800. The desktop apps now ship node release v0.10.5.
