@@ -4,28 +4,33 @@
 // The client handshakes like a peer that has no blocks (zero work), so the
 // node never tries to sync from it. What it shows is checked against headers
 // it has verified itself (linkage, proof of work, median-time-past, the
-// difficulty retarget and each header's history root), because every header
+// difficulty rule and each header's history root), because every header
 // commits to its block's transactions, its filter and the state after it
 // (Section 3.6):
 //
-// - balances, nonces, flags, the burn pool and the total issued come as
-//   state proofs (GetState) against the tip's `state_root`: exact at once,
-//   without the chain;
-// - an address's history, and a thread's replies, are found with block
-//   filters (GetFilters), checked against `filter_hash`: only the blocks
-//   that match are fetched, and none can be hidden;
-// - a transaction the client lacks (a reply's parent, a flagged message)
+// - balances, nonces, names, flags, the burn pool and the total issued come
+//   as state proofs (GetState) against the tip's `state_root`: exact at
+//   once, without the chain;
+// - a thread's replies and flags, and what an address sent or was credited
+//   with, come from the node's index a page at a time (GetThread,
+//   GetAddress), each page proven against the count and digest the state
+//   commits to: two requests whatever the chain's age, and none can be left
+//   out. With a node that keeps no index they are found with block filters
+//   (GetFilters), checked against `filter_hash`: complete too, but a scan
+//   that grows with the chain;
+// - a header below the ones checked (a session started from a checkpoint)
+//   comes with a proof against the tip's header history (GetHeaderProof),
+//   when something old is shown;
+// - a transaction the client lacks (a reply's thread, a flagged message)
 //   comes by id (GetTx) with a merkle branch to its header;
 // - lists read newest first fetch blocks newest first, as far as the view
 //   needs, then their message content (GetContent);
 // - fees come from the node (GetFees), and a sent transaction is answered
 //   (SubmitTx / TxStatus).
 //
-// With the user's consent to keep a local copy (ChainCache), the client
-// also fetches the rest of the chain in the background, once, and replays
-// it: that gives every history row its balance before and after, and lets
-// the client check the node's state root against its own count.
-
+// With the user's consent, what was fetched and checked is kept in a local
+// copy (ChainCache) for the next session. The client never downloads the
+// whole chain: that grows for ever, and nothing it shows needs it.
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
@@ -100,7 +105,6 @@ enum TxProblemKind {
   needsRecipient,
   amountBelowFee,
   replyParentNotMined,
-  replyWrongRecipient,
   flagNotMessage,
   alreadyFlagged,
   messageTooLong,
@@ -151,7 +155,8 @@ class TxView {
   final PendingTx? pending;
 
   /// In an address's history (`MurmurClient.activityOf`), that address's
-  /// balance right after this transaction, when it's known.
+  /// balance right after this transaction, when it's known: worked back from
+  /// the balance proven at the tip.
   final int? balanceAfter;
 
   bool get confirmed => height != null;
@@ -179,9 +184,54 @@ class _Proven {
 
 /// A transaction proven on the chain by its merkle branch, without its block.
 class _LooseTx {
-  _LooseTx(this.tx, this.height);
+  _LooseTx(this.tx, this.height, this.index);
   final Transaction tx;
   final int height;
+
+  /// Its position in its block.
+  final int index;
+}
+
+/// A list read from the node's index (PROTOCOL.md Section 7.6): a thread's
+/// events, or what an address sent or was credited with. Read newest page
+/// first; each page is proven against the count and digest the state holds
+/// for the list, or by chaining into the page after it.
+class _ListRead {
+  _ListRead(this.key, this.request, this.count, this.fallback);
+
+  /// The state entry that commits to the list.
+  final Uint8List key;
+
+  /// What to do instead when the node keeps no index: follow the list's
+  /// items through block filters.
+  final void Function() fallback;
+
+  /// The request for the `count` entries that end at entry `end`.
+  final Message Function(int end, int count) request;
+
+  /// The list's count and digest in that entry's value, or null if the
+  /// value isn't such an entry.
+  final (int, Uint8List)? Function(Uint8List? value) count;
+
+  /// The list's length and digest as last proven; null until first read.
+  int? total;
+  Uint8List? digest;
+
+  /// How many entries are in, counted from the end: `total - have + 1` to
+  /// `total`.
+  int have = 0;
+
+  /// The digest after entry `total - have`: what the next page back must
+  /// chain into.
+  Uint8List? lowDigest;
+
+  /// The node keeps no index (or has no such thread): filters take over.
+  bool unavailable = false;
+
+  /// The entries read, by txid: where each is (height, index in its block).
+  final Map<String, (int, int)> entries = {};
+
+  bool get complete => total != null && have >= total!;
 }
 
 class _Aborted implements Exception {}
@@ -221,8 +271,8 @@ class MurmurClient extends ChangeNotifier {
   /// until the headers back to genesis are checked.
   int _low = 1;
 
-  /// The genesis block's header: the history's first leaf and the
-  /// retarget's first input.
+  /// The genesis block's header: the history's first leaf, and the parent of
+  /// the first block.
   BlockHeader? _genesisHeader;
 
   /// The checkpoint this session started from, if any, and the header
@@ -263,7 +313,7 @@ class MurmurClient extends ChangeNotifier {
   /// Copies of `_history` through every 1024th height, so a reorganization
   /// rebuilds it from the nearest one below the fork instead of from
   /// genesis: packed headers rebuilt as objects compute their work again,
-  /// a 128-bit division each, slow on the web.
+  /// a 256-bit division each, slow on the web.
   /// Only the last few are kept: deeper reorganizations are rare enough to
   /// rebuild from genesis.
   final Map<int, HistoryPeaks> _historyMarks = {};
@@ -283,10 +333,6 @@ class MurmurClient extends ChangeNotifier {
   /// Blocks `_top..height` are all fetched: the newest stretch, which views
   /// read newest first. `height + 1` when the tip itself isn't fetched.
   int _top = 1;
-
-  /// Blocks `1.._counted` are replayed into balances (background, with a
-  /// local copy only).
-  int _counted = 0;
 
   final Map<String, Uint8List> _contents = {};
 
@@ -313,23 +359,6 @@ class MurmurClient extends ChangeNotifier {
   /// the local copy, and never asked for again.
   final Set<String> _withdrawnContent = {};
 
-  // Replayed state, valid for blocks 1.._counted.
-  final Map<String, int> _balances = {};
-  final Map<String, int> _nonces = {};
-  final Map<String, int> _blocksMined = {};
-  final Set<String> _countedFlagEntries = {};
-  int _issued = 0;
-
-  /// The counted transactions involving each address, oldest first: sent by
-  /// it, paid to it, or flagging its messages. Each entry is its location
-  /// (height, index) and the address's balance right after it.
-  final Map<String, List<(int, int, int)>> _byAddress = {};
-
-  /// Burned tokens not yet paid back to miners, after block `_counted`.
-  int _burnPool = 0;
-
-  /// Burn-pool payout of each counted block: `_payouts[i]` is for height i + 1.
-  final List<int> _payouts = [];
   final Map<String, PendingTx> _pending = {};
 
   /// What the node answered for each transaction this client submitted.
@@ -370,10 +399,6 @@ class MurmurClient extends ChangeNotifier {
   /// once the headers back to genesis are in.
   final Set<String> _deferredTxids = {};
   final Set<String> _txUnknown = {};
-
-  /// Set when the node's state root at the counted tip disagrees with this
-  /// client's own count: then the node (or the client) is wrong.
-  int? _stateCheckedAt;
 
   // ---- fetching -----------------------------------------------------------------
 
@@ -424,6 +449,8 @@ class MurmurClient extends ChangeNotifier {
   Completer<Tx>? _txWaiter;
   Completer<Fees>? _feesWaiter;
   Completer<HeaderProof>? _headerProofWaiter;
+  Completer<Thread>? _threadWaiter;
+  Completer<Address>? _addressWaiter;
   (DateTime, FeeInfo)? _lastFees;
 
   /// Bumped on every disconnect, so work tied to an old socket stops.
@@ -434,23 +461,12 @@ class MurmurClient extends ChangeNotifier {
   int get height => _headers.length;
   bool get isOnline => state == LinkState.syncing || state == LinkState.live;
 
-  /// Whether every block is fetched and counted (background, with a local
-  /// copy): what gives every history row its balances.
-  bool get complete => _counted == height;
-
-  /// Blocks counted so far (from genesis up).
-  int get countedHeight => _counted;
-
   /// Blocks fetched so far, of `height`.
   int get fetchedBlocks => _fetched;
 
   /// Whether older blocks are still missing below the newest stretch, so
   /// lists read newest first can grow.
-  bool get canLoadOlder => _top - 1 > _counted;
-
-  /// Whether the whole chain is fetched in the background (only with a
-  /// local copy: otherwise every visit would download it all again).
-  bool get countsChain => _cache != null;
+  bool get canLoadOlder => _top > 1;
 
   /// A header known to be there (at or above `_low`, or genesis).
   BlockHeader _hdr(int h) => h == 0 ? _genesisHeader! : _headers[h - 1]!;
@@ -481,7 +497,7 @@ class MurmurClient extends ChangeNotifier {
   int get checkedTowardGenesis => _backfill.length;
 
   /// Headers this session took from the node and checked in full (link,
-  /// work, time, retarget, history). Those reloaded from the local copy
+  /// work, time, target, history). Those reloaded from the local copy
   /// aren't counted: a back-fill resumed after them fetches only the rest.
   int get headersFromNode => _headersFromNode;
   int _headersFromNode = 0;
@@ -498,26 +514,37 @@ class MurmurClient extends ChangeNotifier {
   // ---- proven state -------------------------------------------------------------
 
   /// Keeps `key` proven at the tip; returns what's proven so far, if anything.
-  _Proven? _watchKey(Uint8List key) {
+  /// A `slow` key (a name: many are watched, and they rarely change) is
+  /// proven again only every [_slowRefresh] blocks.
+  _Proven? _watchKey(Uint8List key, {bool slow = false}) {
     final hex = toHex(key);
     if (!_watchedKeys.containsKey(hex)) {
       _watchedKeys[hex] = key;
+      if (slow) _slowKeys.add(hex);
       _wake();
     }
     return _proven[hex];
   }
+
+  final Set<String> _slowKeys = {};
+  static const _slowRefresh = 100;
 
   /// `address`'s balance and nonce, proven against a recent header's state
   /// root; null until the node's proof has arrived. Keeps it current.
   AccountState? account(String address) {
     final p = _watchKey(accountKey(fromHex(address)));
     if (p == null) return null;
-    final v = p.value;
-    return v == null ? AccountState(0, 0, p.height) : AccountState(readU64le(v), readU64le(v, 8), p.height);
+    final entry = _accountEntry(p);
+    return entry == null ? null : AccountState(entry.balance, entry.nonce, p.height);
   }
 
-  /// `address`'s balance: proven, or counted once the whole chain is.
-  int? knownBalance(String address) => account(address)?.balance ?? (complete ? _balances[address] ?? 0 : null);
+  /// What a proven account key holds: the entry, an empty one for an address
+  /// the chain has never seen, or null if the value isn't an account's.
+  static AccountEntry? _accountEntry(_Proven p) =>
+      p.value == null ? AccountEntry.empty : AccountEntry.parse(p.value!);
+
+  /// `address`'s proven balance; null until the proof arrives.
+  int? knownBalance(String address) => account(address)?.balance;
 
   /// The burn pool and the total issued, proven at the tip; null until then.
   int? get provenPool => _provenU64(poolKey);
@@ -548,10 +575,27 @@ class MurmurClient extends ChangeNotifier {
     return p == null ? null : p.value != null;
   }
 
-  int blocksMinedBy(String address) => _blocksMined[address] ?? 0;
+  /// Blocks `address` mined, among the headers known (all of them, unless
+  /// the session started from a checkpoint and the headers below it aren't
+  /// in yet). Counted on, block by block, as the chain grows.
+  int blocksMinedBy(String address) {
+    final last = _minedCounts[address];
+    var from = _low, count = 0;
+    if (last != null && last.$1 == _low && last.$2 == _reorgs && last.$3 <= height) {
+      from = last.$3 + 1;
+      count = last.$4;
+    }
+    final miner = fromHex(address);
+    for (var h = from; h <= height; h++) {
+      if (_headers.minedBy(h - 1, miner)) count++;
+    }
+    _minedCounts[address] = (_low, _reorgs, height, count);
+    return count;
+  }
 
-  /// What block `h` paid its miner out of the burn pool, once it's counted.
-  int? payoutAt(int h) => h >= 1 && h <= _payouts.length ? _payouts[h - 1] : null;
+  /// Address -> (lowest header, reorganizations, height, blocks mined) as of
+  /// the last count.
+  final Map<String, (int, int, int, int)> _minedCounts = {};
 
   /// Whether a pending transaction may still be mined: the node didn't
   /// answer that it's invalid or refused it (a refused one isn't in its
@@ -708,20 +752,74 @@ class MurmurClient extends ChangeNotifier {
   /// Who wrote the transaction `txid`, if the client knows it.
   String? authorOf(String txid) => lookupTx(txid)?.tx.fromAddress;
 
+  /// Who `tx` credits: a Raw's recipient, or for a Reply the author of its
+  /// thread, which the chain pays (PROTOCOL.md Section 5). Null for the
+  /// other kinds, and for a Reply whose thread isn't at hand yet.
+  String? creditedBy(Transaction tx) => switch (tx.kind) {
+        TxKind.raw => tx.toAddress,
+        TxKind.reply => authorOf(tx.referenceId!),
+        TxKind.orphan || TxKind.flag || TxKind.name => null,
+      };
+
   bool _involves(Transaction t, String address) =>
       t.fromAddress == address ||
-      t.toAddress == address ||
+      creditedBy(t) == address ||
       (t.kind == TxKind.flag && t.referenceId != null && authorOf(t.referenceId!) == address);
 
   // ---- filters ------------------------------------------------------------------
 
-  /// Follows `address`: every block touching it is found by its filter and
-  /// fetched, so its history is complete.
-  void watchAddress(String address) => _watchItem(fromHex(address), 1);
+  /// Follows `address`: what it sent and what credited it are read from the
+  /// node's index and proven against its account's entry, so its history is
+  /// complete at once, at any chain age. With a node that keeps no index,
+  /// every block touching it is found by its filter and fetched instead.
+  void watchAddress(String address) {
+    final item = fromHex(address);
+    final key = accountKey(item);
+    for (final list in [AddressList.sent, AddressList.credited]) {
+      _addressReads.putIfAbsent('$address:${list.index}', () {
+        _wake();
+        return _ListRead(key, (end, count) => GetAddress(item, list, end, count), (value) {
+          final entry = value == null ? AccountEntry.empty : AccountEntry.parse(value);
+          if (entry == null) return null;
+          return list == AddressList.sent ? (entry.nonce, entry.sentDigest) : (entry.credits, entry.creditDigest);
+        }, () => _watchItem(item, 1));
+      });
+    }
+    // Kept proven at the tip: a change there says there is more to read.
+    _watchKey(key);
+  }
 
-  /// Follows a thread: blocks referencing its root or any of its replies,
-  /// from the root's height on.
+  /// Lists being read from the node's index: threads by their first
+  /// message's txid, an address's by `address:list`.
+  final Map<String, _ListRead> _threadReads = {};
+  final Map<String, _ListRead> _addressReads = {};
+
+  /// Whether `address`'s two lists are read whole, so its history needs no
+  /// block and no filter.
+  bool _addressRead(String address) =>
+      (_addressReads['$address:0']?.complete ?? false) && (_addressReads['$address:1']?.complete ?? false);
+
+  /// Whether every reply and flag of thread `root` (the txid of its first
+  /// message) is here, proven against the thread's entry in the state.
+  bool threadComplete(String root) => _threadReads[root]?.complete ?? false;
+
+  /// Follows a thread: blocks referencing its root (every reply does) or any
+  /// of its replies (a flag of one does), from the root's height on.
+  ///
+  /// With a node that keeps an index, the thread's events are read from it
+  /// instead, a page at a time, and proven against the thread's entry.
   void watchThread(TxView root, Iterable<TxView> messages) {
+    if (!root.confirmed) return;
+    final key = threadKey(root.tx.hash);
+    final read = _threadReads.putIfAbsent(root.tx.id, () {
+      _wake();
+      return _ListRead(key, (end, count) => GetThread(root.tx.hash, end, count), (value) {
+        final entry = value == null ? null : ThreadEntry.parse(value);
+        return entry == null ? null : (entry.events, entry.digest);
+      }, () => _watchItem(root.tx.hash, root.height ?? height));
+    });
+    _watchKey(key);
+    if (!read.unavailable) return;
     final from = root.height ?? height;
     _watchItem(root.tx.hash, from);
     for (final m in messages) {
@@ -751,8 +849,9 @@ class MurmurClient extends ChangeNotifier {
   /// Whether `address`'s history is still being looked for: some block not
   /// fetched yet may hold one of its transactions.
   bool historyPending(String address) {
+    if (_addressRead(address)) return false;
     final item = fromHex(address);
-    for (var h = height; h > _counted; h--) {
+    for (var h = height; h >= 1; h--) {
       if (_blocks[h - 1] != null) continue;
       if (_filterMatch(h, item, address) != false) return true;
     }
@@ -766,8 +865,8 @@ class MurmurClient extends ChangeNotifier {
   /// those few.
   ///
   /// Each view carries `address`'s balance right after it when that's known:
-  /// counted from the chain, or worked back from the proven balance at the
-  /// tip (until a block the address mined, whose reward isn't known).
+  /// worked back from the proven balance at the tip (until a block the
+  /// address mined, whose reward isn't known).
   Iterable<TxView> activityOf(String address) sync* {
     final item = fromHex(address);
     final pending = _pending.values.where((p) => _involves(p.tx, address)).toList()
@@ -775,17 +874,37 @@ class MurmurClient extends ChangeNotifier {
     // Refused or invalid ones are shown, but move no balance.
     final pendingChange = pending.where(_inPlay).fold<int>(0, (sum, p) => sum + balanceChange(p.tx, address));
     final proven = account(address);
-    int? running = proven != null && proven.height == height
-        ? proven.balance + pendingChange
-        : (complete ? balanceOfCounted(address) + pendingChange : null);
+    int? running = proven != null && proven.height == height ? proven.balance + pendingChange : null;
     for (final p in pending) {
       final inPlay = _inPlay(p);
       yield TxView(p.tx, content: p.content, pending: p, balanceAfter: inPlay ? running : null);
       if (running != null && inPlay) running -= balanceChange(p.tx, address);
     }
-    // Not counted yet: fetched blocks, and filters for the rest.
     var rewardsCheckedTo = height; // blocks above this were checked for rewards to the address
-    for (var h = height; h > _counted; h--) {
+    // Read whole from the node's index: its transactions, wherever they are.
+    if (_addressRead(address)) {
+      for (final (id, h) in _historyOf(address)) {
+        final view = lookupTx(id);
+        if (view == null || !view.confirmed) continue; // rolled back since
+        if (running != null) {
+          // A block the address mined paid it a reward we can't know here,
+          // and so may one whose header isn't at hand.
+          for (var m = rewardsCheckedTo; m >= h; m--) {
+            if (!_headers.isKnown(m - 1) || _headers.minedBy(m - 1, item)) {
+              running = null;
+              break;
+            }
+          }
+          rewardsCheckedTo = h - 1;
+        }
+        yield TxView(view.tx,
+            height: view.height, blockTime: view.blockTime, content: view.content, balanceAfter: running);
+        if (running != null) running -= balanceChange(view.tx, address);
+      }
+      return;
+    }
+    // Otherwise fetched blocks, and filters for the rest.
+    for (var h = height; h >= 1; h--) {
       final b = _blocks[h - 1];
       if (b == null) {
         if (_filterMatch(h, item, address) == false) continue;
@@ -808,21 +927,40 @@ class MurmurClient extends ChangeNotifier {
         if (running != null) running -= balanceChange(tx, address);
       }
     }
-    final entries = _byAddress[address];
-    if (entries == null) return;
-    for (var i = entries.length - 1; i >= 0; i--) {
-      final (h, j, balance) = entries[i];
-      if (h > _counted) continue; // rolled back while iterating
-      yield _viewAt(h, j, balanceAfter: balance);
-    }
   }
 
-  int balanceOfCounted(String address) => _balances[address] ?? 0;
+  /// `address`'s transactions on the chain, newest first, as (txid, height),
+  /// once its lists are read whole: what they hold, and what fetched blocks
+  /// hold that they don't (flags against its messages, and anything mined
+  /// since they were read). Worked out once per change: lists read it often.
+  List<(String, int)> _historyOf(String address) {
+    final cached = _histories[address];
+    if (cached != null && cached.$1 == _dataVersion) return cached.$2;
+    final at = <String, (int, int)>{
+      ...?_addressReads['$address:0']?.entries,
+      ...?_addressReads['$address:1']?.entries,
+    };
+    for (final MapEntry(key: id, value: where) in _txIndex.entries) {
+      if (at.containsKey(id)) continue;
+      if (_involves(_blocks[where.$1 - 1]!.transactions[where.$2], address)) at[id] = where;
+    }
+    final newestFirst = at.entries.toList()
+      ..sort((a, b) {
+        final byHeight = b.value.$1.compareTo(a.value.$1);
+        return byHeight != 0 ? byHeight : b.value.$2.compareTo(a.value.$2);
+      });
+    final history = [for (final e in newestFirst) (e.key, e.value.$1)];
+    _histories[address] = (_dataVersion, history);
+    return history;
+  }
+
+  final Map<String, (int, List<(String, int)>)> _histories = {};
 
   /// What `tx` does to `address`'s balance: the sender pays amount and fee,
-  /// the recipient gets the amount (both, for a payment to oneself).
-  static int balanceChange(Transaction tx, String address) =>
-      (tx.toAddress == address ? tx.amount : 0) - (tx.fromAddress == address ? tx.amount + tx.fee : 0);
+  /// and whoever it credits gets the amount (both, for a payment to oneself
+  /// or a reply in one's own thread).
+  int balanceChange(Transaction tx, String address) =>
+      (creditedBy(tx) == address ? tx.amount : 0) - (tx.fromAddress == address ? tx.amount + tx.fee : 0);
 
   /// Every known message (threads, replies, flags), newest first: pending
   /// ones, then fetched blocks from the tip down, then those proven by GetTx.
@@ -899,8 +1037,8 @@ class MurmurClient extends ChangeNotifier {
   ///   thread is asked for by id at once, and nothing less recent than the
   ///   reply shows until it's here, however long that takes (below a
   ///   checkpoint's headers, until they're checked).
-  /// - Blocks aren't only fetched newest first (a filter match, a page, the
-  ///   local copy from genesis up): nothing shows that's as old as a block
+  /// - Blocks aren't only fetched newest first (a filter match, a page):
+  ///   nothing shows that's as old as a block
   ///   still missing, whose threads and replies could change the order.
   List<ThreadSummary> threads({int? upTo}) {
     if (upTo == null) return _messages.threads;
@@ -958,58 +1096,59 @@ class MurmurClient extends ChangeNotifier {
   int flagCountOf(TxView v) => _messages.flagCountOf(v);
 
   /// Whether a message is known not to be text (PROTOCOL.md Section 2.4:
-  /// first byte 0x00, as in aliases), reading its content live.
+  /// first byte 0x00, as in a name's), reading its content live.
   bool isNonText(TxView v) {
     final content = liveContent(v);
     return content != null && protocol_alias.isNonText(messageOf(content));
   }
 
-  final Map<String, String?> _aliases = {};
-  int _aliasVersion = -1;
-
-  /// The alias `address` published (PROTOCOL.md Section 7.8), when the
-  /// client can tell it's the latest: see `services/aliases.dart`. Null for
-  /// none, or none known yet. Resolved again whenever the client changes
-  /// (new blocks, content, a reorganization).
+  /// The public name `address` set (PROTOCOL.md Section 7.8), proven: the
+  /// state holds the hash of the address's latest Name message, and the
+  /// name is that message's text, checked against the hash. Null for none,
+  /// for none known yet (the proof or the content is on its way), and for
+  /// content no node serves any more: there is nothing older to fall back
+  /// on, so a replaced name never shows.
   String? publishedAlias(String address) {
-    if (_aliasVersion != _dataVersion) {
-      _aliases.clear();
-      _aliasVersion = _dataVersion;
+    final p = _watchKey(nameKey(fromHex(address)), slow: true);
+    final hash = p?.value;
+    if (hash == null || hash.length != 32) return null;
+    final key = toHex(hash);
+    if (_withdrawnContent.contains(key)) return null;
+    final content = _contents[key];
+    if (content == null) {
+      if (!_contentUnavailable.contains(key) && !_nameContent.containsKey(key)) {
+        _nameContent[key] = p!.height;
+        _wake();
+      }
+      return null;
     }
-    return _aliases.putIfAbsent(address, () {
-      final item = fromHex(address);
-      return resolveAlias(
-        _messages.aliasCandidatesOf(address),
-        tip: height,
-        unknown: (h) => h < _low || (_blocks[h - 1] == null && _filterMatch(h, item, address) != false),
-        contentOf: (v) => _contentOf(v.tx),
-      );
-    });
+    return nameIn(content);
   }
+
+  /// Name messages to fetch by hash alone (the state names them, not a
+  /// transaction at hand), with the height they were proven at.
+  final Map<String, int> _nameContent = {};
 
   /// Whether a message's author flagged it themselves, as far as fetched
   /// blocks and pending transactions tell: a withdrawal. The app lists such
   /// a thread only to its author, and nodes may stop keeping its content.
   bool selfFlagged(TxView v) => _messages.isSelfFlagged(v);
 
-  /// Whether a Reply is part of a thread (PROTOCOL.md Section 2.4); if not,
-  /// it's shown as a payment.
+  /// Whether a Reply is in a thread that shows (PROTOCOL.md Section 2.4);
+  /// if not (it names a Name, or a message that isn't text), it's shown as
+  /// a payment.
   bool isThreadedReply(TxView v) => _messages.isThreadedReply(v);
 
-  /// Direct replies to a message, oldest first.
+  /// A thread's replies, oldest first, among what's fetched. Threads are
+  /// flat: a reply has none of its own.
   List<TxView> repliesOf(TxView v) => _messages.repliesOf(v);
-
-  /// Every reply under a message, at any depth, among what's fetched.
-  Iterable<TxView> repliesUnder(TxView v) => _messages.repliesUnder(v);
 
   /// The threads and replies `address` wrote, among what's fetched, newest
   /// first.
   List<TxView> messagesBy(String address) => _messages.messagesBy(address);
 
-  /// The message a reply answers, if the client knows it.
-  TxView? parentOf(TxView v) => _messages.parentOf(v);
-
-  /// The thread at the top of a message's reply chain, if known.
+  /// The thread a message is in, if known: itself for a thread's first
+  /// message.
   TxView? threadRootOf(TxView v) => _messages.threadRootOf(v);
 
   // ---- what views ask for -----------------------------------------------------
@@ -1379,6 +1518,8 @@ class MurmurClient extends ChangeNotifier {
       _txWaiter,
       _feesWaiter,
       _headerProofWaiter,
+      _threadWaiter,
+      _addressWaiter,
     ]) {
       if (c != null && !c.isCompleted) c.completeError(_Aborted());
     }
@@ -1391,6 +1532,8 @@ class MurmurClient extends ChangeNotifier {
     _txWaiter = null;
     _feesWaiter = null;
     _headerProofWaiter = null;
+    _threadWaiter = null;
+    _addressWaiter = null;
     _headersSyncing = false;
     _wake();
     state = LinkState.disconnected;
@@ -1462,6 +1605,12 @@ class MurmurClient extends ChangeNotifier {
       case final HeaderProof msg:
         _complete(_headerProofWaiter, msg);
         _headerProofWaiter = null;
+      case final Thread msg:
+        _complete(_threadWaiter, msg);
+        _threadWaiter = null;
+      case final Address msg:
+        _complete(_addressWaiter, msg);
+        _addressWaiter = null;
       case final TxStatus msg:
         _statuses[toHex(msg.txid)] = msg;
         notifyListeners();
@@ -1478,7 +1627,9 @@ class MurmurClient extends ChangeNotifier {
             SubmitTx() ||
             GetState() ||
             GetFilters() ||
-            GetHeaderProof():
+            GetHeaderProof() ||
+            GetThread() ||
+            GetAddress():
         break;
       // Compact block relay is between nodes (Section 7.9): every node sends
       // SendCompact after its Hello, and the client never asks for compact
@@ -1550,8 +1701,7 @@ class MurmurClient extends ChangeNotifier {
     if (await _proveWatched(gen)) return true;
     // Then the text of what's already fetched, before fetching more: each
     // batch of blocks is followed by its messages, so lists fill in while
-    // older blocks keep arriving (however many a filter or the local copy
-    // still wants).
+    // older blocks keep arriving (however many a filter still wants).
     if (await _fetchContent(gen)) return true;
     final wanted = _wantedHeights
         .where((h) => h >= _low && h <= height && _blocks[h - 1] == null)
@@ -1564,6 +1714,8 @@ class MurmurClient extends ChangeNotifier {
     }
     _settleOwnPending();
     if (await _fetchTxs(gen)) return true;
+    // Threads and histories on screen, from the node's index.
+    if (await _readLists(gen)) return true;
     // The newest stretch, as far back as the open view needs.
     final older = _olderBatch();
     if (height > 0 && (_top > height || _wantOlder) && older.isNotEmpty) {
@@ -1581,27 +1733,13 @@ class MurmurClient extends ChangeNotifier {
       await _fetchBlocks(_olderBatch(), gen);
       return true;
     }
-    // With a local copy, the rest of the chain, oldest first, counted as it
-    // arrives: done once, then kept.
-    if (countsChain && !complete && _low == 1) {
-      final batch = [
-        for (var h = _counted + 1; h < _top && h <= _counted + maxBatchBlocks; h++)
-          if (_blocks[h - 1] == null) h,
-      ];
-      if (batch.isEmpty) {
-        _advance();
-      } else {
-        await _fetchBlocks(batch, gen);
-      }
-      return true;
-    }
     return false;
   }
 
   /// The next batch below the newest stretch, newest first (not below the
   /// known headers).
   List<int> _olderBatch() => [
-        for (var h = _top - 1; h > _counted && h >= _low && h > _top - 1 - maxBatchBlocks; h--)
+        for (var h = _top - 1; h >= _low && h > _top - 1 - maxBatchBlocks; h--)
           if (_blocks[h - 1] == null) h,
       ];
 
@@ -1661,7 +1799,7 @@ class MurmurClient extends ChangeNotifier {
 
   /// Checks `h`, the header after `parent`, as a node does (PROTOCOL.md
   /// Section 7.2): it links to its parent, meets its target, is later than
-  /// the median of the last 11 timestamps, carries the retarget's target,
+  /// the median of the last 11 timestamps, carries the difficulty rule's target,
   /// and commits to the header history through its parent (`history`).
   /// `at` looks up the earlier headers (genesis included).
   void _checkHeader(BlockHeader h, BlockHeader? Function(int height) at, HistoryPeaks history) {
@@ -1719,8 +1857,9 @@ class MurmurClient extends ChangeNotifier {
   BlockHeader? headerOrGenesis(int h) => h == 0 ? _genesisHeader : headerAt(h);
 
   /// Starts from a checkpoint (PROTOCOL.md Section 7.7): its block, checked
-  /// against the checkpoint's hash; the headers before it that the difficulty
-  /// and median-time-past checks need, checked by their links back from it;
+  /// against the checkpoint's hash; the 11 headers before it, which the
+  /// median-time-past and the next block's target need, checked by their
+  /// links back from it;
   /// and the header history through it, checked against its `history_root`.
   /// The headers back to genesis are checked later, in the background.
   Future<void> _startFromCheckpoint(Checkpoint cp, int gen) async {
@@ -1731,7 +1870,7 @@ class MurmurClient extends ChangeNotifier {
     if (header == null || !bytesEqual(header.hash, hash) || header.height != cp.height || !header.meetsTarget) {
       throw LinkError(LinkErrorKind.checkpointMismatch, height: cp.height);
     }
-    final from = max(1, cp.height - network!.lwmaWindow);
+    final from = max(1, cp.height - _checkpointContext);
     final context = <int, BlockHeader>{};
     List<HistoryNode>? peaks;
     final heights = [for (var h = from; h < cp.height; h++) h];
@@ -1778,14 +1917,17 @@ class MurmurClient extends ChangeNotifier {
     _checkpointHistory = _history.copy();
     _startedFrom = cp;
     _top = height + 1;
-    _counted = 0;
     _storeBlock(block!, const []);
     _advance();
   }
 
+  /// Headers before a checkpoint that the first header after it is checked
+  /// against: the last 11 for its time, the last two for its target.
+  static const _checkpointContext = 11;
+
   /// Checks the headers from genesis up to the checkpoint's context, one
   /// batch per call: each fully (links, proof of work, median-time-past,
-  /// retarget, history root), and the last must lead to the known headers,
+  /// target, history root), and the last must lead to the known headers,
   /// and so to the checkpoint. If it doesn't, the release's checkpoint or
   /// every node reached is wrong: the client stops and says so.
   Future<bool> _backfillHeaders(int gen) async {
@@ -1899,6 +2041,9 @@ class MurmurClient extends ChangeNotifier {
     for (var i = 0; i < b.transactions.length; i++) {
       final tx = b.transactions[i];
       _txIndex[tx.id] = (h, i);
+      // A new name for its sender: the one proven before is asked again now,
+      // not at its next slow turn.
+      if (tx.kind == TxKind.name) _stateAsked.remove(toHex(nameKey(tx.from)));
       if (tx.kind == TxKind.flag && tx.referenceId != null) {
         _flagKeys.add('${tx.fromAddress}:${tx.referenceId}');
         // A flag from the author of the message it names: a retraction.
@@ -1910,7 +2055,7 @@ class MurmurClient extends ChangeNotifier {
       final key = toHex(tx.messageHash!);
       _contentOwner[key] = (tx.id, h);
       // The author's flag may have come in an earlier fetched block.
-      if ((tx.kind == TxKind.orphan || tx.kind == TxKind.reply) && _flagKeys.contains('${tx.fromAddress}:${tx.id}')) {
+      if (_flagKeys.contains('${tx.fromAddress}:${tx.id}')) {
         _withdraw(tx);
         continue;
       }
@@ -1979,10 +2124,10 @@ class MurmurClient extends ChangeNotifier {
 
   /// A message withdrawn by its author (their own flag is on the chain):
   /// deletes its content here, in memory and in the local copy, and never
-  /// asks for it again. Only Orphans and Replies carry content to withdraw.
+  /// asks for it again. A withdrawn Name is no name any more.
   void _withdraw(Transaction message) {
     final hash = message.messageHash;
-    if (hash == null || (message.kind != TxKind.orphan && message.kind != TxKind.reply)) return;
+    if (hash == null) return;
     final key = toHex(hash);
     if (!_withdrawnContent.add(key)) return;
     _contents.remove(key);
@@ -1991,96 +2136,11 @@ class MurmurClient extends ChangeNotifier {
     _unsavedRemovals.add(key);
   }
 
-  /// Grows the newest stretch down over blocks already fetched, and counts
-  /// every block that now follows the counted ones.
+  /// Grows the newest stretch down over blocks already fetched.
   void _advance() {
     while (_top > 1 && _blocks[_top - 2] != null) {
       _top--;
     }
-    final wasComplete = complete;
-    while (_counted < height && _blocks[_counted] != null) {
-      _applyBlock(_blocks[_counted]!);
-      _counted++;
-    }
-    if (!wasComplete && complete && height > 0 && _stateCheckedAt != height) _checkStateRoot();
-  }
-
-  /// Once the whole chain is counted, the state tree this client computes
-  /// must have the root the tip's header commits to. If not, the node served
-  /// a chain whose state it lied about (or this client has a bug): either
-  /// way, nothing it says can be trusted.
-  void _checkStateRoot() {
-    _stateCheckedAt = height;
-    final entries = <String, Uint8List>{};
-    final addresses = {..._balances.keys, ..._nonces.keys};
-    for (final address in addresses) {
-      final balance = _balances[address] ?? 0, nonce = _nonces[address] ?? 0;
-      if (balance == 0 && nonce == 0) continue;
-      entries[toHex(accountKey(fromHex(address)))] = Uint8List.fromList([...u64le(balance), ...u64le(nonce)]);
-    }
-    for (final flag in _countedFlagEntries) {
-      entries[flag] = Uint8List.fromList([1]);
-    }
-    if (_burnPool > 0) entries[toHex(poolKey)] = u64le(_burnPool);
-    if (_issued > 0) entries[toHex(issuedKey)] = u64le(_issued);
-    if (!bytesEqual(stateRootOf(entries), _headers.stateRootAt(height - 1)!)) {
-      error = LinkError(LinkErrorKind.stateMismatch, height: height);
-    }
-  }
-
-  /// Balance effects (PROTOCOL.md Section 5): the sender's nonce goes up and
-  /// it pays `fee + amount`; the recipient gets `amount`, or it's burned into
-  /// the pool (Orphan). The miner gets subsidy + ceil(pool before / K) + fees,
-  /// and only then do this block's burns enter the pool.
-  void _applyBlock(Block b) {
-    void credit(String addr, int delta) => _balances[addr] = (_balances[addr] ?? 0) + delta;
-    var burned = 0;
-    for (var i = 0; i < b.transactions.length; i++) {
-      final tx = b.transactions[i];
-      _nonces[tx.fromAddress] = (_nonces[tx.fromAddress] ?? 0) + 1;
-      credit(tx.fromAddress, -(tx.fee + tx.amount));
-      if (tx.toAddress != null) credit(tx.toAddress!, tx.amount);
-      if (tx.kind == TxKind.flag && tx.reference != null) {
-        _countedFlagEntries.add(toHex(flagEntryKey(flagKeyOf(tx.from, tx.reference!))));
-      }
-
-      // Indexed after the balance changes, so each entry holds the balance
-      // right after the transaction.
-      void index(String? address) {
-        if (address == null) return;
-        _byAddress.putIfAbsent(address, () => []).add((b.header.height, i, _balances[address] ?? 0));
-      }
-
-      index(tx.fromAddress);
-      if (tx.toAddress != tx.fromAddress) index(tx.toAddress);
-      if (tx.kind == TxKind.flag && tx.referenceId != null) {
-        // A flag also concerns the author of the message it reports.
-        final author = authorOf(tx.referenceId!);
-        if (author != tx.fromAddress) index(author);
-      }
-      burned += tx.burned;
-    }
-    final payout = network!.burnPayout(_burnPool);
-    _payouts.add(payout);
-    _burnPool = _burnPool - payout + burned;
-    final subsidy = network!.subsidyAt(b.header.height);
-    _issued += subsidy;
-    final miner = toHex(b.header.miner);
-    credit(miner, subsidy + payout + b.totalFees);
-    _blocksMined[miner] = (_blocksMined[miner] ?? 0) + 1;
-  }
-
-  void _resetCounted() {
-    _counted = 0;
-    _byAddress.clear();
-    _balances.clear();
-    _nonces.clear();
-    _blocksMined.clear();
-    _countedFlagEntries.clear();
-    _payouts.clear();
-    _burnPool = 0;
-    _issued = 0;
-    _stateCheckedAt = null;
   }
 
   /// Drops everything above height `h` (a reorganization).
@@ -2148,11 +2208,6 @@ class MurmurClient extends ChangeNotifier {
         if (tx.kind == TxKind.flag && tx.referenceId != null) _flagKeys.add('${tx.fromAddress}:${tx.referenceId}');
       }
     }
-    if (_counted > h) {
-      // The payout rounds up, so the pool can't be unwound: count again.
-      _resetCounted();
-      _advance();
-    }
     _unsavedBlocks.removeWhere((b) => b.header.height > h);
     final cache = _cache;
     if (cache != null) unawaited(cache.dropBlocksAbove(h).catchError((Object _) {}));
@@ -2195,7 +2250,11 @@ class MurmurClient extends ChangeNotifier {
     _settling.clear();
     _txUnknown.clear();
     _deferredTxids.clear();
-    _resetCounted();
+    _nameContent.clear();
+    _minedCounts.clear();
+    _threadReads.clear();
+    _addressReads.clear();
+    _headersUnproven.clear();
     _pending.clear();
     _wantedHeights.clear();
     _unsavedBlocks.clear();
@@ -2217,7 +2276,7 @@ class MurmurClient extends ChangeNotifier {
     if (height == 0) return false;
     final stale = [
       for (final MapEntry(key: hex, value: key) in _watchedKeys.entries)
-        if ((_stateAsked[hex] ?? -1) < height) key,
+        if ((_stateAsked[hex] ?? -_slowRefresh) < (_slowKeys.contains(hex) ? height - _slowRefresh + 1 : height)) key,
     ].take(maxStateKeys).toList();
     if (stale.isEmpty) return false;
     final at = height;
@@ -2291,9 +2350,9 @@ class MurmurClient extends ChangeNotifier {
     for (final p in _pending.values) {
       if (!p.mine || _settling.contains(p.tx.id)) continue;
       final proven = _proven[toHex(accountKey(p.tx.from))];
-      if (proven == null) continue;
-      final nonce = proven.value == null ? 0 : readU64le(proven.value!, 8);
-      if (nonce > p.tx.nonce) {
+      final entry = proven == null ? null : _accountEntry(proven);
+      if (entry == null) continue;
+      if (entry.nonce > p.tx.nonce) {
         _settling.add(p.tx.id);
         _wantedTxids.add(p.tx.id);
       }
@@ -2314,6 +2373,12 @@ class MurmurClient extends ChangeNotifier {
       _txAsking = const {};
     }
     if (gen != _generation) throw _Aborted();
+    // In blocks below the headers checked so far (a session started from a
+    // checkpoint): those headers come by proof against the tip's history.
+    await _fetchOldHeaders([
+      for (final (_, lookup) in reply.entries)
+        if (lookup is TxOnChain) lookup.height,
+    ], gen);
     final answered = <String>{};
     for (final (txid, lookup) in reply.entries) {
       final id = toHex(txid);
@@ -2330,8 +2395,8 @@ class MurmurClient extends ChangeNotifier {
           _pending.putIfAbsent(id, () => PendingTx(tx, null, mine: false));
         case TxOnChain(:final tx, :final blockHash, height: final h, :final index, :final branch):
           final header = headerAt(h);
-          // In a block below the headers checked so far (started from a
-          // checkpoint): proven once they're in.
+          // Still without its header (the node gave no proof of it): proven
+          // once the headers back to genesis are in.
           if (header == null && h >= 1 && h < _low) {
             _deferredTxids.add(id);
             continue;
@@ -2342,14 +2407,213 @@ class MurmurClient extends ChangeNotifier {
               !bytesEqual(merkleRootFromBranch(txid, index, branch), header.merkleRoot)) {
             throw FormatException('the node sent a transaction not proven in block $h');
           }
-          _loose[id] = _LooseTx(tx, h);
-          _pending.remove(id);
-          _wantContent(tx, h);
+          _storeLoose(tx, h, index);
       }
     }
     // What the reply left out (it may stop early) is asked for again.
     _wantedTxids.addAll(ids.where((id) => !answered.contains(id)));
     return true;
+  }
+
+  /// Keeps a transaction proven on the chain without its block: what GetTx,
+  /// GetThread and GetAddress give. As for a block's transactions, a flag is
+  /// noted, and an author's flag of their own message withdraws it.
+  void _storeLoose(Transaction tx, int h, int index) {
+    final id = tx.id;
+    _pending.remove(id);
+    if (_txIndex.containsKey(id)) return;
+    _loose[id] = _LooseTx(tx, h, index);
+    if (tx.kind == TxKind.flag && tx.referenceId != null) {
+      _flagKeys.add('${tx.fromAddress}:${tx.referenceId}');
+      final target = lookupTx(tx.referenceId!)?.tx;
+      if (target != null && target.fromAddress == tx.fromAddress) _withdraw(target);
+    }
+    if (tx.messageHash == null) return;
+    _contentOwner[toHex(tx.messageHash!)] = (id, h);
+    if (_flagKeys.contains('${tx.fromAddress}:$id')) {
+      _withdraw(tx);
+    } else {
+      _wantContent(tx, h);
+    }
+  }
+
+  /// Headers below the ones checked that were fetched on their own, each
+  /// proven against the tip's header history.
+  int get oldHeadersProven => _oldHeadersProven;
+  int _oldHeadersProven = 0;
+
+  /// Headers the node couldn't prove against our tip: not asked for again
+  /// this session.
+  final Set<int> _headersUnproven = {};
+
+  /// Gets the headers at `heights` that aren't known (below the ones checked
+  /// from a checkpoint), each proven against the tip's `history_root`
+  /// (PROTOCOL.md Sections 3.6 and 7.6): the tip commits to every block
+  /// before it. They are as trusted as the tip's own chain back to the
+  /// checkpoint; the check back to genesis later covers them like the rest.
+  Future<void> _fetchOldHeaders(Iterable<int> heights, int gen) async {
+    final wanted = {
+      for (final h in heights)
+        if (h >= 1 && h < height && !_headers.isKnown(h - 1) && !_headersUnproven.contains(h)) h,
+    }.toList()
+      ..sort();
+    for (var i = 0; i < wanted.length; i += maxHeaderProofs) {
+      final batch = wanted.sublist(i, min(i + maxHeaderProofs, wanted.length));
+      final tip = height;
+      final at = hashAt(tip);
+      final root = _hdr(tip).historyRoot;
+      final reply = await _request(_headerProofWaiter = Completer<HeaderProof>(), GetHeaderProof(at, batch));
+      if (gen != _generation) throw _Aborted();
+      // The tip moved on meanwhile: whoever needs them asks again.
+      if (!reply.available || !bytesEqual(reply.at, at) || tip > height || !bytesEqual(hashAt(tip), at)) return;
+      final got = <int>{};
+      for (final (header, siblings) in reply.entries) {
+        final h = header.height;
+        if (!batch.contains(h)) continue;
+        // The block at height `tip` commits to the `tip` blocks before it,
+        // genesis first: block `h` is leaf `h`.
+        if (!verifyHistoryProof(
+            root: root, n: tip, index: h, header: header, siblings: siblings, peaks: reply.peaks)) {
+          throw FormatException('the node sent a header not proven at height $h');
+        }
+        if (h <= height && !_headers.isKnown(h - 1)) {
+          _headers[h - 1] = header;
+          _oldHeadersProven++;
+        }
+        got.add(h);
+      }
+      _headersUnproven.addAll(batch.where((h) => !got.contains(h)));
+    }
+  }
+
+  /// The height of best-chain block `hash` among the newest (a node answers
+  /// about its tip, and proves state for the 120 blocks before it), or null.
+  int? _recentHeightOf(Uint8List hash) {
+    for (var h = height; h >= _low && h > height - 121; h--) {
+      if (_headers.hashIs(h - 1, hash)) return h;
+    }
+    return null;
+  }
+
+  /// Reads one page of one list that has more to read: a thread or an
+  /// address's history on screen. Returns whether it asked the node.
+  Future<bool> _readLists(int gen) async {
+    if (height == 0) return false;
+    for (final read in [..._threadReads.values, ..._addressReads.values]) {
+      if (read.unavailable) continue;
+      // Read whole: more only once the state shows the list has grown (or
+      // changed, after a reorganization).
+      if (read.complete) {
+        final proven = _proven[toHex(read.key)];
+        final now = proven == null ? null : read.count(proven.value);
+        if (now == null || (now.$1 == read.total && bytesEqual(now.$2, read.digest!))) continue;
+      }
+      await _readPage(read, gen);
+      return true;
+    }
+    return false;
+  }
+
+  Future<ListPage?> _askPage(_ListRead read, int end, int count) async {
+    final msg = read.request(end, count);
+    if (msg is GetThread) return (await _request(_threadWaiter = Completer<Thread>(), msg)).page;
+    return (await _request(_addressWaiter = Completer<Address>(), msg)).page;
+  }
+
+  Future<void> _readPage(_ListRead read, int gen) async {
+    // The next page back, or (first, and when the list has grown) the newest.
+    final back = read.total != null && !read.complete;
+    final end = back ? read.total! - read.have : 0;
+    final page = await _askPage(read, end, maxPageEntries);
+    if (gen != _generation) throw _Aborted();
+    if (page == null || !page.available) {
+      // No index on this node: block filters find the same, more slowly.
+      read.unavailable = true;
+      read.fallback();
+      return;
+    }
+    final txids = [for (final e in page.entries) e.tx.hash];
+    final after = chainDigest(page.startDigest, txids);
+    if (back) {
+      // An earlier page is proven by chaining into the page after it.
+      if (page.entries.isEmpty || page.start + page.entries.length != end || !bytesEqual(after, read.lowDigest!)) {
+        // Not the list we were reading any more (a reorganization): again.
+        read
+          ..total = null
+          ..have = 0
+          ..entries.clear();
+        return;
+      }
+    } else {
+      // The newest page is proven against the state at the block it describes.
+      final at = _recentHeightOf(page.at);
+      if (at == null) {
+        // The node's tip is past ours: catch up, then read again.
+        _needHeaders = true;
+        return;
+      }
+      final reply = await _request(_stateWaiter = Completer<State>(), GetState(page.at, [read.key]));
+      if (gen != _generation) throw _Aborted();
+      if (!reply.available || !bytesEqual(reply.block, page.at) || reply.proofs.isEmpty) return;
+      if (at > height || !_headers.hashIs(at - 1, page.at)) return; // reorganized meanwhile
+      final (key, proof) = reply.proofs.first;
+      final fact = bytesEqual(key, read.key) ? verifyStateProof(_headers.stateRootAt(at - 1)!, key, proof) : null;
+      if (fact == null) throw FormatException('the node sent a state proof that does not match block $at');
+      final entry = read.count(fact.value);
+      if (entry == null) {
+        if (fact.value == null && page.total == 0 && page.entries.isEmpty) {
+          // No such entry, and nothing listed: an empty list, proven.
+          read
+            ..total = 0
+            ..digest = Uint8List(32)
+            ..have = 0
+            ..lowDigest = Uint8List(32);
+          return;
+        }
+        throw const FormatException('the node sent a list the state does not hold');
+      }
+      final (total, digest) = entry;
+      if (page.total != total || page.start + page.entries.length != total || !bytesEqual(after, digest)) {
+        throw const FormatException('the node sent a list that does not match the state');
+      }
+      // Whether what was read before is still the list's start: its digest
+      // at the old length must come up while chaining this page.
+      final old = read.total, oldDigest = read.digest;
+      var continues = old != null && read.complete && old >= page.start && old <= total;
+      if (continues) {
+        final upToOld = chainDigest(page.startDigest, txids.take(old - page.start));
+        continues = bytesEqual(upToOld, oldDigest!);
+      }
+      if (continues) {
+        read.have += total - old!;
+      } else {
+        read
+          ..entries.clear()
+          ..have = page.entries.length
+          ..lowDigest = page.startDigest;
+      }
+      read
+        ..total = total
+        ..digest = digest;
+    }
+    // Each entry is on the chain, where it says: its branch leads to its
+    // block's merkle root. (That it is in the list, the digest has shown.)
+    await _fetchOldHeaders([for (final e in page.entries) e.height], gen);
+    for (final e in page.entries) {
+      final header = headerAt(e.height);
+      if (header == null ||
+          !bytesEqual(header.hash, e.blockHash) ||
+          !bytesEqual(merkleRootFromBranch(e.tx.hash, e.index, e.branch), header.merkleRoot)) {
+        throw FormatException('the node sent a transaction not proven in block ${e.height}');
+      }
+      read.entries[e.tx.id] = (e.height, e.index);
+      _storeLoose(e.tx, e.height, e.index);
+    }
+    if (back) {
+      read
+        ..have += page.entries.length
+        ..lowDigest = page.startDigest;
+    }
   }
 
   // ---- gossip -------------------------------------------------------------------
@@ -2410,23 +2674,32 @@ class MurmurClient extends ChangeNotifier {
   /// whether it asked. The node serves what it has (possibly nothing: it may
   /// have deleted it); what it didn't send isn't asked for again.
   Future<bool> _fetchContent(int gen) async {
-    _missingContent.removeWhere((key, _) =>
-        _contents.containsKey(key) || _contentUnavailable.contains(key) || _withdrawnContent.contains(key));
-    if (_missingContent.isEmpty) return false;
+    bool settled(String key) =>
+        _contents.containsKey(key) || _contentUnavailable.contains(key) || _withdrawnContent.contains(key);
+    _missingContent.removeWhere((key, _) => settled(key));
+    _nameContent.removeWhere((key, _) => settled(key));
+    if (_missingContent.isEmpty && _nameContent.isEmpty) return false;
+    // Names first: every row shows one. Then messages, newest first.
     final newestFirst = _missingContent.entries.toList()..sort((a, b) => b.value.$1.compareTo(a.value.$1));
-    final wanted = {for (final e in newestFirst.take(maxContentRequest)) e.key: e.value.$2};
+    final wanted = <String, Transaction?>{
+      for (final key in _nameContent.keys.take(maxContentRequest)) key: null,
+    };
+    for (final e in newestFirst) {
+      if (wanted.length >= maxContentRequest) break;
+      wanted[e.key] = e.value.$2;
+    }
     final items = await _getContent([for (final k in wanted.keys) fromHex(k)]);
     if (gen != _generation) throw _Aborted();
     for (final item in items) {
       final key = toHex(item.hash);
+      if (!wanted.containsKey(key) || _contents.containsKey(key) || _withdrawnContent.contains(key)) continue;
       final tx = wanted[key];
-      // Only what we asked for, and only valid content (hash and length).
-      if (tx == null ||
-          !tx.isContent(item.content) ||
-          _contents.containsKey(key) ||
-          _withdrawnContent.contains(key)) {
-        continue;
-      }
+      // Only what we asked for, and only valid content: its hash, and its
+      // length (a name's is fixed; a message's is its transaction's).
+      final valid = tx != null
+          ? tx.isContent(item.content)
+          : item.content.length == protocol_alias.aliasContentSize && toHex(sha256Bytes(item.content)) == key;
+      if (!valid) continue;
       _contents[key] = item.content;
       _unsavedContents[key] = item.content;
     }
@@ -2435,6 +2708,7 @@ class MurmurClient extends ChangeNotifier {
     for (final key in wanted.keys) {
       if (!_contents.containsKey(key)) _contentUnavailable.add(key);
       _missingContent.remove(key);
+      _nameContent.remove(key);
     }
     return true;
   }
@@ -2486,44 +2760,51 @@ class MurmurClient extends ChangeNotifier {
 
   // ---- submitting -----------------------------------------------------------
 
-  /// Checks a transaction against consensus (PROTOCOL.md Section 2.3), the
-  /// proven balance, and the client rules of Section 2.4 (a reply that
-  /// doesn't pay its parent's author, or a flag of something that isn't a
-  /// message, would be valid but ignored by every client). Returns a
-  /// problem, or null if valid. `message` is the text, without salt.
+  /// Checks a transaction against consensus (PROTOCOL.md Sections 2.3 and
+  /// 5), the proven balance, and the client rules of Section 2.4 (a flag of
+  /// something that isn't a message of the thread it names would be valid
+  /// but ignored by every client). Returns a problem, or null if valid.
+  /// `message` is the text, without salt. `reference` is the message a
+  /// Reply answers (any message of the thread: the reply goes in its
+  /// thread) or the one a Flag reports.
   TxProblem? checkTransaction({
     required String fromAddress,
     required TxKind kind,
-    required Uint8List? to,
-    required int amount,
+    Uint8List? to,
+    int amount = 0,
     required int fee,
-    required Uint8List? message,
+    Uint8List? message,
     String? reference,
   }) {
     const malformed = TxProblem(TxProblemKind.malformed);
     const checking = TxProblem(TxProblemKind.checkingBalance);
-    if (fee <= 0) return const TxProblem(TxProblemKind.feeTooLow);
+    // Below the network's least fee a transaction is invalid, not just slow.
+    if (fee < (network?.minFee ?? minFee)) return const TxProblem(TxProblemKind.feeTooLow);
     if (amount < 0) return malformed;
     final target = reference == null ? null : lookupTx(reference);
-    bool isMessage(TxView? v) => v != null && (v.tx.kind == TxKind.orphan || v.tx.kind == TxKind.reply);
+    var debit = fee + amount;
     switch (kind) {
-      case TxKind.orphan:
-        if (to != null || reference != null || amount != orphanBurn(fee)) return malformed;
+      case TxKind.orphan || TxKind.name:
+        if (to != null || reference != null) return malformed;
         if (message == null) return const TxProblem(TxProblemKind.needsMessage);
+        debit = fee + orphanBurn(fee);
       case TxKind.reply:
-        if (to == null) return const TxProblem(TxProblemKind.needsRecipient);
+        if (to != null || reference == null) return malformed;
         if (amount < fee) return TxProblem(TxProblemKind.amountBelowFee, fee);
         if (message == null) return const TxProblem(TxProblemKind.needsMessage);
-        if (reference == null) return malformed;
-        if (!isMessage(target) || !target!.confirmed) return const TxProblem(TxProblemKind.replyParentNotMined);
-        if (target.tx.fromAddress != toHex(to)) return const TxProblem(TxProblemKind.replyWrongRecipient);
+        // The thread must be on the chain, or the reply can't be mined.
+        final thread = target == null ? null : threadRootOf(target);
+        if (thread == null || !thread.confirmed) return const TxProblem(TxProblemKind.replyParentNotMined);
       case TxKind.raw:
         if (to == null) return const TxProblem(TxProblemKind.needsRecipient);
         if (amount < fee) return TxProblem(TxProblemKind.amountBelowFee, fee);
         if (message != null || reference != null) return malformed;
       case TxKind.flag:
-        if (to != null || amount != 0 || message != null || reference == null) return malformed;
-        if (!isMessage(target)) return const TxProblem(TxProblemKind.flagNotMessage);
+        if (to != null || message != null || reference == null) return malformed;
+        debit = fee;
+        if (target == null || !target.tx.kind.hasMessage || !target.confirmed) {
+          return const TxProblem(TxProblemKind.flagNotMessage);
+        }
         if (hasFlagged(fromAddress, reference)) return const TxProblem(TxProblemKind.alreadyFlagged);
         // Earlier flags anywhere on the chain are proven, not searched for.
         if (provenFlagged(fromAddress, reference) == null) return checking;
@@ -2533,16 +2814,19 @@ class MurmurClient extends ChangeNotifier {
     }
     final available = availableTo(fromAddress);
     if (available == null) return checking;
-    if (fee + amount > available) {
-      return TxProblem(TxProblemKind.insufficientBalance, fee + amount, available);
+    if (debit > available) {
+      return TxProblem(TxProblemKind.insufficientBalance, debit, available);
     }
     return null;
   }
 
-  /// Salts `message` (PROTOCOL.md Section 2.4), signs the transaction with
-  /// the sender's next nonce, and submits it (SubmitTx; the node answers
-  /// with a TxStatus, see [statusOf]). Throws a [TxProblem] if it would be
-  /// refused or the client is offline.
+  /// Salts `message` (PROTOCOL.md Section 2.4), signs the transaction for
+  /// this network with the sender's next nonce, and submits it (SubmitTx;
+  /// the node answers with a TxStatus, see [statusOf]). Throws a
+  /// [TxProblem] if it would be refused or the client is offline.
+  ///
+  /// A Reply goes in the thread of the message `reference` names, and a
+  /// Flag of a reply names that reply's thread: both are worked out here.
   Future<Transaction> submit({
     required MurmurWallet wallet,
     required TxKind kind,
@@ -2567,17 +2851,26 @@ class MurmurClient extends ChangeNotifier {
     final nonce = nextNonce(wallet.addressHex);
     if (nonce == null) throw const TxProblem(TxProblemKind.checkingBalance);
     final content = message == null ? null : saltedContent(message);
+    final target = reference == null ? null : lookupTx(reference)!.tx;
+    final thread = target?.threadId;
 
     final tx = await wallet.sign(
+      networkTag: network!.tag,
       kind: kind,
       nonce: nonce,
-      to: to,
-      amount: amount,
       fee: fee,
+      amount: amount,
+      to: to,
       messageHash: content == null ? null : sha256Bytes(content),
       contentSize: content?.length ?? 0,
-      reference: reference == null ? null : fromHex(reference),
-      timestamp: DateTime.now().millisecondsSinceEpoch ~/ 1000,
+      // A reply names its thread; a flag its target, and the thread unless
+      // the target starts it.
+      reference: switch (kind) {
+        TxKind.reply => fromHex(thread!),
+        TxKind.flag => fromHex(reference!),
+        _ => null,
+      },
+      thread: kind == TxKind.flag && thread != reference ? fromHex(thread!) : null,
     );
     if (state != LinkState.live) throw const TxProblem(TxProblemKind.connectionLost);
     if (_txIndex.containsKey(tx.id) || _pending.containsKey(tx.id)) {

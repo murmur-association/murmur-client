@@ -94,8 +94,9 @@ class TestNode {
 
   /// Starts the node on the chain (on the port it had, if it ran before),
   /// mining on top to `mineTo` if given. With `webSocketPort` it also takes
-  /// WebSocket connections there (`--ws-port`), as browsers need.
-  Future<void> start({Uint8List? mineTo, int? webSocketPort}) async {
+  /// WebSocket connections there (`--ws-port`), as browsers need. `extra`
+  /// are more of the node's options (`--no-index`, say).
+  Future<void> start({Uint8List? mineTo, int? webSocketPort, List<String> extra = const []}) async {
     await node.start([
       '--daemon',
       '--spec', 'demo',
@@ -109,6 +110,7 @@ class TestNode {
       // time past) until it waits out the future-timestamp limit, up to a
       // minute (Section 8.2). Slowly, it stays within seconds of the clock.
       if (mineTo != null) ...['--mine-to', toHex(mineTo), '--mine-cpu', '1'],
+      ...extra,
     ]);
     final deadline = DateTime.now().add(const Duration(seconds: 30));
     while (node.state != LocalNodeState.running) {

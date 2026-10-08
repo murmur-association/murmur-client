@@ -5,6 +5,7 @@ import '../services/node_client.dart';
 import 'common.dart';
 import 'paged_list.dart';
 import 'thread_page.dart';
+import 'emoji.dart';
 import 'glyphs.dart';
 
 /// Every thread, most recently active first (a new reply anywhere in a
@@ -321,7 +322,7 @@ class _ThreadTile extends StatelessWidget {
     final tile = ListTile(
       // The author's picture: threads read as people talking.
       leading: Opacity(opacity: root.confirmed ? 1 : 0.5, child: AddressAvatar(root.tx.fromAddress)),
-      title: Text(text, maxLines: 1, overflow: TextOverflow.ellipsis),
+      title: MessageText(text, maxLines: 1),
       // Who started it, in copper, then when.
       subtitle: withdrawn
           ? Text(l.threadWithdrawnMine, maxLines: 1, overflow: TextOverflow.ellipsis)

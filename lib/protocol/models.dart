@@ -1,7 +1,8 @@
 // Transactions and blocks, mirroring murmur core's transaction.rs and
 // consensus.rs (PROTOCOL.md Sections 2 and 3). Hashes must match the node
-// byte for byte, so the preimages here follow the Rust field order and
-// little-endian integer encoding.
+// byte for byte: a transaction has one encoding, signed, hashed and sent,
+// and the header preimage follows the Rust field order with little-endian
+// integers.
 
 import 'dart:math';
 import 'dart:typed_data';
@@ -18,9 +19,11 @@ const saltLength = 16;
 /// Maximum content size: salt plus the largest message.
 const maxContentSize = saltLength + maxMessageSize;
 
-final _secureRandom = Random.secure();
+/// Every amount on the chain is a whole number of units; people read and
+/// write tokens, with up to six decimals.
+const unitsPerToken = 1000000;
 
-final BigInt _u128Max = (BigInt.one << 128) - BigInt.one;
+final _secureRandom = Random.secure();
 
 /// Salts a message with 16 bytes from a cryptographically secure source,
 /// giving the content a transaction commits to.
@@ -37,48 +40,69 @@ Uint8List saltedContent(List<int> message) {
 Uint8List messageOf(Uint8List content) =>
     content.length <= saltLength ? Uint8List(0) : Uint8List.sublistView(content, saltLength);
 
-/// What every transaction weighs before its content: the fixed fields, with
-/// optional ones counted at full width (PROTOCOL.md Section 2.3).
-const txBaseBytes = 264;
+/// The most a transaction's own bytes can be (PROTOCOL.md Section 2.3): what
+/// a fee is worked out against before the transaction exists.
+const txMaxOwnBytes = 196;
 
-/// An Orphan's `amount` must be exactly this times its fee, and is burned:
-/// starting a thread costs 11 x the fee.
+/// An Orphan's or a Name's amount is exactly this times its fee, and is
+/// burned: starting a thread costs 11 x the fee.
 const orphanBurnMultiple = 10;
 
 int orphanBurn(int fee) => fee * orphanBurnMultiple;
 
-/// Weight of a transaction carrying `contentSize` bytes of content: what its
-/// fee per byte is measured against.
-int txWeight(int contentSize) => txBaseBytes + contentSize;
+/// The most a transaction carrying `contentSize` bytes of content can weigh:
+/// what its fee per byte is measured against before it is signed. A signed
+/// transaction knows its own [Transaction.weight], a little less.
+int txWeight(int contentSize) => txMaxOwnBytes + contentSize;
 
-/// The index is the on-chain tag: Orphan = 0, Reply = 1, Raw = 2, Flag = 3.
-enum TxKind { orphan, reply, raw, flag }
+/// The index is the on-chain tag: Orphan = 0, Reply = 1, Raw = 2, Flag = 3,
+/// Name = 4.
+enum TxKind {
+  orphan,
+  reply,
+  raw,
+  flag,
+  name;
+
+  /// Carries a message: a hash and a size of content.
+  bool get hasMessage => this == orphan || this == reply || this == name;
+
+  /// The first message of a thread, which burns ten times its fee. A Name is
+  /// one so that it can be flagged; it's never shown as a thread.
+  bool get startsThread => this == orphan || this == name;
+}
 
 class Transaction {
+  /// `amount` is what a Reply pays its thread's author or a Raw its
+  /// recipient. An Orphan's and a Name's is their burn and a Flag's is 0,
+  /// whatever is given: none of them writes one.
   Transaction({
     required this.kind,
-    required this.from,
-    required this.nonce,
-    required this.to,
-    required this.amount,
-    required this.fee,
-    required this.messageHash,
-    required this.contentSize,
-    required this.reference,
-    required this.timestamp,
     required this.pubkey,
+    required this.nonce,
+    required this.fee,
+    int amount = 0,
+    this.to,
+    this.messageHash,
+    this.contentSize = 0,
+    this.reference,
+    this.thread,
     required this.signature,
-  });
+  }) : amount = kind.startsThread ? orphanBurn(fee) : (kind == TxKind.flag ? 0 : amount);
 
   final TxKind kind;
-  final Uint8List from;
+
+  /// The sender's public key. The sender is its address, [from].
+  final Uint8List pubkey;
 
   /// The sender's transaction count before this one: valid only if it equals
   /// the sender's nonce in the state (PROTOCOL.md Sections 2.1 and 5).
   final int nonce;
-  final Uint8List? to;
-  final int amount;
   final int fee;
+  final int amount;
+
+  /// A Raw's recipient. A Reply has none: the chain pays its thread's author.
+  final Uint8List? to;
 
   /// H(content); the content itself travels separately.
   final Uint8List? messageHash;
@@ -86,85 +110,162 @@ class Transaction {
   /// The content's length in bytes; 0 for Raw and Flag.
   final int contentSize;
 
-  /// Another transaction's txid: a Reply's parent, or what a Flag reports.
+  /// A Reply's thread (the txid of its first message), or the message a Flag
+  /// reports.
   final Uint8List? reference;
 
-  final int timestamp;
-  final Uint8List pubkey;
+  /// A Flag's thread, when its target isn't the thread's first message.
+  final Uint8List? thread;
+
   final Uint8List signature;
 
-  /// Everything except the signature: what gets signed.
-  static Uint8List signingBytesFor({
+  /// Everything but the signature (PROTOCOL.md Section 2.2): what is signed,
+  /// after the network's tag.
+  static Uint8List bodyFor({
     required TxKind kind,
-    required Uint8List from,
-    required int nonce,
-    required Uint8List? to,
-    required int amount,
-    required int fee,
-    required Uint8List? messageHash,
-    required int contentSize,
-    required Uint8List? reference,
-    required int timestamp,
     required Uint8List pubkey,
+    required int nonce,
+    required int fee,
+    int amount = 0,
+    Uint8List? to,
+    Uint8List? messageHash,
+    int contentSize = 0,
+    Uint8List? reference,
+    Uint8List? thread,
   }) {
     final w = ByteWriter()
       ..u8(kind.index)
-      ..bytes(from)
-      ..u64(nonce, Endian.little);
-    _optional(w, to);
-    w
-      ..u64(amount, Endian.little)
-      ..u64(fee, Endian.little);
-    _optional(w, messageHash);
-    w.u32(contentSize, Endian.little);
-    _optional(w, reference);
-    w
-      ..u64(timestamp, Endian.little)
-      ..bytes(pubkey);
+      ..bytes(pubkey)
+      ..varint(nonce)
+      ..varint(fee);
+    switch (kind) {
+      case TxKind.orphan || TxKind.name:
+        w
+          ..bytes(messageHash!)
+          ..varint(contentSize);
+      case TxKind.reply:
+        w
+          ..varint(amount)
+          ..bytes(messageHash!)
+          ..varint(contentSize)
+          ..bytes(reference!);
+      case TxKind.raw:
+        w
+          ..bytes(to!)
+          ..varint(amount);
+      case TxKind.flag:
+        w.bytes(reference!);
+        if (thread == null) {
+          w.u8(0);
+        } else {
+          w
+            ..u8(1)
+            ..bytes(thread);
+        }
+    }
     return w.take();
   }
 
-  static void _optional(ByteWriter w, Uint8List? v) {
-    if (v != null) {
-      w
-        ..u8(1)
-        ..bytes(v);
-    } else {
-      w.u8(0);
+  /// Reads one transaction: its kind and fields say where it ends. Anything
+  /// that isn't the one encoding of a transaction is refused.
+  static Transaction read(ByteReader r) {
+    final tag = r.u8();
+    if (tag >= TxKind.values.length) throw FormatException('unknown tx kind tag $tag');
+    final kind = TxKind.values[tag];
+    final pubkey = r.take(32);
+    final nonce = r.varint();
+    final fee = r.varint();
+    var amount = 0, contentSize = 0;
+    Uint8List? to, messageHash, reference, thread;
+    switch (kind) {
+      case TxKind.orphan || TxKind.name:
+        messageHash = r.hash32();
+        contentSize = r.varint();
+      case TxKind.reply:
+        amount = r.varint();
+        messageHash = r.hash32();
+        contentSize = r.varint();
+        reference = r.hash32();
+      case TxKind.raw:
+        to = r.hash32();
+        amount = r.varint();
+      case TxKind.flag:
+        reference = r.hash32();
+        final marker = r.u8();
+        if (marker > 1) throw FormatException('invalid flag thread marker $marker');
+        if (marker == 1) thread = r.hash32();
     }
+    if (contentSize > 0xffffffff) throw const FormatException('a content size over 32 bits');
+    return Transaction(
+      kind: kind,
+      pubkey: pubkey,
+      nonce: nonce,
+      fee: fee,
+      amount: amount,
+      to: to,
+      messageHash: messageHash,
+      contentSize: contentSize,
+      reference: reference,
+      thread: thread,
+      signature: r.take(64),
+    );
   }
 
-  Uint8List signingBytes() => signingBytesFor(
-        kind: kind,
-        from: from,
-        nonce: nonce,
-        to: to,
-        amount: amount,
-        fee: fee,
-        messageHash: messageHash,
-        contentSize: contentSize,
-        reference: reference,
-        timestamp: timestamp,
-        pubkey: pubkey,
-      );
+  late final Uint8List body = bodyFor(
+    kind: kind,
+    pubkey: pubkey,
+    nonce: nonce,
+    fee: fee,
+    amount: amount,
+    to: to,
+    messageHash: messageHash,
+    contentSize: contentSize,
+    reference: reference,
+    thread: thread,
+  );
 
-  /// The txid: SHA-256 of the signing bytes followed by the signature.
-  late final Uint8List hash = sha256Bytes([...signingBytes(), ...signature]);
+  /// The transaction as it is sent, and as its id hashes it.
+  late final Uint8List bytes = Uint8List.fromList([...body, ...signature]);
+
+  /// The txid: SHA-256 of the transaction's bytes.
+  late final Uint8List hash = sha256Bytes(bytes);
   late final String id = toHex(hash);
+
+  /// The sender: the address of [pubkey], which a transaction doesn't write.
+  late final Uint8List from = sha256Bytes(pubkey);
   late final String fromAddress = toHex(from);
   late final String? toAddress = to == null ? null : toHex(to!);
   late final String? referenceId = reference == null ? null : toHex(reference!);
 
-  /// Toward the block cap and fee per byte.
-  int get weight => txWeight(contentSize);
+  /// The thread this transaction is in, as the txid of its first message: a
+  /// Reply's reference, a Flag's thread (its target when it names none), an
+  /// Orphan's or a Name's own id. None for a Raw.
+  late final String? threadId = switch (kind) {
+    TxKind.orphan || TxKind.name => id,
+    TxKind.reply => referenceId,
+    TxKind.flag => thread == null ? referenceId : toHex(thread!),
+    TxKind.raw => null,
+  };
 
-  /// Tokens this transaction destroys: an Orphan's amount (it has no
-  /// recipient). Zero for every other kind.
-  int get burned => kind == TxKind.orphan ? amount : 0;
+  /// Toward the block cap and fee per byte: its bytes plus its content's.
+  int get weight => bytes.length + contentSize;
+
+  /// Tokens this transaction destroys: an Orphan's or a Name's amount (they
+  /// have no recipient). Zero for every other kind.
+  int get burned => kind.startsThread ? amount : 0;
 
   /// Whether `content` is this transaction's content: right hash and length.
   bool isContent(Uint8List content) =>
       messageHash != null && content.length == contentSize && bytesEqual(sha256Bytes(content), messageHash!);
+}
+
+/// A block's work, `floor(2^256 / (target + 1))`: the expected number of
+/// hashes to find it (PROTOCOL.md Section 3.2). A target of 0 would give
+/// 2^256, one past what 256 bits hold: it gives 2^256 − 1.
+BigInt blockWork(Uint8List target) {
+  final t = bigIntFromBytes(target);
+  if (t == BigInt.zero) return u256Max;
+  return (u256Max - t) ~/ (t + BigInt.one) + BigInt.one;
 }
 
 class BlockHeader {
@@ -195,7 +296,10 @@ class BlockHeader {
   /// The header history (MMR) of every block before this one.
   final Uint8List historyRoot;
   final int timestamp;
-  final BigInt target;
+
+  /// The 32 bytes of the target, most significant first, as everywhere it
+  /// is written. All 256 bits count.
+  final Uint8List target;
 
   /// The 8 bytes of the nonce, as on the wire (big-endian). Any 64-bit
   /// value: a miner may start anywhere (murmur-miner picks at random), so
@@ -214,7 +318,7 @@ class BlockHeader {
           ..bytes(filterHash)
           ..bytes(historyRoot)
           ..u64(timestamp, Endian.little)
-          ..u128(target, Endian.little)
+          ..bytes(target)
           // Little-endian in the preimage (PROTOCOL.md Section 3.1).
           ..bytes(nonce.reversed.toList())
           ..bytes(miner))
@@ -228,14 +332,21 @@ class BlockHeader {
   Uint8List? _hash;
   late final String id = toHex(hash);
 
-  /// The block's work, `floor((2^128 − 1) / target)` (PROTOCOL.md Section
-  /// 3.2). Computed once: the retarget reads each header's about 90 times,
-  /// and 128-bit division is slow on the web.
-  late final BigInt work = target == BigInt.zero ? _u128Max : _u128Max ~/ target;
+  /// The target as a number, for the difficulty rule.
+  late final BigInt targetValue = bigIntFromBytes(target);
 
-  /// The node compares the first 16 bytes of the hash, read big-endian,
-  /// against the u128 target.
-  bool get meetsTarget => bigIntFromBytes(hash.sublist(0, 16)) <= target;
+  /// The block's work. Computed once: 256-bit division is slow on the web.
+  late final BigInt work = blockWork(target);
+
+  /// The hash, read as a number with its first byte the most significant,
+  /// must be at most the target: a comparison byte by byte.
+  bool get meetsTarget {
+    final h = hash;
+    for (var i = 0; i < 32; i++) {
+      if (h[i] != target[i]) return h[i] < target[i];
+    }
+    return true;
+  }
 }
 
 class Block {

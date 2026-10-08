@@ -4,6 +4,16 @@ Newest first. Each release is a `vX.Y.Z` tag matching `version` in `pubspec.yaml
 
 ## Unreleased
 
+**Breaking: a new network and protocol.** The app speaks protocol 11 and joins `murmur-testnet-10`; it no longer reaches `murmur-testnet-9`. Nothing carries over: wallets keep their keys, and start with nothing on the new chain. The desktop apps ship node release v0.11.0.
+
+- **Changed: tokens have decimals.** Amounts are shown and typed in tokens with up to six decimals. The least fee is 0.5 token: a reply costs at least 1 token, a new thread or a public name at least 5.5.
+- **Changed: threads are flat.** A reply goes in its thread, whichever message it answers, and pays **the author of the thread**, not the author of the message answered. A thread page shows the first message and its replies, oldest first.
+- **Changed: old threads and histories open at once.** A thread's replies and flags, and what an address sent and received, are read from the node in a couple of requests and proven, however old they are, where the app used to search the chain since they began. A node that keeps no such index is still searched the old way.
+- **Changed: public names are proven, and show for everyone.** A name is now a transaction of its own kind, and the app proves which name an address has, where it had to find the address's messages first. Names set on the old network don't carry over.
+- **Changed: the app no longer downloads the whole chain** with "keep a local copy" on. The copy holds what was fetched and checked. With the download went a block's reward breakdown, the balance beside old history rows of an address that mines, and the app's own recount of the chain's state.
+- **Changed: a message's time is its block's.** A transaction no longer carries a time of its own.
+- **Added: an engine for emoji of the app's own**, written as `:name:` in a message. It has no emoji yet, so nothing shows.
+
 ## v0.4.2: large header nonces, and copying on an iPhone (2026-10-07)
 
 No protocol or network change, and the same testnet checkpoint (block 24,800). **Update: earlier versions can be taken off the chain by one valid block.**

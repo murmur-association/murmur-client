@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:intl/intl.dart' show NumberFormat;
 
 import '../crypto/wallet.dart' show WalletId;
 import '../protocol/alias.dart';
@@ -12,14 +11,16 @@ import 'common.dart';
 import 'thread_page.dart';
 import 'tx_page.dart';
 import 'unlock.dart';
+import 'emoji.dart';
 import 'glyphs.dart';
 
 /// Builds, signs and sends a transaction: a new thread (an Orphan) or a
 /// transfer, as `kind` says. With `replyTo` it sends a Reply to that message,
 /// and with `flagTarget` a Flag reporting that message. Replies and flags
-/// name their target by txid (`reference`, PROTOCOL.md Section 2.3). With
-/// `alias` it publishes the wallet's alias (an Orphan with a fixed message,
-/// Section 7.8; empty clears it).
+/// name their target by txid; a reply goes in that message's thread and
+/// pays the thread's author, whoever it answers (PROTOCOL.md Section 2.4).
+/// With `alias` it sets the wallet's public name (a Name, Section 7.8; empty
+/// clears it).
 ///
 /// Ctrl+Enter (Cmd+Enter on Apple devices) sends, like the button. Either
 /// way a summary of everything signed comes first, as the last confirmation.
@@ -44,8 +45,10 @@ class _ComposePageState extends State<ComposePage> {
       ? TxKind.reply
       : widget.flagTarget != null
           ? TxKind.flag
-          : (widget.kind == TxKind.raw ? TxKind.raw : TxKind.orphan);
-  late final _to = TextEditingController(text: widget.replyTo?.tx.fromAddress ?? widget.to ?? '');
+          : widget.alias != null
+              ? TxKind.name
+              : (widget.kind == TxKind.raw ? TxKind.raw : TxKind.orphan);
+  late final _to = TextEditingController(text: widget.to ?? '');
   final _amount = TextEditingController(text: '1');
   final _fee = TextEditingController(text: '1');
   final _message = TextEditingController();
@@ -63,7 +66,8 @@ class _ComposePageState extends State<ComposePage> {
   bool get _isFlag => widget.flagTarget != null;
   bool get _isReply => widget.replyTo != null;
 
-  /// Replies and transfers pay someone; threads and flags don't.
+  /// Replies and transfers pay someone; threads, names and flags don't. A
+  /// transfer names who; a reply pays its thread's author.
   bool get _hasRecipient => _kind == TxKind.reply || _kind == TxKind.raw;
 
   @override
@@ -94,12 +98,12 @@ class _ComposePageState extends State<ComposePage> {
   /// and transfers must meet.
   void _applyFee(int fee, {bool force = false}) {
     if (force || !_feeEdited) {
-      _fee.text = '$fee';
+      _fee.text = amountText(context, fee);
       if (force) _feeEdited = false;
     }
     final amount = _parseAmount(_amount.text) ?? 0;
     final current = _parseAmount(_fee.text) ?? fee;
-    if (!_amountEdited && amount < current) _amount.text = '$current';
+    if (!_amountEdited && amount < current) _amount.text = amountText(context, current);
   }
 
   @override
@@ -124,21 +128,15 @@ class _ComposePageState extends State<ComposePage> {
     return alias.isEmpty ? context.l10n.aliasCleared : context.l10n.aliasSetTo(alias);
   }
 
-  /// What this transaction will weigh: 264 bytes plus its content (the
-  /// 16-byte salt and the message).
+  /// What this transaction will weigh at most: its own bytes plus its
+  /// content (the 16-byte salt and the message).
   int get _weight {
     final message = _messageBytes();
     return txWeight(message == null ? 0 : saltLength + message.length);
   }
 
-  /// Whole numbers, with or without the locale's digit grouping. Only its
-  /// own group separator is dropped, so "1.5" in English is refused rather
-  /// than read as 15.
-  int? _parseAmount(String s) {
-    final group = NumberFormat.decimalPattern(context.l10n.localeName).symbols.GROUP_SEP;
-    final v = int.tryParse(s.trim().replaceAll(group, '').replaceAll(RegExp(r"[\s'’_]"), ''));
-    return (v == null || v < 0) ? null : v;
-  }
+  /// What a field holds, in units (tokens with decimals as typed).
+  int? _parseAmount(String s) => parseAmount(context, s);
 
   /// Whether sending is possible now: what the button's enabled state and
   /// the shortcut both follow.
@@ -155,9 +153,11 @@ class _ComposePageState extends State<ComposePage> {
     final l = context.l10n;
     // What will be signed, fixed now: the summary shows exactly this.
     final from = scope.wallets.wallet!.addressHex;
-    final to = _hasRecipient ? fromHex(_to.text.trim()) : null;
+    final to = _kind == TxKind.raw ? fromHex(_to.text.trim()) : null;
     final fee = _parseAmount(_fee.text)!;
-    final amount = _hasRecipient ? _parseAmount(_amount.text)! : (_kind == TxKind.orphan ? orphanBurn(fee) : 0);
+    final amount = _hasRecipient ? _parseAmount(_amount.text)! : 0;
+    // Who a reply pays: the author of its thread.
+    final paidTo = _isReply ? scope.client.threadRootOf(widget.replyTo!)?.tx.fromAddress : null;
     final message = _messageBytes();
     final reference = widget.replyTo?.tx.id ?? widget.flagTarget?.tx.id;
     // What can't be sent is said before the summary and the unlock. The
@@ -180,12 +180,12 @@ class _ComposePageState extends State<ComposePage> {
         kind: _kind,
         typeName: widget.alias != null ? l.publicName : null,
         from: from,
-        to: to == null ? null : toHex(to),
+        to: to == null ? paidTo : toHex(to),
         target: widget.replyTo ?? widget.flagTarget,
         message: message == null ? null : _messageShown(context),
         weight: _weight,
         fee: fee,
-        burn: _kind == TxKind.orphan ? amount : null,
+        burn: _kind.startsThread ? orphanBurn(fee) : null,
         paid: _hasRecipient ? amount : null,
         check: check,
       ),
@@ -268,10 +268,9 @@ class _ComposePageState extends State<ComposePage> {
               Card(
                 child: ListTile(
                   leading: const MurmurIcon(Glyph.flag),
-                  title: Text(
+                  title: MessageText(
                     messageOrUnavailable(context, widget.flagTarget!).replaceAll('\n', ' '),
                     maxLines: 3,
-                    overflow: TextOverflow.ellipsis,
                   ),
                   // Flagging one's own message withdraws it (see the Threads tab).
                   subtitle: widget.flagTarget!.tx.fromAddress == wallet.addressHex
@@ -285,10 +284,9 @@ class _ComposePageState extends State<ComposePage> {
               Card(
                 child: ListTile(
                   leading: const MurmurIcon(Glyph.reply),
-                  title: Text(
+                  title: MessageText(
                     messageOrUnavailable(context, widget.replyTo!).replaceAll('\n', ' '),
                     maxLines: 3,
-                    overflow: TextOverflow.ellipsis,
                   ),
                   subtitle: Emphasized(l.replyingTo(Emphasized.link(nameOf(context, widget.replyTo!.tx.fromAddress), 0)),
                       links: [widget.replyTo!.tx.fromAddress],
@@ -309,7 +307,7 @@ class _ComposePageState extends State<ComposePage> {
             Text(
               switch (_kind) {
                 TxKind.flag => '',
-                TxKind.orphan when widget.alias != null => l.explainAlias(orphanBurnMultiple + 1, orphanBurnMultiple),
+                TxKind.name => l.explainAlias(orphanBurnMultiple + 1, orphanBurnMultiple),
                 TxKind.orphan => l.explainThread(orphanBurnMultiple + 1, orphanBurnMultiple),
                 TxKind.reply => l.explainReply,
                 TxKind.raw => l.explainTransfer,
@@ -341,7 +339,7 @@ class _ComposePageState extends State<ComposePage> {
                   child: TextFormField(
                     controller: _amount,
                     autovalidateMode: AutovalidateMode.onUserInteraction,
-                    keyboardType: TextInputType.number,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
                     decoration: InputDecoration(
                       labelText: _kind == TxKind.reply ? l.payToAuthor : l.amount,
                       border: const OutlineInputBorder(),
@@ -349,8 +347,8 @@ class _ComposePageState extends State<ComposePage> {
                     onChanged: (_) => setState(() => _amountEdited = true),
                     validator: (v) {
                       final a = _parseAmount(v ?? '');
-                      if (a == null) return l.wholeNumber;
-                      if (fee != null && a < fee) return l.atLeastFee(fee);
+                      if (a == null) return l.notAnAmount;
+                      if (fee != null && a < fee) return l.atLeastFee(formatAmount(context, fee));
                       return null;
                     },
                   ),
@@ -361,22 +359,22 @@ class _ComposePageState extends State<ComposePage> {
                 child: TextFormField(
                   controller: _fee,
                   autovalidateMode: AutovalidateMode.onUserInteraction,
-                  keyboardType: TextInputType.number,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   decoration: InputDecoration(
                     labelText: l.feeToMiner,
                     border: const OutlineInputBorder(),
-                    helperText: _feeInfo == null ? null : l.suggestedFee(_feeInfo!.suggested(_weight)),
+                    helperText: _feeInfo == null ? null : l.suggestedFee(formatAmount(context, _feeInfo!.suggested(_weight))),
                   ),
                   onChanged: (_) => setState(() => _feeEdited = true),
                   validator: (v) {
                     final f = _parseAmount(v ?? '');
-                    return (f == null || f < 1) ? l.atLeastOne : null;
+                    return (f == null || f < minFee) ? l.atLeastMin(formatAmount(context, minFee)) : null;
                   },
                 ),
               ),
             ]),
             const SizedBox(height: 12),
-            if (_kind != TxKind.raw && !_isFlag && widget.alias == null)
+            if (_kind != TxKind.raw && !_isFlag && widget.alias == null) ...[
               TextFormField(
                 controller: _message,
                 // Checked as the user types: an error (too long, say) clears as soon as
@@ -396,10 +394,12 @@ class _ComposePageState extends State<ComposePage> {
                   return null;
                 },
               ),
+              EmojiPicker(_message),
+            ],
             const SizedBox(height: 16),
             _CostSummary(
               fee: fee ?? 0,
-              burn: _kind == TxKind.orphan ? orphanBurn(fee ?? 0) : null,
+              burn: _kind.startsThread ? orphanBurn(fee ?? 0) : null,
               paid: _hasRecipient ? (_parseAmount(_amount.text) ?? 0) : null,
               available: available,
             ),
@@ -534,7 +534,7 @@ class _SendSummary extends StatelessWidget {
                 if (target != null)
                   row(
                     kind == TxKind.flag ? l.reports : l.inReplyTo,
-                    Text(messageOrUnavailable(context, target!), maxLines: 4, overflow: TextOverflow.ellipsis),
+                    MessageText(messageOrUnavailable(context, target!), maxLines: 4),
                   ),
                 if (message != null)
                   row(
@@ -547,10 +547,10 @@ class _SendSummary extends StatelessWidget {
                         border: Border.all(color: theme.colorScheme.outlineVariant),
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      child: SelectableText(message!, style: theme.textTheme.bodyLarge),
+                      child: MessageText(message!, selectable: true, style: theme.textTheme.bodyLarge),
                     ),
                   ),
-                row(l.weight, Text(l.weightValue(weight, (fee / weight).toStringAsFixed(4)))),
+                row(l.weight, Text(l.weightValue(weight, formatAmount(context, fee ~/ weight)))),
                 const Divider(height: 20),
                 amount(Glyph.fee, l.costFee, fee),
                 if (burn != null) amount(Glyph.burn, l.costBurn(orphanBurnMultiple), burn!),
@@ -779,11 +779,11 @@ class _FeeCard extends StatelessWidget {
             childrenPadding: const EdgeInsetsDirectional.fromSTEB(16, 0, 16, 12),
             title: Text(l.feeWhy, style: theme.textTheme.labelLarge?.copyWith(color: scheme.primary)),
             children: [
-              InfoPoint(Glyph.fee, l.feePerBytePoint(txBaseBytes)),
+              InfoPoint(Glyph.fee, l.feePerBytePoint(txMaxOwnBytes)),
               InfoPoint(
                 Glyph.blocks,
                 info.recentLowest != null
-                    ? l.feeRecentPoint(info.recentLowest!, info.recentMedian!)
+                    ? l.feeRecentPoint(formatAmount(context, info.recentLowest!), formatAmount(context, info.recentMedian!))
                     : l.feeRecentNonePoint,
               ),
               InfoPoint(Glyph.node, info.source == FeeSource.node ? l.feeFromNode(info.pending) : l.feeLocal(info.pending),

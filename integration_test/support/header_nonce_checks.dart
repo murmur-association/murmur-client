@@ -16,38 +16,41 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:murmur_client/protocol/bytes.dart';
 import 'package:murmur_client/protocol/wire.dart';
 
-/// Testnet block 27802 as sent on the wire. Its nonce (bytes 192 to 199,
-/// 55e96d778ea4c761) is above 2^53: the first block a browser refused.
+/// The header of PROTOCOL.md Section 3.1 as sent on the wire: testnet-9's
+/// block 27802, the first a browser refused, in the 248-byte layout. Its
+/// nonce (bytes 208 to 215, 55e96d778ea4c761) is above 2^53. It tests the
+/// hash alone: it doesn't meet its target.
 const _block27802 = '0000000000006c9a0000003fbddd247dcc70a4a380e4d961de600da963d41c611400d4720bb0f10b'
     '0000000000000000000000000000000000000000000000000000000000000000'
     'f34c0e6bf382756779500d39a00a7821af4cc162825b1de8b3de4a3b1e69ea98'
     'df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119'
     '04717153a74686397cb63948d8a5f406af099169adaee20b435347433f4fead3'
-    '000000006ac64dd6000001c0c0490469817b48c4f6d1a86755e96d778ea4c761'
-    '7c2d9aee91b740ba61aa4ef61e0f853f67c3a292b065f1b3b77b6068066fee28';
+    '000000006ac64dd6000001c0c0490469817b48c4f6d1a867ffffffffffffffff'
+    'ffffffffffffffff55e96d778ea4c7617c2d9aee91b740ba61aa4ef61e0f853f'
+    '67c3a292b065f1b3b77b6068066fee28';
 
 /// That header with another nonce (8 bytes, hex, big-endian as on the wire).
-Uint8List _withNonce(String nonce) => fromHex(_block27802.replaceRange(384, 400, nonce));
+Uint8List _withNonce(String nonce) => fromHex(_block27802.replaceRange(416, 432, nonce));
 
 void headerNonceTests() {
-  test('a header with a nonce above 2^53 keeps its hash and meets its target', () {
+  test('a header with a nonce above 2^53 keeps its hash', () {
     final bytes = fromHex(_block27802);
     expect(bytes.length, headerBytes);
     final header = decodeHeader(bytes);
     expect(header.height, 27802);
     expect(toHex(header.nonce), '55e96d778ea4c761');
-    // The node's own hash of it (`murmur-node ctl checkpoint 27802`).
-    expect(header.id, '00000148cb77708faa9b71e4242157a73ebf41e96855111e79f22bf6ec3a9c8a');
-    expect(header.meetsTarget, isTrue);
+    expect(toHex(header.target), '000001c0c0490469817b48c4f6d1a867ffffffffffffffffffffffffffffffff',
+        reason: 'all 32 bytes of the target');
+    expect(header.id, 'c4281183b93686debedc6f05c86c7c609707fd43cf1ec1d27d62f08602e79116');
     expect(encodeHeader(header), bytes, reason: 'and goes back on the wire as it came');
   });
 
   test('nonces with the top bit set, and the largest, hash as the node hashes them', () {
     for (final (nonce, hash) in [
       // 2^63 + 12345: the Dart VM read it as 8000000100003039.
-      ('8000000000003039', '599e4207ee7b51341f34050d6f0bf36919044076002a54df36d8a922df0f7247'),
+      ('8000000000003039', 'b7b4c3b69bc837a374d7a1c8ab6685b7b2e8f751b718286328c42e90dad06881'),
       // 2^64 - 1: the Dart VM read it as 00000000ffffffff.
-      ('ffffffffffffffff', 'f9aaf366c6f077b1a551f0587bee8b611994dca0fc26aa433a558b681fe19007'),
+      ('ffffffffffffffff', '6745c5eed4a53f7df3a51644e83ad33151de91539a0a6f1b60f068d2e894aad7'),
     ]) {
       final bytes = _withNonce(nonce);
       final header = decodeHeader(bytes);
@@ -77,10 +80,10 @@ void headerNonceTests() {
   test("a peer's Hello carries any 64-bit nonce", () {
     for (final nonce in ['ffffffffffffffff', '8000000000003039', '0000000000000001']) {
       final hello = Hello(
-          version: 10, genesis: Uint8List(32), nonce: fromHex(nonce), listenPort: 7878, height: 5, work: BigInt.two);
+          version: 11, genesis: Uint8List(32), nonce: fromHex(nonce), listenPort: 7878, height: 5, work: BigInt.two);
       final back = decodeMessage(encodePayload(hello)) as Hello;
       expect(toHex(back.nonce), nonce);
-      expect((back.version, back.listenPort, back.height, back.work), (10, 7878, 5, BigInt.two));
+      expect((back.version, back.listenPort, back.height, back.work), (11, 7878, 5, BigInt.two));
     }
   });
 }

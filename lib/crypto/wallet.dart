@@ -53,43 +53,44 @@ class MurmurWallet {
 
   /// Signs a transaction with the sender's next `nonce`: the nonce proven
   /// in the state, plus its own pending transactions (PROTOCOL.md Section 5).
+  /// `networkTag` is the tag of the network it is for (`NetworkInfo.tag`):
+  /// the signature covers it, so the transaction is valid nowhere else.
   Future<Transaction> sign({
+    required Uint8List networkTag,
     required TxKind kind,
     required int nonce,
-    required Uint8List? to,
-    required int amount,
     required int fee,
-    required Uint8List? messageHash,
+    int amount = 0,
+    Uint8List? to,
+    Uint8List? messageHash,
     int contentSize = 0,
     Uint8List? reference,
-    required int timestamp,
+    Uint8List? thread,
   }) async {
-    final bytes = Transaction.signingBytesFor(
+    final body = Transaction.bodyFor(
       kind: kind,
-      from: address,
+      pubkey: publicKey,
       nonce: nonce,
-      to: to,
-      amount: amount,
       fee: fee,
+      amount: amount,
+      to: to,
       messageHash: messageHash,
       contentSize: contentSize,
       reference: reference,
-      timestamp: timestamp,
-      pubkey: publicKey,
+      thread: thread,
     );
-    final sig = await _ed25519.sign(bytes, keyPair: _keyPair);
+    final sig = await _ed25519.sign([...networkTag, ...body], keyPair: _keyPair);
     return Transaction(
       kind: kind,
-      from: address,
+      pubkey: publicKey,
       nonce: nonce,
-      to: to,
-      amount: amount,
       fee: fee,
+      amount: amount,
+      to: to,
       messageHash: messageHash,
       contentSize: contentSize,
       reference: reference,
-      timestamp: timestamp,
-      pubkey: publicKey,
+      thread: thread,
       signature: Uint8List.fromList(sig.bytes),
     );
   }

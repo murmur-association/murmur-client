@@ -15,6 +15,7 @@ import '../services/node_client.dart';
 import '../services/storage.dart';
 import 'address_page.dart';
 import 'brand.dart';
+import 'emoji.dart';
 import 'l10n.dart';
 import 'thread_page.dart';
 import 'tx_page.dart';
@@ -129,6 +130,7 @@ String kindLabel(BuildContext context, TxKind k) {
     TxKind.reply => l.kindReply,
     TxKind.raw => l.kindTransfer,
     TxKind.flag => l.kindFlag,
+    TxKind.name => l.publicName,
   };
 }
 
@@ -137,6 +139,7 @@ Glyph kindIcon(TxKind k) => switch (k) {
       TxKind.reply => Glyph.reply,
       TxKind.raw => Glyph.transfer,
       TxKind.flag => Glyph.flag,
+      TxKind.name => Glyph.edit,
     };
 
 /// The message in a transaction's content as text (UTF-8, tolerating bad
@@ -466,7 +469,7 @@ class CountBadges extends StatelessWidget {
         child: Row(mainAxisSize: MainAxisSize.min, children: [
           MurmurIcon(icon, size: 16, color: color),
           const SizedBox(width: 3),
-          Text(formatAmount(context, n), style: TextStyle(color: color, fontWeight: FontWeight.w600)),
+          Text(formatCount(context, n), style: TextStyle(color: color, fontWeight: FontWeight.w600)),
         ]),
       );
     }
@@ -500,7 +503,7 @@ class TxTile extends StatelessWidget {
     final client = AppScope.of(context).client;
     final String title;
     if (tx.kind == TxKind.raw) {
-      title = l.transferOf(tx.amount);
+      title = l.transferOf(formatAmount(context, tx.amount));
     } else if (tx.kind == TxKind.flag) {
       final target = client.referenced(view);
       final targetText = target == null ? null : liveMessageText(context, target)?.replaceAll('\n', ' ');
@@ -508,17 +511,18 @@ class TxTile extends StatelessWidget {
     } else {
       title = messageOrUnavailable(context, view).replaceAll('\n', ' ');
     }
-    // A reply that fails the Section 2.4 check is only a payment.
+    // A reply in something that isn't a conversation is only a payment.
     final label = tx.kind == TxKind.reply && view.confirmed && !client.isThreadedReply(view)
         ? l.replyNotThreaded
         : kindLabel(context, tx.kind);
     // Who: the names in copper.
     // Who: the names in copper, each a link to its address.
-    final people = [tx.fromAddress, if (tx.toAddress != null) tx.toAddress!];
-    final route = tx.toAddress == null
+    // A reply pays its thread's author, whoever it answers.
+    final paid = client.creditedBy(tx);
+    final people = [tx.fromAddress, if (paid != null) paid];
+    final route = paid == null
         ? l.routeFrom(Emphasized.link(nameOf(context, tx.fromAddress), 0))
-        : l.routeFromTo(
-            Emphasized.link(nameOf(context, tx.fromAddress), 0), Emphasized.link(nameOf(context, tx.toAddress!), 1));
+        : l.routeFromTo(Emphasized.link(nameOf(context, tx.fromAddress), 0), Emphasized.link(nameOf(context, paid), 1));
 
     Widget? trailing;
     if (showCounts) {
@@ -526,7 +530,7 @@ class TxTile extends StatelessWidget {
         trailing = CountBadges(replies: client.replyCountOf(view), flags: client.flagCountOf(view));
       }
     } else if (perspective != null) {
-      final delta = MurmurClient.balanceChange(tx, perspective!);
+      final delta = client.balanceChange(tx, perspective!);
       final after = view.balanceAfter;
       final change = Text(
         formatSigned(context, delta),
@@ -535,14 +539,14 @@ class TxTile extends StatelessWidget {
       trailing = after == null
           ? change
           : Tooltip(
-              message: l.balanceBeforeAfterTooltip(after - delta, after),
+              message: l.balanceBeforeAfterTooltip(formatAmount(context, after - delta), formatAmount(context, after)),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   change,
                   Text(
-                    l.balanceBeforeAfter(after - delta, after),
+                    l.balanceBeforeAfter(formatAmount(context, after - delta), formatAmount(context, after)),
                     style: Theme.of(context)
                         .textTheme
                         .bodySmall
@@ -557,7 +561,7 @@ class TxTile extends StatelessWidget {
 
     return ListTile(
       leading: GlyphAvatar(kindIcon(tx.kind), active: view.confirmed),
-      title: Text(title, maxLines: 2, overflow: TextOverflow.ellipsis),
+      title: MessageText(title, maxLines: 2),
       subtitle: Emphasized('${Emphasized.safe(label)} · $route · ${whenOf(context, view)}',
           links: people, style: _subtitleStyle(context), maxLines: 1, weight: FontWeight.w600),
       trailing: trailing,
@@ -581,32 +585,6 @@ class BalanceText extends StatelessWidget {
     if (balance != null) return Text(formatAmount(context, balance), style: style);
     return Text(context.l10n.checkingBalance,
         style: style?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant));
-  }
-}
-
-/// A label, with a bar and "x of y blocks counted" beneath it, while the
-/// chain is still being fetched and counted.
-class ChainProgress extends StatelessWidget {
-  const ChainProgress({super.key, required this.client, required this.label, this.style});
-
-  final MurmurClient client;
-  final String label;
-  final TextStyle? style;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final total = client.height;
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-      Text(label, style: style?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-      const SizedBox(height: 4),
-      SizedBox(
-        width: 240,
-        child: LinearProgressIndicator(value: total == 0 ? null : client.countedHeight / total),
-      ),
-      const SizedBox(height: 4),
-      Text(context.l10n.chainCounted(client.countedHeight, total), style: theme.textTheme.bodySmall),
-    ]);
   }
 }
 

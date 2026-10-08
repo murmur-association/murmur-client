@@ -53,24 +53,24 @@ Set<MessageFilter> messageFiltersOf(TxView v, String me, MurmurClient client) {
     TxKind.orphan => {if (mine) MessageFilter.threads},
     TxKind.reply => {
         if (mine) MessageFilter.sent,
-        if (tx.toAddress == me) MessageFilter.received,
+        if (client.creditedBy(tx) == me) MessageFilter.received,
       },
     TxKind.flag => {
         if (mine) MessageFilter.flagsSent,
         if (tx.referenceId != null && client.authorOf(tx.referenceId!) == me) MessageFilter.flagsReceived,
       },
-    TxKind.raw => const {},
+    TxKind.raw || TxKind.name => const {},
   };
 }
 
-Set<WalletFilter> walletFiltersOf(TxView v, String me) {
+Set<WalletFilter> walletFiltersOf(TxView v, String me, MurmurClient client) {
   final tx = v.tx;
   final mine = tx.fromAddress == me;
-  final toMe = tx.toAddress == me;
+  final toMe = client.creditedBy(tx) == me;
   return switch (tx.kind) {
     TxKind.raw => {if (mine) WalletFilter.transfersSent, if (toMe) WalletFilter.transfersReceived},
     TxKind.reply => {if (mine) WalletFilter.repliesPaid, if (toMe) WalletFilter.repliesEarned},
-    TxKind.orphan => {if (mine) WalletFilter.threadCosts},
+    TxKind.orphan || TxKind.name => {if (mine) WalletFilter.threadCosts},
     TxKind.flag => {if (mine) WalletFilter.flagCosts},
   };
 }

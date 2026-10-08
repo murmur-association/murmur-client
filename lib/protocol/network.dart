@@ -1,6 +1,6 @@
 // Per-network consensus parameters the client needs: enough to recognize the
-// network from its genesis hash, check headers (retarget), and credit block
-// rewards when rebuilding balances. Mirrors ChainParams in murmur core's
+// network from its genesis hash, check headers (difficulty), sign for it, and
+// credit block rewards when rebuilding balances. Mirrors ChainParams in murmur core's
 // consensus.rs.
 
 import 'dart:convert';
@@ -36,10 +36,9 @@ class NetworkInfo {
     required this.halvingInterval,
     required this.maxBlockBytes,
     required this.burnPayoutBlocks,
-    required this.lwmaWindow,
-    this.maxSwingPct = 16,
-    this.initialSubsidy = 25,
-    this.tailEmission = 1,
+    this.initialSubsidy = 25 * unitsPerToken,
+    this.tailEmission = unitsPerToken,
+    this.minFee = unitsPerToken ~/ 2,
     this.known = true,
     this.checkpoint,
   });
@@ -47,7 +46,7 @@ class NetworkInfo {
   final String id;
   final int genesisTimestamp;
 
-  /// Genesis target is u128::MAX >> this.
+  /// Genesis target is (2^256 − 1) >> this.
   final int genesisTargetShift;
   final int targetBlockSecs;
   final int halvingInterval;
@@ -57,16 +56,18 @@ class NetworkInfo {
 
   /// Each block pays its miner ceil(pool / this) from the burn pool.
   final int burnPayoutBlocks;
+
+  /// In units, as every amount.
   final int initialSubsidy;
   final int tailEmission;
 
-  /// Blocks the difficulty retarget averages over, and its largest step (%).
-  final int lwmaWindow;
-  final int maxSwingPct;
+  /// The least fee a transaction may pay, by consensus (PROTOCOL.md Section
+  /// 2.3): one paying less is invalid, not merely refused.
+  final int minFee;
 
   /// False when the node's genesis matched none of the built-in networks,
   /// in which case reward accounting falls back to whitepaper values and the
-  /// difficulty retarget isn't checked (its parameters aren't known).
+  /// difficulty rule isn't checked (its parameters aren't known).
   final bool known;
 
   /// Where this release starts syncing, if it ships one. The demo network
@@ -76,41 +77,51 @@ class NetworkInfo {
   /// A public test network: its tokens are for testing only.
   bool get isTestnet => id.startsWith('murmur-testnet-');
 
-  BigInt get genesisTarget => ((BigInt.one << 128) - BigInt.one) >> genesisTargetShift;
+  Uint8List get genesisTarget => u256Bytes(u256Max >> genesisTargetShift);
+
+  /// What a signature covers before the transaction itself, and the genesis
+  /// block's `prev_hash`: `H(network id)` (PROTOCOL.md Section 2.2). A
+  /// transaction signed for one network is invalid on every other.
+  Uint8List get tag => sha256Bytes(utf8.encode(id));
+
+  /// The difficulty rule's three times (PROTOCOL.md Section 4), in seconds:
+  /// a parent this much faster or slower than the block time halves or
+  /// doubles the target; how long after its parent a block may come before
+  /// it is eased; and how fast it is eased beyond that.
+  int get difficultyTau => 30 * targetBlockSecs;
+  int get difficultySlack => 40 * targetBlockSecs;
+  int get difficultyEase => 10 * targetBlockSecs;
 
   static const whitepaper = NetworkInfo(
-    id: 'murmur-testnet-9',
+    id: 'murmur-testnet-10',
     genesisTimestamp: 1790208000, // 2026-09-24T00:00:00Z
     genesisTargetShift: 8,
     targetBlockSecs: 30,
     halvingInterval: 4200000,
     maxBlockBytes: 2000000,
     burnPayoutBlocks: 2880,
-    lwmaWindow: 90,
-    // Written by tool/refresh_checkpoint.dart: the testnet's nodes, asked
-    // one by one, agreed on it, on a chain checked from genesis that holds
-    // the checkpoint shipped before it (the first, block 16,000, came from
-    // `murmur-node ctl checkpoint` on a node the project trusts). Refresh it
-    // with every release (AGENTS.md, Recipes); the release job checks it
-    // against the live network, and test/network_test.dart its form.
-    checkpoint: Checkpoint(24800, '000001c3527c4b783ddb5bfb37ae29b9b71a0594115d0ab9010a7e5429c32fae'),
+    // No checkpoint yet: murmur-testnet-10 hasn't started, and its genesis
+    // date (so its genesis hash) is still to be set. Its first comes from
+    // `murmur-node ctl checkpoint` on a node the project trusts; from then
+    // on tool/refresh_checkpoint.dart writes the line, with every release
+    // (AGENTS.md, Recipes), and test/network_test.dart checks its form.
   );
 
   static const demo = NetworkInfo(
-    id: 'murmur-demo-9',
+    id: 'murmur-demo-10',
     genesisTimestamp: 0,
     genesisTargetShift: 4,
     targetBlockSecs: 2,
     halvingInterval: 2000,
     maxBlockBytes: 200000,
     burnPayoutBlocks: 100,
-    lwmaWindow: 20,
   );
 
   static const all = [whitepaper, demo];
 
-  /// Block subsidy at `height`: halves every `halvingInterval` blocks,
-  /// floored at `tailEmission`.
+  /// Block subsidy at `height`: halves exactly every `halvingInterval`
+  /// blocks (25, 12.5, 6.25, 3.125 and 1.5625 tokens), floored at
+  /// `tailEmission`.
   int subsidyAt(int height) {
     final halvings = height ~/ halvingInterval;
     // Halve by division: on the web, `>>` only handles shifts below 32.
@@ -150,7 +161,6 @@ class NetworkInfo {
       halvingInterval: 4200000,
       maxBlockBytes: 2000000,
       burnPayoutBlocks: 2880,
-      lwmaWindow: 90,
       known: false,
     );
   }

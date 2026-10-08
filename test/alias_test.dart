@@ -9,39 +9,9 @@ import 'package:murmur_client/protocol/alias.dart';
 import 'package:murmur_client/protocol/bytes.dart';
 import 'package:murmur_client/protocol/models.dart';
 import 'package:murmur_client/services/aliases.dart';
-import 'package:murmur_client/services/node_client.dart';
 
-final _me = Uint8List(32)..fillRange(0, 32, 7);
-var _serial = 0;
-
-/// A mined Orphan of the alias length at `height` carrying `message`
-/// (salted), or with no content at hand when `message` is null.
-(TxView, Uint8List?) _candidate(int height, Uint8List? message) {
-  final content = message == null ? Uint8List(aliasContentSize) : saltedContent(message);
-  final tx = Transaction(
-    kind: TxKind.orphan,
-    from: _me,
-    nonce: ++_serial,
-    to: null,
-    amount: 10,
-    fee: 1,
-    messageHash: sha256Bytes(content),
-    contentSize: aliasContentSize,
-    reference: null,
-    timestamp: 1790208000,
-    pubkey: Uint8List(32),
-    signature: Uint8List(64)..buffer.asByteData().setUint32(0, _serial),
-  );
-  return (TxView(tx, height: height, blockTime: 1790208000 + height), message == null ? null : content);
-}
-
-/// Resolves candidates given latest first, with every block fetched unless
-/// listed in `missing`.
-String? _resolve(List<(TxView, Uint8List?)> candidates, {int tip = 100, Set<int> missing = const {}}) {
-  final contents = {for (final (v, c) in candidates) v.tx.id: c};
-  return resolveAlias([for (final (v, _) in candidates) v],
-      tip: tip, unknown: missing.contains, contentOf: (v) => contents[v.tx.id]);
-}
+/// A Name's content carrying `message`, salted.
+Uint8List _content(Uint8List message) => saltedContent(message);
 
 void main() {
   test('the example of Section 7.8: bob', () {
@@ -82,29 +52,12 @@ void main() {
     expect(isNonText(Uint8List.fromList(utf8.encode('hello'))), isFalse);
   });
 
-  test('resolving: the latest alias wins, and an empty one clears it', () {
-    expect(_resolve([_candidate(50, aliasMessage('new')), _candidate(20, aliasMessage('old'))]), 'new');
-    expect(_resolve([_candidate(50, aliasMessage('')), _candidate(20, aliasMessage('old'))]), isNull);
-    expect(_resolve(const []), isNull);
-  });
-
-  test('resolving: an ordinary 71-byte message is skipped', () {
-    final text = Uint8List(aliasMessageLength)..fillRange(0, aliasMessageLength, 0x61);
-    expect(_resolve([_candidate(50, text), _candidate(20, aliasMessage('old'))]), 'old');
-  });
-
-  test('resolving: content that is gone means no known alias, never the older one', () {
-    expect(_resolve([_candidate(50, null), _candidate(20, aliasMessage('old'))]), isNull);
-  });
-
-  test('resolving: a block not fetched above the alias could hold a newer one', () {
-    final c = [_candidate(20, aliasMessage('bob'))];
-    expect(_resolve(c, missing: {60}), isNull);
-    expect(_resolve(c, missing: {20}), isNull, reason: 'a later transaction in its own block');
-    expect(_resolve(c, missing: {10}), 'bob', reason: 'older blocks don\'t matter');
-  });
-
-  test('resolving: within a block, the later position wins', () {
-    expect(_resolve([_candidate(30, aliasMessage('later')), _candidate(30, aliasMessage('earlier'))]), 'later');
+  test('the name in a Name\'s content: valid, cleared, or none', () {
+    expect(nameIn(_content(aliasMessage('bob'))), 'bob');
+    expect(nameIn(_content(aliasMessage(''))), isNull, reason: 'an empty name clears the one before');
+    // An ordinary 71-byte message, and content of another length: no name.
+    expect(nameIn(_content(Uint8List(aliasMessageLength)..fillRange(0, aliasMessageLength, 0x61))), isNull);
+    expect(nameIn(_content(Uint8List.fromList(utf8.encode('bob')))), isNull);
+    expect(nameIn(Uint8List(aliasContentSize)), isNull);
   });
 }

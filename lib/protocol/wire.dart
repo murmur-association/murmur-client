@@ -13,7 +13,7 @@ import 'bytes.dart';
 import 'commitments.dart';
 import 'models.dart';
 
-const protocolVersion = 10;
+const protocolVersion = 11;
 
 /// Payloads over this are a protocol violation.
 const maxPayloadBytes = 16 * 1024 * 1024;
@@ -33,7 +33,10 @@ const maxHeaderProofs = 64;
 const maxFilters = 1000;
 
 /// Transactions in a CompactBlock, GetBlockTxs or BlockTxs (Section 7.9).
-const maxCompactTxs = 10000;
+const maxCompactTxs = 16000;
+
+/// Entries in one page of a thread's events or of an address's lists.
+const maxPageEntries = 500;
 
 sealed class Message {
   const Message();
@@ -57,6 +60,8 @@ class Hello extends Message {
   final Uint8List nonce;
   final int listenPort;
   final int height;
+
+  /// The tip's cumulative work, a u256.
   final BigInt work;
 }
 
@@ -272,6 +277,85 @@ class HeaderProof extends Message {
   final List<(BlockHeader, List<HistoryNode>)> entries;
 }
 
+/// One page of a list a node's index serves (PROTOCOL.md Sections 7 and
+/// 7.6): a thread's events, or what an address sent, was credited with, or
+/// had flagged. Entries are numbers `start + 1` to `start + entries.length`,
+/// oldest first.
+class ListPage {
+  const ListPage({
+    required this.available,
+    required this.at,
+    required this.total,
+    required this.start,
+    required this.startDigest,
+    required this.entries,
+  });
+
+  /// False when the node has no such thread, or keeps no index.
+  final bool available;
+
+  /// The best-chain block the page describes: the node's tip when it
+  /// answered. The state entry that proves the page is asked for there.
+  final Uint8List at;
+
+  /// The list's length as of `at`.
+  final int total;
+  final int start;
+
+  /// The list's digest after entry `start` (`0^32` when `start` is 0, and
+  /// always for the flags against an address, which no state entry holds).
+  final Uint8List startDigest;
+  final List<TxOnChain> entries;
+}
+
+/// Asks for the `count` events of thread `root` that end at event number
+/// `end`; 0, or beyond the last, means the newest.
+class GetThread extends Message {
+  const GetThread(this.root, this.end, this.count);
+
+  final Uint8List root;
+  final int end;
+  final int count;
+}
+
+class Thread extends Message {
+  const Thread(this.root, this.page);
+
+  final Uint8List root;
+  final ListPage page;
+}
+
+/// The lists of an address a node's index serves, by their tag on the wire.
+enum AddressList {
+  /// Every transaction it sent; their number is its nonce.
+  sent,
+
+  /// What credited it: a transfer to it, a reply in a thread it started.
+  credited,
+
+  /// The Flags whose target is one of its messages. In no state entry: each
+  /// can be checked, their completeness can't.
+  flagsAgainst,
+}
+
+/// As [GetThread], for one of an address's lists.
+class GetAddress extends Message {
+  const GetAddress(this.address, this.list, this.end, this.count);
+
+  final Uint8List address;
+  final AddressList list;
+  final int end;
+  final int count;
+}
+
+class Address extends Message {
+  const Address(this.address, this.list, this.page);
+
+  final Uint8List address;
+  final AddressList list;
+  final ListPage page;
+}
+
 // ---- compact block relay, between nodes (Section 7.9) ---------------------------
 //
 // Nodes announce new blocks to each other by short txids and rebuild them
@@ -313,60 +397,11 @@ class BlockTxs extends Message {
 
 // ---- transactions and blocks ------------------------------------------------
 
-void _optional(ByteWriter w, Uint8List? v) {
-  if (v != null) {
-    w
-      ..u8(1)
-      ..bytes(v);
-  } else {
-    w.u8(0);
-  }
-}
+// A transaction has one encoding (Section 2.2), with no length before it:
+// its kind and fields say where it ends.
+void _encodeTx(ByteWriter w, Transaction tx) => w.bytes(tx.bytes);
 
-void _encodeTx(ByteWriter w, Transaction tx) {
-  w
-    ..u8(tx.kind.index)
-    ..bytes(tx.from)
-    ..u64(tx.nonce);
-  _optional(w, tx.to);
-  w
-    ..u64(tx.amount)
-    ..u64(tx.fee);
-  _optional(w, tx.messageHash);
-  w.u32(tx.contentSize);
-  _optional(w, tx.reference);
-  w
-    ..u64(tx.timestamp)
-    ..bytes(tx.pubkey)
-    ..bytes(tx.signature);
-}
-
-Transaction _decodeTx(ByteReader r) {
-  final tag = r.u8();
-  if (tag > 3) throw FormatException('unknown tx kind tag $tag');
-  final from = r.hash32();
-  final nonce = r.u64();
-  final to = r.boolean() ? r.hash32() : null;
-  final amount = r.u64();
-  final fee = r.u64();
-  final messageHash = r.boolean() ? r.hash32() : null;
-  final contentSize = r.u32();
-  final reference = r.boolean() ? r.hash32() : null;
-  return Transaction(
-    kind: TxKind.values[tag],
-    from: from,
-    nonce: nonce,
-    to: to,
-    amount: amount,
-    fee: fee,
-    messageHash: messageHash,
-    contentSize: contentSize,
-    reference: reference,
-    timestamp: r.u64(),
-    pubkey: r.take(32),
-    signature: r.take(64),
-  );
-}
+Transaction _decodeTx(ByteReader r) => Transaction.read(r);
 
 void _encodeHeader(ByteWriter w, BlockHeader h) {
   w
@@ -377,7 +412,7 @@ void _encodeHeader(ByteWriter w, BlockHeader h) {
     ..bytes(h.filterHash)
     ..bytes(h.historyRoot)
     ..u64(h.timestamp)
-    ..u128(h.target)
+    ..bytes(h.target)
     ..bytes(h.nonce)
     ..bytes(h.miner);
 }
@@ -390,7 +425,7 @@ BlockHeader _decodeHeader(ByteReader r) => BlockHeader(
       filterHash: r.hash32(),
       historyRoot: r.hash32(),
       timestamp: r.u64(),
-      target: r.u128(),
+      target: r.take(32),
       nonce: r.take(8),
       miner: r.hash32(),
     );
@@ -415,7 +450,7 @@ Block _decodeBlock(ByteReader r) {
 
 /// A header's wire size: height, prev hash, merkle root, state root, filter
 /// hash, history root, timestamp, target, nonce, miner.
-const headerBytes = 8 + 32 * 5 + 8 + 16 + 8 + 32;
+const headerBytes = 8 + 32 * 5 + 8 + 32 + 8 + 32;
 
 /// Headers and blocks in their wire encoding, for storage.
 Uint8List encodeHeader(BlockHeader h) {
@@ -547,8 +582,8 @@ StateProof _decodeStateProof(ByteReader r) {
     2 => OtherTerminal(r.hash32(), r.hash32()),
     _ => throw FormatException('unknown state proof terminal $tag'),
   };
-  if (terminal is ValueTerminal && terminal.value.length > 64) {
-    throw const FormatException('state value over 64 bytes');
+  if (terminal is ValueTerminal && terminal.value.length > 96) {
+    throw const FormatException('state value over 96 bytes');
   }
   return StateProof(siblings, terminal);
 }
@@ -577,11 +612,11 @@ List<HistoryNode> _decodeHistoryNodes(ByteReader r) {
     for (var i = 0; i < n; i++)
       HistoryNode(
         hash: r.hash32(),
-        work: r.u128(),
+        work: r.u256(),
         firstTime: r.u64(),
         lastTime: r.u64(),
-        firstTarget: r.u128(),
-        lastTarget: r.u128(),
+        firstTarget: r.take(32),
+        lastTarget: r.take(32),
       ),
   ];
 }
@@ -591,12 +626,50 @@ void _encodeHistoryNodes(ByteWriter w, List<HistoryNode> nodes) {
   for (final n in nodes) {
     w
       ..bytes(n.hash)
-      ..u128(n.work)
+      ..u256(n.work)
       ..u64(n.firstTime)
       ..u64(n.lastTime)
-      ..u128(n.firstTarget)
-      ..u128(n.lastTarget);
+      ..bytes(n.firstTarget)
+      ..bytes(n.lastTarget);
   }
+}
+
+ListPage _decodePage(ByteReader r) {
+  final available = r.boolean();
+  final at = r.hash32();
+  final total = r.u64();
+  final start = r.u64();
+  final startDigest = r.hash32();
+  final n = r.u32();
+  if (n > maxPageEntries) throw FormatException('$n page entries exceeds limit');
+  final entries = <TxOnChain>[];
+  for (var i = 0; i < n; i++) {
+    final lookup = _decodeLookup(r);
+    // A page holds what is on the chain, each with its proof of inclusion.
+    if (lookup is! TxOnChain) throw const FormatException('a page entry that is not on the chain');
+    entries.add(lookup);
+  }
+  return ListPage(
+      available: available, at: at, total: total, start: start, startDigest: startDigest, entries: entries);
+}
+
+void _encodePage(ByteWriter w, ListPage p) {
+  w
+    ..u8(p.available ? 1 : 0)
+    ..bytes(p.at)
+    ..u64(p.total)
+    ..u64(p.start)
+    ..bytes(p.startDigest)
+    ..u32(p.entries.length);
+  for (final entry in p.entries) {
+    _encodeLookup(w, entry);
+  }
+}
+
+AddressList _decodeAddressList(ByteReader r) {
+  final tag = r.u8();
+  if (tag >= AddressList.values.length) throw FormatException('unknown address list $tag');
+  return AddressList.values[tag];
 }
 
 // ---- messages -----------------------------------------------------------------
@@ -613,7 +686,7 @@ Uint8List encodePayload(Message message) {
         ..bytes(msg.nonce)
         ..u16(msg.listenPort)
         ..u64(msg.height)
-        ..u128(msg.work);
+        ..u256(msg.work);
     case final NewTx msg:
       w.u8(1);
       _encodeTx(w, msg.tx);
@@ -759,6 +832,30 @@ Uint8List encodePayload(Message message) {
       for (final tx in msg.txs) {
         _encodeTx(w, tx);
       }
+    case final GetThread msg:
+      w
+        ..u8(28)
+        ..bytes(msg.root)
+        ..u64(msg.end)
+        ..u32(msg.count);
+    case final Thread msg:
+      w
+        ..u8(29)
+        ..bytes(msg.root);
+      _encodePage(w, msg.page);
+    case final GetAddress msg:
+      w
+        ..u8(30)
+        ..bytes(msg.address)
+        ..u8(msg.list.index)
+        ..u64(msg.end)
+        ..u32(msg.count);
+    case final Address msg:
+      w
+        ..u8(31)
+        ..bytes(msg.address)
+        ..u8(msg.list.index);
+      _encodePage(w, msg.page);
   }
   return w.take();
 }
@@ -786,7 +883,7 @@ Message decodeMessage(Uint8List payload) {
         nonce: r.take(8),
         listenPort: r.u16(),
         height: r.u64(),
-        work: r.u128(),
+        work: r.u256(),
       );
     case 1:
       final tx = _decodeTx(r);
@@ -896,6 +993,24 @@ Message decodeMessage(Uint8List payload) {
       final n = r.u32();
       if (n > maxCompactTxs) throw FormatException('$n transactions exceeds limit');
       msg = BlockTxs(block, [for (var i = 0; i < n; i++) _decodeTx(r)]);
+    case 28:
+      final root = r.hash32();
+      final end = r.u64();
+      final count = r.u32();
+      if (count > maxPageEntries) throw FormatException('$count events exceeds limit');
+      msg = GetThread(root, end, count);
+    case 29:
+      msg = Thread(r.hash32(), _decodePage(r));
+    case 30:
+      final address = r.hash32();
+      final list = _decodeAddressList(r);
+      final end = r.u64();
+      final count = r.u32();
+      if (count > maxPageEntries) throw FormatException('$count entries exceeds limit');
+      msg = GetAddress(address, list, end, count);
+    case 31:
+      final address = r.hash32();
+      msg = Address(address, _decodeAddressList(r), _decodePage(r));
     default:
       throw FormatException('unknown message tag $tag');
   }

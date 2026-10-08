@@ -39,7 +39,7 @@ class WalletTab extends StatelessWidget {
         listenable: prefs,
         builder: (context, _) {
           final filters = prefs.walletFilters;
-          bool shown(TxView v) => walletFiltersOf(v, address).any(filters.contains);
+          bool shown(TxView v) => walletFiltersOf(v, address, client).any(filters.contains);
           return PagedList<TxView>(
             resetKey: (address, filters.fold(0, (mask, f) => mask | (1 << f.index))),
             fetch: (n) => client.activityOf(address).where(shown).take(n).toList(),
@@ -66,7 +66,7 @@ class WalletTab extends StatelessWidget {
                       const SizedBox(height: 12),
                       Text(l.balance, style: theme.textTheme.labelLarge),
                       BalanceText(client: client, address: address, style: theme.textTheme.displaySmall),
-                      if (pending > 0) Text(l.pendingCommitted(pending)),
+                      if (pending > 0) Text(l.pendingCommitted(formatAmount(context, pending))),
                       if (mined > 0) Text(l.blocksMined(mined)),
                       const SizedBox(height: 12),
                       Text(l.address, style: theme.textTheme.labelLarge),

@@ -1,8 +1,8 @@
 // The three commitments every header carries (PROTOCOL.md Section 3.6), so
 // a client holding only headers can check what a node tells it:
 //
-// - the state tree (`state_root`): a sparse Merkle tree over balances,
-//   nonces, flags, the burn pool and the total issued;
+// - the state tree (`state_root`): a sparse Merkle tree over accounts,
+//   threads, names, flags, the burn pool and the total issued;
 // - the block filter (`filter_hash`): a Golomb-Rice coded set of the
 //   addresses and references a block's transactions touch;
 // - the header history (`history_root`): a Merkle Mountain Range over every
@@ -32,8 +32,69 @@ int _pow2(int k) {
 
 // ---- state tree -------------------------------------------------------------------
 
-/// Key of an account's entry, holding `balance:u64le ‖ nonce:u64le`.
+/// Key of an account's entry ([AccountEntry]).
 Uint8List accountKey(Uint8List address) => sha256Bytes([0x00, ...address]);
+
+/// Key of a thread's entry ([ThreadEntry]); `root` is the txid of the
+/// thread's first message.
+Uint8List threadKey(Uint8List root) => sha256Bytes([0x04, ...root]);
+
+/// Key of an address's name: the `message_hash` of its latest Name.
+Uint8List nameKey(Uint8List address) => sha256Bytes([0x05, ...address]);
+
+/// A list's digest after `txids` are added to one that stood at `start`:
+/// each entry makes it `H(digest ‖ txid)` (PROTOCOL.md Section 3.6). A list
+/// starts at `0^32`.
+Uint8List chainDigest(Uint8List start, Iterable<Uint8List> txids) {
+  var digest = start;
+  for (final txid in txids) {
+    digest = sha256Bytes([...digest, ...txid]);
+  }
+  return digest;
+}
+
+/// An account's entry: its balance and nonce, and the count and digest of
+/// the two lists the state commits to for it. What it sent has `nonce`
+/// entries; what credited it (a transfer to it, a reply in a thread it
+/// started) has `credits`. A block's reward is in neither.
+class AccountEntry {
+  const AccountEntry(this.balance, this.nonce, this.sentDigest, this.credits, this.creditDigest);
+
+  /// An address the chain has never seen: no entry.
+  static final empty = AccountEntry(0, 0, Uint8List(32), 0, Uint8List(32));
+
+  /// `balance:u64le ‖ nonce:u64le ‖ sent_digest:32 ‖ credits:u64le ‖
+  /// credit_digest:32`, or null if `value` isn't that.
+  static AccountEntry? parse(Uint8List value) {
+    if (value.length != 88) return null;
+    return AccountEntry(
+      readU64le(value),
+      readU64le(value, 8),
+      value.sublist(16, 48),
+      readU64le(value, 48),
+      value.sublist(56, 88),
+    );
+  }
+
+  final int balance, nonce, credits;
+  final Uint8List sentDigest, creditDigest;
+}
+
+/// A thread's entry: who started it, and the count and digest of its events
+/// (its Replies and the Flags that name it, in chain order).
+class ThreadEntry {
+  const ThreadEntry(this.author, this.events, this.digest);
+
+  /// `author:32 ‖ events:u64le ‖ digest:32`, or null if `value` isn't that.
+  static ThreadEntry? parse(Uint8List value) {
+    if (value.length != 72) return null;
+    return ThreadEntry(value.sublist(0, 32), readU64le(value, 32), value.sublist(40, 72));
+  }
+
+  final Uint8List author;
+  final int events;
+  final Uint8List digest;
+}
 
 /// `flag_key = H(from ‖ reference)` (PROTOCOL.md Section 2.3).
 Uint8List flagKeyOf(Uint8List from, Uint8List reference) => sha256Bytes([...from, ...reference]);
@@ -47,10 +108,13 @@ final Uint8List poolKey = sha256Bytes([0x02]);
 /// Key of the total issued, `issued:u64le`.
 final Uint8List issuedKey = sha256Bytes([0x03]);
 
-/// A u64 stored little-endian (state values), exact up to 2^53.
+/// A u64 stored little-endian (state values). As [ByteReader.u64], 2^53 and
+/// above is refused: nothing the state counts gets there.
 int readU64le(Uint8List bytes, [int offset = 0]) {
   final d = ByteData.sublistView(bytes);
-  return d.getUint32(offset + 4, Endian.little) * 4294967296 + d.getUint32(offset, Endian.little);
+  final hi = d.getUint32(offset + 4, Endian.little);
+  if (hi >= 0x200000) throw const FormatException('a number too large to be valid here');
+  return hi * 4294967296 + d.getUint32(offset, Endian.little);
 }
 
 Uint8List u64le(int v) => (ByteWriter()..u64(v, Endian.little)).take();
@@ -153,14 +217,18 @@ const filterP = 19;
 const filterM = 784931;
 final int _pSize = _pow2(filterP);
 
-/// The distinct items a block's filter holds: each transaction's `from`, its
-/// `to` and its `reference`. Not the content hash.
+/// The distinct items a block's filter holds: each transaction's sender, a
+/// Raw's `to`, a Reply's or a Flag's `reference`, and a Flag's `thread`. Not
+/// the content hash, and not who a Reply pays: every item is in the
+/// transactions themselves, so someone watching for replies to their
+/// threads watches for the threads' txids.
 List<Uint8List> blockFilterItems(List<Transaction> transactions) {
   final seen = <String, Uint8List>{};
   for (final tx in transactions) {
     seen.putIfAbsent(toHex(tx.from), () => tx.from);
     if (tx.to != null) seen.putIfAbsent(toHex(tx.to!), () => tx.to!);
     if (tx.reference != null) seen.putIfAbsent(toHex(tx.reference!), () => tx.reference!);
+    if (tx.thread != null) seen.putIfAbsent(toHex(tx.thread!), () => tx.thread!);
   }
   return seen.values.toList();
 }
@@ -264,11 +332,6 @@ bool? filterMatchesAny(Uint8List filter, Uint8List prevHash, List<Uint8List> ite
 // its first and last timestamps and targets. So a proof also shows how much
 // work the chain claims around the proven header.
 
-final BigInt _u128Max = (BigInt.one << 128) - BigInt.one;
-
-/// A block's work: `floor((2^128 − 1) / target)` (PROTOCOL.md Section 3.2).
-BigInt workOf(BigInt target) => target == BigInt.zero ? _u128Max : _u128Max ~/ target;
-
 /// A node of the header history: a hash and the summary it commits to.
 class HistoryNode {
   const HistoryNode({
@@ -294,16 +357,18 @@ class HistoryNode {
   final Uint8List hash;
   final BigInt work;
   final int firstTime, lastTime;
-  final BigInt firstTarget, lastTarget;
 
-  /// `work:u128le ‖ first_time:u64le ‖ last_time:u64le ‖ first_target:u128le
-  /// ‖ last_target:u128le`: the 64 bytes a parent's hash covers.
+  /// Targets as their 32 bytes, most significant first.
+  final Uint8List firstTarget, lastTarget;
+
+  /// `work:32 ‖ first_time:u64le ‖ last_time:u64le ‖ first_target:32 ‖
+  /// last_target:32`: the 112 bytes a parent's hash covers.
   Uint8List get data => (ByteWriter()
-        ..u128(work, Endian.little)
+        ..u256(work)
         ..u64(firstTime, Endian.little)
         ..u64(lastTime, Endian.little)
-        ..u128(firstTarget, Endian.little)
-        ..u128(lastTarget, Endian.little))
+        ..bytes(firstTarget)
+        ..bytes(lastTarget))
       .take();
 
   /// Whether two nodes are the same (hash and summary).
@@ -312,8 +377,8 @@ class HistoryNode {
       work == other.work &&
       firstTime == other.firstTime &&
       lastTime == other.lastTime &&
-      firstTarget == other.firstTarget &&
-      lastTarget == other.lastTarget;
+      bytesEqual(firstTarget, other.firstTarget) &&
+      bytesEqual(lastTarget, other.lastTarget);
 }
 
 /// `join(tag, L, R)`: the summaries combine (work adds, saturating), and the
@@ -322,7 +387,7 @@ HistoryNode joinHistory(int tag, HistoryNode left, HistoryNode right) {
   final sum = left.work + right.work;
   final summary = HistoryNode(
     hash: _zero32,
-    work: sum > _u128Max ? _u128Max : sum,
+    work: sum > u256Max ? u256Max : sum,
     firstTime: left.firstTime,
     lastTime: right.lastTime,
     firstTarget: left.firstTarget,

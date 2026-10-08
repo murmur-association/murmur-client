@@ -23,7 +23,7 @@ const _typicalMessage = 280;
 /// What a card needs to hold, and what funding it costs, at `fees`.
 ({int perCard, int fundingFee, int claimFee}) invitationCosts(FeeInfo fees) {
   final threadFee = fees.suggested(txWeight(saltLength + _typicalMessage));
-  final transferFee = max(minFee, fees.suggested(txBaseBytes));
+  final transferFee = max(minFee, fees.suggested(txWeight(0)));
   return (
     perCard: inviteThreads * threadFee * (orphanBurnMultiple + 1) + transferFee,
     fundingFee: transferFee,
@@ -82,7 +82,7 @@ Future<Transaction> sweepInvitation({
   final card = await cardWallet(invite);
   final available = client.availableTo(card.addressHex);
   if (available == null) throw const TxProblem(TxProblemKind.checkingBalance);
-  final fee = max(minFee, (await client.feeInfo()).suggested(txBaseBytes));
+  final fee = max(minFee, (await client.feeInfo()).suggested(txWeight(0)));
   if (available - fee < fee) throw TxProblem(TxProblemKind.insufficientBalance, fee * 2, available);
   return client.submit(wallet: card, kind: TxKind.raw, to: to, amount: available - fee, fee: fee);
 }

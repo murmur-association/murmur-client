@@ -1,12 +1,15 @@
-// Thread structure over messages: which reply answers which message, reply
-// and flag counts, and each thread's latest activity.
+// Thread structure over messages: which thread a reply is in, reply and
+// flag counts, and each thread's latest activity.
 //
-// Replies and flags name their target by txid (`reference`). Consensus never
-// looks it up, so clients apply PROTOCOL.md Section 2.4:
-// - a Reply is a reply to its reference only if that transaction is on the
-//   chain, is an Orphan or a Reply, and its `from` equals the Reply's `to`.
-//   Otherwise the Reply is just a payment, outside any thread;
-// - a Flag counts against its reference only if that is an Orphan or Reply.
+// Threads are flat (PROTOCOL.md Section 2.4): a thread is an Orphan and
+// every Reply whose `reference` is that Orphan's txid. A Reply names its
+// thread, not the message it answers, and consensus refuses one whose thread
+// isn't on the chain. What is left to clients:
+// - a Flag counts against its target only if the target is a message of the
+//   thread the Flag names;
+// - a Name is a thread's first message only so that it can be flagged: it's
+//   never shown as a thread, and a Reply that names it is just a payment;
+// - a message whose first byte is 0x00 isn't text, and starts no thread.
 // Every client applying these rules to the same chain gets the same threads.
 
 import 'dart:math';
@@ -15,14 +18,13 @@ import '../protocol/alias.dart';
 import '../protocol/models.dart';
 import 'node_client.dart' show TxView;
 
-/// When a message happened, for ordering: block time once mined, signing
-/// time while pending.
-int activityTime(TxView v) => v.blockTime ?? v.tx.timestamp;
-
-bool _isMessage(TxView v) => v.tx.kind == TxKind.orphan || v.tx.kind == TxKind.reply;
+/// When a message happened, for ordering: its block's time once mined (a
+/// transaction carries none of its own), and when this client first saw it
+/// while pending.
+int activityTime(TxView v) => v.blockTime ?? (v.pending?.seenAt.millisecondsSinceEpoch ?? 0) ~/ 1000;
 
 /// Whether a message is known not to be text (Section 2.4: its first byte
-/// is 0x00, as in aliases). Content not at hand yet counts as text until it
+/// is 0x00, as in a name's). Content not at hand yet counts as text until it
 /// arrives.
 bool isNonTextMessage(TxView v) => v.content != null && isNonText(messageOf(v.content!));
 
@@ -35,7 +37,7 @@ class ThreadSummary {
   /// Newest time among the root and all its replies.
   final int lastActivity;
 
-  /// Replies anywhere in the thread, at any depth.
+  /// Replies in the thread.
   final int replies;
 
   /// Flags on the root message.
@@ -45,20 +47,17 @@ class ThreadSummary {
 class MessageIndex {
   MessageIndex._();
 
-  /// Every Orphan and Reply, chain and pending.
+  /// Every Orphan, Reply and Name, chain and pending.
   final _byTxid = <String, TxView>{};
 
-  /// Reply txid -> parent txid, for replies that pass the Section 2.4 check.
-  final _parentOf = <String, String>{};
+  /// Reply txid -> its thread's txid, for replies in a thread that shows.
+  final _threadOf = <String, String>{};
 
-  /// Parent txid -> its valid direct replies, oldest first.
-  final _children = <String, List<TxView>>{};
+  /// Thread txid -> its replies, oldest first.
+  final _replies = <String, List<TxView>>{};
 
   /// Flagged txid -> distinct flagging addresses.
   final _flaggers = <String, Set<String>>{};
-
-  /// Sender -> its mined Orphans of the alias length, latest first.
-  final _aliasCandidates = <String, List<TxView>>{};
 
   /// Author -> their Orphans and Replies, newest first.
   final _byAuthor = <String, List<TxView>>{};
@@ -66,16 +65,11 @@ class MessageIndex {
   /// Most recently active first.
   final threads = <ThreadSummary>[];
 
-  /// Messages that replies point to (directly, or up a chain of replies)
-  /// and that aren't known: each with the time of the newest reply under
-  /// it. One of these may be an older thread that such a reply has just
-  /// made the most recently active; where it belongs in [threads] isn't
-  /// known until it's fetched.
+  /// Threads that replies name and that aren't known: each with the time of
+  /// the newest such reply. One of these may be an older thread that a reply
+  /// has just made the most recently active; where it belongs in [threads]
+  /// isn't known until it's fetched.
   final missingParents = <String, int>{};
-
-  /// `address`'s possible alias transactions (Section 7.8) among what's
-  /// known, latest first: mined Orphans with `content_size` 87.
-  List<TxView> aliasCandidatesOf(String address) => _aliasCandidates[address] ?? const [];
 
   /// Builds the index from every known transaction, newest first (the order
   /// `MurmurClient.transactions` returns: pending, then the chain from the
@@ -84,77 +78,58 @@ class MessageIndex {
     final ix = MessageIndex._();
     final oldestFirst = newestFirst.reversed.toList();
     for (final v in oldestFirst) {
-      if (_isMessage(v)) ix._byTxid[v.tx.id] = v;
+      if (v.tx.kind.hasMessage) ix._byTxid[v.tx.id] = v;
     }
     for (final v in newestFirst) {
-      if (_isMessage(v)) ix._byAuthor.putIfAbsent(v.tx.fromAddress, () => []).add(v);
+      if (v.tx.kind == TxKind.orphan || v.tx.kind == TxKind.reply) {
+        ix._byAuthor.putIfAbsent(v.tx.fromAddress, () => []).add(v);
+      }
     }
 
+    // In the order given, so a block's replies keep their order in it when
+    // sorted by time below.
+    final position = <String, int>{};
     for (final v in oldestFirst) {
       final ref = v.tx.referenceId;
       if (ref == null) continue;
       final target = ix._byTxid[ref];
-      if (target == null) continue;
       switch (v.tx.kind) {
         case TxKind.reply:
-          // Nothing replies to a non-text message: that's a payment.
-          if (target.confirmed && target.tx.fromAddress == v.tx.toAddress && !isNonTextMessage(target)) {
-            ix._parentOf[v.tx.id] = ref;
-            ix._children.putIfAbsent(ref, () => []).add(v);
+          if (target == null) {
+            final t = activityTime(v);
+            if (t > (ix.missingParents[ref] ?? -1)) ix.missingParents[ref] = t;
+          } else if (target.tx.kind == TxKind.orphan && target.confirmed && !isNonTextMessage(target)) {
+            // Anything else it names (a Name, a message that isn't text) is
+            // no conversation: the reply is a payment.
+            ix._threadOf[v.tx.id] = ref;
+            position[v.tx.id] = position.length;
+            ix._replies.putIfAbsent(ref, () => []).add(v);
           }
         case TxKind.flag:
-          // A pending flag may duplicate a mined one; count each address once.
-          ix._flaggers.putIfAbsent(ref, () => {}).add(v.tx.fromAddress);
-        case TxKind.orphan || TxKind.raw:
+          // Only against a message of the thread the flag names. A pending
+          // flag may duplicate a mined one; count each address once.
+          if (target != null && target.tx.threadId == v.tx.threadId) {
+            ix._flaggers.putIfAbsent(ref, () => {}).add(v.tx.fromAddress);
+          }
+        case TxKind.orphan || TxKind.raw || TxKind.name:
           break;
       }
     }
-    for (final list in ix._children.values) {
-      list.sort((a, b) => activityTime(a).compareTo(activityTime(b)));
-    }
-
-    // Replies whose thread isn't known yet: up each chain of valid replies
-    // to a message that's missing. (A reply that isn't part of a thread, a
-    // payment under Section 2.4, leads nowhere.)
-    for (final v in ix._byTxid.values) {
-      if (v.tx.kind != TxKind.reply) continue;
-      var cur = v;
-      for (var depth = 0; depth < 10000 && cur.tx.kind == TxKind.reply; depth++) {
-        final ref = cur.tx.referenceId;
-        if (ref == null) break;
-        final target = ix._byTxid[ref];
-        if (target == null) {
-          final t = activityTime(v);
-          if (t > (ix.missingParents[ref] ?? -1)) ix.missingParents[ref] = t;
-          break;
-        }
-        if (!ix._parentOf.containsKey(cur.tx.id)) break;
-        cur = target;
-      }
-    }
-
-    // Alias candidates (Section 7.8): mined Orphans of the alias length, by
-    // sender, latest first (the input's order).
-    for (final v in newestFirst) {
-      if (v.tx.kind == TxKind.orphan && v.confirmed && v.tx.contentSize == aliasContentSize) {
-        ix._aliasCandidates.putIfAbsent(v.tx.fromAddress, () => []).add(v);
-      }
+    for (final list in ix._replies.values) {
+      list.sort((a, b) {
+        final byTime = activityTime(a).compareTo(activityTime(b));
+        return byTime != 0 ? byTime : position[a.tx.id]!.compareTo(position[b.tx.id]!);
+      });
     }
 
     for (final v in ix._byTxid.values) {
       if (v.tx.kind != TxKind.orphan || isNonTextMessage(v)) continue;
+      final replies = ix.repliesOf(v);
       var last = activityTime(v);
-      var replies = 0;
-      final stack = [...ix.repliesOf(v)];
-      final seen = <String>{v.tx.id};
-      while (stack.isNotEmpty) {
-        final r = stack.removeLast();
-        if (!seen.add(r.tx.id)) continue;
-        replies++;
+      for (final r in replies) {
         last = max(last, activityTime(r));
-        stack.addAll(ix.repliesOf(r));
       }
-      ix.threads.add(ThreadSummary(v, lastActivity: last, replies: replies, flags: ix.flagCountOf(v)));
+      ix.threads.add(ThreadSummary(v, lastActivity: last, replies: replies.length, flags: ix.flagCountOf(v)));
     }
     // Ties (a block's messages share its time) are settled by the threads
     // themselves, never by the order they arrived in: the list must come
@@ -194,22 +169,11 @@ class MessageIndex {
     return (threads: settled, held: settled.length < threads.length);
   }
 
-  /// Valid direct replies to this message, oldest first.
-  List<TxView> repliesOf(TxView v) => _children[v.tx.id] ?? const [];
+  /// A thread's replies, oldest first. A reply has none of its own: threads
+  /// are flat.
+  List<TxView> repliesOf(TxView v) => _replies[v.tx.id] ?? const [];
 
   int replyCountOf(TxView v) => repliesOf(v).length;
-
-  /// Every valid reply under this message, at any depth.
-  Iterable<TxView> repliesUnder(TxView v) sync* {
-    final seen = <String>{v.tx.id};
-    final stack = [...repliesOf(v)];
-    while (stack.isNotEmpty) {
-      final r = stack.removeLast();
-      if (!seen.add(r.tx.id)) continue;
-      yield r;
-      stack.addAll(repliesOf(r));
-    }
-  }
 
   /// The threads and replies `address` wrote, among what's known, newest
   /// first.
@@ -220,25 +184,14 @@ class MessageIndex {
   /// Whether the message's own author flagged it: withdrawn.
   bool isSelfFlagged(TxView v) => _flaggers[v.tx.id]?.contains(v.tx.fromAddress) ?? false;
 
-  /// The message a reply validly answers, if any.
-  TxView? parentOf(TxView v) {
-    final p = _parentOf[v.tx.id];
-    return p == null ? null : _byTxid[p];
-  }
+  /// Whether a Reply is in a thread that shows; if not, it's a payment.
+  bool isThreadedReply(TxView v) => _threadOf.containsKey(v.tx.id);
 
-  /// Whether a Reply counts as part of a thread under Section 2.4.
-  bool isThreadedReply(TxView v) => _parentOf.containsKey(v.tx.id);
-
-  /// The thread (Orphan) at the top of a message's reply chain, or null if
-  /// the chain doesn't lead to a known Orphan.
+  /// The thread a message is in: itself for an Orphan, a Reply's thread
+  /// when it shows, or null.
   TxView? threadRootOf(TxView v) {
-    var cur = v;
-    for (var depth = 0; depth < 10000; depth++) {
-      if (cur.tx.kind == TxKind.orphan) return cur;
-      final p = parentOf(cur);
-      if (p == null) return null;
-      cur = p;
-    }
-    return null;
+    if (v.tx.kind == TxKind.orphan) return v;
+    final thread = _threadOf[v.tx.id];
+    return thread == null ? null : _byTxid[thread];
   }
 }

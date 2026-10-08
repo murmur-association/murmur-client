@@ -68,10 +68,10 @@ Future<void> checkProvenState(Connect connect) async {
   expect(client.fetchedBlocks, lessThanOrEqualTo(client.height));
 }
 
-/// With a local copy, the client fetches and counts the whole chain and
-/// agrees with the tip's state root; a second session starts from the copy.
-/// Every block is downloaded, so it takes longer as the chain grows: for a
-/// chain a test built, or a run by hand.
+/// With a local copy, a second session starts from what the first fetched
+/// and checked: its headers and blocks aren't fetched again. The client
+/// never downloads the whole chain, so this takes the same time on a chain
+/// of any length.
 Future<void> checkLocalCopy(Connect connect) async {
   final dir = await Directory.systemTemp.createTemp('murmur-cache-test');
   addTearDown(() async {
@@ -83,15 +83,12 @@ Future<void> checkLocalCopy(Connect connect) async {
   });
 
   final first = await connect(MurmurClient()..useCache(FileChainCache(dir)));
-  // A state root that disagrees with the client's own count is an error,
-  // which `until` fails on.
-  await until(first, () => first.complete, timeout: const Duration(minutes: 30));
-  final height = first.height;
+  await until(first, () => first.fetchedBlocks > 0 && !first.threadsHeldBack);
+  final height = first.height, fetched = first.fetchedBlocks;
   first.disconnect(); // disposed when the test ends
   await Future<void>.delayed(const Duration(milliseconds: 500)); // last cache writes
 
   final second = await connect(MurmurClient()..useCache(FileChainCache(dir)));
-  await until(second, () => second.complete && second.height >= height, timeout: const Duration(minutes: 10));
-  expect(second.fetchedBlocks, second.height);
+  await until(second, () => second.height >= height && second.fetchedBlocks >= fetched);
   expect(second.headersFromNode, lessThan(height), reason: 'the stored headers were not fetched again');
 }

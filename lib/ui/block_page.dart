@@ -17,8 +17,7 @@ class BlockPage extends StatelessWidget {
       // A block on the chain that isn't fetched yet is fetched now.
       final onChain = client.headerAt(height) != null;
       if (block == null && onChain) client.requestBlock(height);
-      final payout = client.payoutAt(height);
-      String n(int v) => formatAmount(context, v);
+      String n(int v) => formatCount(context, v);
       void go(int h) => Navigator.of(context)
           .pushReplacement(MaterialPageRoute(builder: (_) => BlockPage(height: h)));
       return Scaffold(
@@ -52,14 +51,9 @@ class BlockPage extends StatelessWidget {
                 InfoRow(l.miner, HashText(toHex(block.header.miner),
                     onTap: () => openAddress(context, toHex(block.header.miner)))),
                 // The burn-pool payout is known once the chain below is counted.
-                InfoRow(
-                    l.reward,
-                    Text(payout == null
-                        ? '…'
-                        : l.rewardBreakdown(client.network!.subsidyAt(height), payout, block.totalFees))),
                 InfoRow(l.merkleRoot, HashText(toHex(block.header.merkleRoot))),
                 InfoRow(l.target,
-                    SelectableText(block.header.target.toRadixString(16).padLeft(32, '0'), style: mono)),
+                    SelectableText(toHex(block.header.target), style: mono)),
                 InfoRow(l.nonce, Text('${bigIntFromBytes(block.header.nonce)}')),
                 const Divider(height: 32),
                 Text(l.txCount(block.transactions.length), style: Theme.of(context).textTheme.titleMedium),

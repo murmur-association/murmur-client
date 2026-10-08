@@ -75,12 +75,8 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String transferOf(int amount) {
-    final intl.NumberFormat amountNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String amountString = amountNumberFormat.format(amount);
-
-    return 'Transfer of $amountString';
+  String transferOf(String amount) {
+    return 'Transfer of $amount';
   }
 
   @override
@@ -148,7 +144,7 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get probFeeTooLow => 'The fee must be at least 1.';
+  String get probFeeTooLow => 'The fee is below the network\'s minimum.';
 
   @override
   String get probMalformed => 'This transaction is not well formed.';
@@ -160,21 +156,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get probNeedsRecipient => 'Enter a recipient.';
 
   @override
-  String probAmountBelowFee(int fee) {
-    final intl.NumberFormat feeNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String feeString = feeNumberFormat.format(fee);
-
-    return 'The amount must be at least the fee ($feeString).';
+  String probAmountBelowFee(String fee) {
+    return 'The amount must be at least the fee ($fee).';
   }
 
   @override
   String get probReplyParentNotMined =>
       'You can only reply to a thread or reply that is already in a block.';
-
-  @override
-  String get probReplyWrongRecipient =>
-      'A reply must pay the author of the message it answers.';
 
   @override
   String get probFlagNotMessage => 'Only threads and replies can be flagged.';
@@ -196,15 +184,8 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String probInsufficientBalance(int needed, int available) {
-    final intl.NumberFormat neededNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String neededString = neededNumberFormat.format(needed);
-    final intl.NumberFormat availableNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String availableString = availableNumberFormat.format(available);
-
-    return 'Insufficient balance: $neededString needed, $availableString available (confirmed balance minus pending transactions).';
+  String probInsufficientBalance(String needed, String available) {
+    return 'Insufficient balance: $needed needed, $available available (confirmed balance minus pending transactions).';
   }
 
   @override
@@ -421,12 +402,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get balance => 'Balance';
 
   @override
-  String pendingCommitted(int amount) {
-    final intl.NumberFormat amountNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String amountString = amountNumberFormat.format(amount);
-
-    return '$amountString committed to pending transactions';
+  String pendingCommitted(String amount) {
+    return '$amount committed to pending transactions';
   }
 
   @override
@@ -591,12 +568,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get statNextReward => 'Next block reward';
 
   @override
-  String rewardPlusFees(int amount) {
-    final intl.NumberFormat amountNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String amountString = amountNumberFormat.format(amount);
-
-    return '$amountString + fees';
+  String rewardPlusFees(String amount) {
+    return '$amount + fees';
   }
 
   @override
@@ -636,21 +609,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get reward => 'Reward';
 
   @override
-  String rewardBreakdown(int subsidy, int payout, int fees) {
-    final intl.NumberFormat subsidyNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String subsidyString = subsidyNumberFormat.format(subsidy);
-    final intl.NumberFormat payoutNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String payoutString = payoutNumberFormat.format(payout);
-    final intl.NumberFormat feesNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String feesString = feesNumberFormat.format(fees);
-
-    return '$subsidyString subsidy + $payoutString from the burn pool + $feesString fees';
-  }
-
-  @override
   String get merkleRoot => 'Merkle root';
 
   @override
@@ -688,12 +646,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get threadGone => 'This thread is no longer on the chain.';
 
   @override
-  String paidToParent(int amount) {
-    final intl.NumberFormat amountNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String amountString = amountNumberFormat.format(amount);
-
-    return 'paid $amountString to the parent\'s author';
+  String paidToThreadAuthor(String amount) {
+    return 'paid $amount to the thread\'s author';
   }
 
   @override
@@ -752,12 +706,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get burned => 'Burned';
 
   @override
-  String burnedValue(int amount) {
-    final intl.NumberFormat amountNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String amountString = amountNumberFormat.format(amount);
-
-    return '$amountString (returned to miners through the burn pool)';
+  String burnedValue(String amount) {
+    return '$amount (returned to miners through the burn pool)';
   }
 
   @override
@@ -765,9 +715,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get fee => 'Fee';
-
-  @override
-  String get signedAt => 'Signed at';
 
   @override
   String get contentHash => 'Content hash';
@@ -889,7 +836,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get explainReply =>
-      'Your reply pays the author of the message at least the fee (you can tip more), plus the fee to the miner.';
+      'Your reply pays the thread\'s author at least the fee (you can tip more), plus the fee to the miner.';
 
   @override
   String get explainTransfer =>
@@ -902,34 +849,28 @@ class AppLocalizationsEn extends AppLocalizations {
   String get enterAddress => 'Enter a 64-character hex address';
 
   @override
-  String get payToAuthor => 'Pay to author';
+  String get payToAuthor => 'Pay the thread\'s author';
 
   @override
-  String get wholeNumber => 'Whole number';
+  String get notAnAmount => 'Enter an amount';
 
   @override
-  String atLeastFee(int fee) {
-    final intl.NumberFormat feeNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String feeString = feeNumberFormat.format(fee);
-
-    return 'At least the fee ($feeString)';
+  String atLeastFee(String fee) {
+    return 'At least the fee ($fee)';
   }
 
   @override
   String get feeToMiner => 'Fee (to the miner)';
 
   @override
-  String suggestedFee(int fee) {
-    final intl.NumberFormat feeNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String feeString = feeNumberFormat.format(fee);
-
-    return 'Suggested: $feeString';
+  String suggestedFee(String fee) {
+    return 'Suggested: $fee';
   }
 
   @override
-  String get atLeastOne => 'At least 1';
+  String atLeastMin(String min) {
+    return 'At least $min';
+  }
 
   @override
   String bytesOf(int count, int max) {
@@ -950,6 +891,14 @@ class AppLocalizationsEn extends AppLocalizations {
     final String countString = countNumberFormat.format(count);
 
     return 'Too long: $countString bytes';
+  }
+
+  @override
+  String get murmurEmoji => 'Murmur emoji';
+
+  @override
+  String murmurEmojiHint(String example) {
+    return 'Drawn only in Murmur. Other apps show the name, such as $example.';
   }
 
   @override
@@ -998,39 +947,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get checkAgain => 'Check again';
 
   @override
-  String balanceBeforeAfter(int before, int after) {
-    final intl.NumberFormat beforeNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String beforeString = beforeNumberFormat.format(before);
-    final intl.NumberFormat afterNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String afterString = afterNumberFormat.format(after);
-
-    return '$beforeString → $afterString';
+  String balanceBeforeAfter(String before, String after) {
+    return '$before → $after';
   }
 
   @override
-  String balanceBeforeAfterTooltip(int before, int after) {
-    final intl.NumberFormat beforeNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String beforeString = beforeNumberFormat.format(before);
-    final intl.NumberFormat afterNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String afterString = afterNumberFormat.format(after);
-
-    return 'Balance: $beforeString before, $afterString after';
-  }
-
-  @override
-  String chainCounted(int counted, int total) {
-    final intl.NumberFormat countedNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String countedString = countedNumberFormat.format(counted);
-    final intl.NumberFormat totalNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String totalString = totalNumberFormat.format(total);
-
-    return '$countedString of $totalString blocks counted';
+  String balanceBeforeAfterTooltip(String before, String after) {
+    return 'Balance: $before before, $after after';
   }
 
   @override
@@ -1383,12 +1306,8 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String claimHolds(int amount) {
-    final intl.NumberFormat amountNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String amountString = amountNumberFormat.format(amount);
-
-    return 'This invitation holds $amountString: enough to start your first threads.';
+  String claimHolds(String amount) {
+    return 'This invitation holds $amount: enough to start your first threads.';
   }
 
   @override
@@ -1773,15 +1692,8 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String feeRecentPoint(int lowest, int median) {
-    final intl.NumberFormat lowestNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String lowestString = lowestNumberFormat.format(lowest);
-    final intl.NumberFormat medianNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String medianString = medianNumberFormat.format(median);
-
-    return '**Recent blocks** took fees as low as **$lowestString** (median $medianString).';
+  String feeRecentPoint(String lowest, String median) {
+    return '**Recent blocks** took fees as low as **$lowest** (median $median).';
   }
 
   @override

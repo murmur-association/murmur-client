@@ -81,8 +81,9 @@ void main() {
   test('a card holds five threads and its claim fee', () {
     final fees = estimateFees(pending: const [], maxBlockBytes: 2000000, recentBlockMins: const []);
     final costs = invitationCosts(fees);
-    // At the minimum fee of 1: five threads at 11 each, plus 1 to claim.
-    expect((costs.perCard, costs.fundingFee, costs.claimFee), (56, 1, 1));
+    // At the minimum fee of half a token: five threads at 5.5 tokens each,
+    // plus half a token to claim.
+    expect((costs.perCard, costs.fundingFee, costs.claimFee), (28000000, 500000, 500000));
     expect(inviteInRoute('/invite/${invite.code}'), invite.code);
     expect(inviteInRoute('/thread/abc'), isNull);
   });

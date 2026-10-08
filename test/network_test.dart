@@ -51,7 +51,7 @@ void main() {
       await client.connect('seed.test', good.port);
       await _until(() => client.state == LinkState.live);
       expect(accepted, hasLength(1), reason: 'the broken node was tried first');
-      expect(client.network?.id, 'murmur-demo-9');
+      expect(client.network?.id, 'murmur-demo-10');
       expect(client.error, isNull);
     });
 
@@ -104,8 +104,8 @@ void main() {
         final cp = net.checkpoint;
         if (cp == null) continue;
         expect(cp.wellFormed, isTrue, reason: '${net.id}: Checkpoint(${cp.height}, ${cp.hash})');
-        // Its context (the lwma window before it) must exist on the chain.
-        expect(cp.height, greaterThan(net.lwmaWindow), reason: net.id);
+        // Its context (the 11 headers before it) must exist on the chain.
+        expect(cp.height, greaterThan(11), reason: net.id);
       }
     });
 

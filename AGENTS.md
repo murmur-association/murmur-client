@@ -4,7 +4,9 @@ Working notes for anyone changing this repository, human or agent. [README.md](R
 
 ## What this is
 
-A Flutter light client for the Murmur chain. The node, and the protocol's source of truth, live in the sibling repository [`../murmur`](https://gitlab.com/murmur-association/murmur): `PROTOCOL.md` (wire format, consensus, test vectors) and `CHANGELOG.md`. The client speaks **protocol 10** (`murmur-testnet-9`, `murmur-demo-9`: the networks kept their names from protocol 9). Of protocol 10's compact block relay (Section 7.9) it only decodes the four messages and ignores them: it never sends `SendCompact`, so nodes keep sending it whole blocks (`NewBlock`). **Where this code and PROTOCOL.md disagree, PROTOCOL.md wins.** Section numbers in comments (for example "Section 3.6") refer to it. Don't edit `../murmur` from here: propose node changes to its owner instead.
+A Flutter light client for the Murmur chain. The node, and the protocol's source of truth, live in the sibling repository [`../murmur`](https://gitlab.com/murmur-association/murmur): `PROTOCOL.md` (wire format, consensus, test vectors), `vectors/demo-10.txt` (a small chain rebuilt byte for byte by the node's tests, copied here as `test/vectors/demo-10.txt`) and `CHANGELOG.md`. The client speaks **protocol 11** (`murmur-testnet-10`, `murmur-demo-10`). Of its compact block relay (Section 7.9) it only decodes the four messages and ignores them: it never sends `SendCompact`, so nodes keep sending it whole blocks (`NewBlock`). **Where this code and PROTOCOL.md disagree, PROTOCOL.md wins.** Section numbers in comments (for example "Section 3.6") refer to it. Don't edit `../murmur` from here: propose node changes to its owner instead.
+
+**`murmur-testnet-10` hasn't started.** The public testnet still runs `murmur-testnet-9` on protocol 10, which this code no longer speaks, and testnet-10's genesis date (so its genesis hash) isn't final. So this work lives on the branch `testnet-10`, and **must not reach `main` before the network starts**: `main` is what the scheduled release publishes. Until then the testnet has no checkpoint in `network.dart`, and the checkpoint tools and the release pipeline can't run for it (Known gaps).
 
 Targets: the web (the main one), plus Windows, Linux, macOS, Android and iOS. `web/`, `windows/` and `linux/` are committed (the desktop apps show as Murmur, with the app's icon, written by `tool/render_brand.dart`); generate the other platform folders with `flutter create` (see README).
 
@@ -28,7 +30,7 @@ dart run tool/header_bench.dart generate 100000 build/headers.bin   # a valid te
 dart run tool/header_bench.dart check build/headers.bin             # times the header checks (also in a browser: header_bench_web.dart)
 ```
 
-Tests against the node use the **pinned node release** (`tool/node_release.dart`, now v0.10.5), downloaded from the node project's package registry and checked against its `SHA256SUMS`. The node's specification is its code, so the tests use the node itself rather than restating its rules. Without the download they're skipped (CI sets `MURMUR_REQUIRE_NODE`, which makes that a failure):
+Tests against the node use the **pinned node release** (`tool/node_release.dart`, now v0.11.0), downloaded from the node project's package registry and checked against its `SHA256SUMS`. The node's specification is its code, so the tests use the node itself rather than restating its rules. Without the download they're skipped (CI sets `MURMUR_REQUIRE_NODE`, which makes that a failure):
 
 ```
 dart run tool/bundle_node.dart --for-tests    # into build/node; again after raising the pinned release
@@ -38,11 +40,12 @@ flutter test                                  # node_test.dart and local_node_te
 `MURMUR_NODE_BIN=<murmur-node>` uses another binary instead, such as one built from `../murmur` while a node change isn't released yet.
 
 - **Nothing to set up or wait for.** `node_test.dart` has the node build the demo chains it needs (`murmur-node demo-chain`, through `test/support/test_node.dart`): a chain, an extension, or a heavier branch for a reorganization, built and checked with the node's own rules. It then starts the node on them through the app's `ProcessLocalNode`. Headers a test needs as objects come from syncing a client, never from the node's files.
-- **What it covers:** checkpoint start, back-fill (stored, resumed, restarted), reorganizations (the node restarts on a heavier branch, and the client reconnects), state proofs and filters, the local copy and its state-root check, sending with proven nonces, threads and flags, invitations. The node mines to the chain's wallet, at 1% of a core (a node mining flat out at the easy demo target races ahead of its clock and stalls).
+- **What it covers:** checkpoint start, back-fill (stored, resumed, restarted), reorganizations (the node restarts on a heavier branch, and the client reconnects), state proofs and filters, the local copy, sending every kind with proven nonces, flat threads and flags, invitations; a thread and a history older than the checkpoint read from the node's index, with the same through filters on a node started with `--no-index`; public names set, replaced and cleared. The node mines to the chain's wallet, at 1% of a core (a node mining flat out at the easy demo target races ahead of its clock and stalls).
+- **The protocol itself is checked against the node's vectors** in `test/vectors_test.dart`, offline: PROTOCOL.md's (transactions of every kind, a header with large nonces, work, the difficulty factors and targets, the header history root, the genesis hashes) and the nine-block chain of `test/vectors/demo-10.txt`, rebuilt here from its transactions and nonces down to every target, commitment, hash and state entry, with the node's `Thread` and `Address` answers proven. Copy the file again when the node's changes.
 - **Branches need room:** `demo-chain` spaces new blocks 2 s apart, never in the future, so a branch or extension of `n` blocks needs `n × 2 s` after the block it builds on. Without that room it refuses at once, writing nothing, and says how much earlier the chain must end. Build a chain that will get long branches with an earlier end (`TestNode.build(…, endTime:)`).
 - **Read-only against a public node:** two files, both skipped without `MURMUR_NODE`, neither sending anything (never send testnet transactions from tests without the user asking).
   - `test/live_release_test.dart` is what a release waits on (`public-node-tests`, the only place CI sets `MURMUR_NODE`): sync from the shipped checkpoint, then the supply, the burn pool, an account and the fees (`checkProvenBasics`). It's **bounded**: a few requests whatever the chain's length. Keep it so; anything that grows with the chain would one day fail every release, and after a scheduled release has already pushed its tag.
-  - `test/live_node_test.dart` is for runs by hand (`MURMUR_NODE=testnet-seed.murmur.info:7878 flutter test test/live_node_test.dart`): a filter scan of the whole chain and every block downloaded and counted (`test/support/client_checks.dart`). They take longer every day, so no pipeline runs them.
+  - `test/live_node_test.dart` is for runs by hand (`MURMUR_NODE=testnet-seed.murmur.info:7878 flutter test test/live_node_test.dart`): the proven state, an address's history and the local copy against a public node (`test/support/client_checks.dart`). No pipeline runs them.
 - `test/support/fake_node.dart` remains for what a real node can't be made to do: answer on another protocol version, or on an address a test picks.
 
 **Paths with an apostrophe** (for example `C:\Users\o'brien`) break `flutter test` and web builds, because Flutter pastes the path into generated Dart code. Map a drive letter to the parent folder and work from it:
@@ -83,22 +86,27 @@ set TMP=%TEMP%
      - **Reading a code asks every time** (`unlockCards`): to show a card's QR code and link, to print, and to cancel (which signs with the card's key). One unlock for the selected cards.
      - **Codes earlier versions stored in the clear** are sealed at the next unlock, or when cards are next made.
      - Forgetting the passphrase leaves waiting cards unreadable: they can't be shown or cancelled any more (said when it's chosen, `passphraseNewForget`).
-5. **Check before showing.** Every header is checked fully: link, proof of work, median-time-past, retarget, and `history_root`. Everything shown is proven against checked headers:
+5. **Check before showing.** Every header is checked fully: link, proof of work, median-time-past, the difficulty rule's target, and `history_root`. Everything shown is proven against checked headers:
    - state proofs against `state_root`;
+   - a page of a thread or of an address's history (the node's index) against the count and digest the state holds for that list, or by chaining into the page after it;
+   - an old header against the tip's `history_root`;
    - filters against `filter_hash`;
    - blocks against `merkle_root` and `filter_hash`;
    - transactions against merkle branches;
    - content against its hash and length.
 
    Two things can't be checked, and are shown as the node's word: `Fees`, and `TxStatus`.
-6. **Byte-exact encodings.** Hash preimages are little-endian, wire integers big-endian, both exactly as in the Rust core. A node penalizes malformed messages. Any change to hashing or encoding needs a PROTOCOL.md test vector in `test/protocol_test.dart`.
+6. **Byte-exact encodings.** A transaction has one encoding, signed (after the network's tag), hashed into its txid and sent; a header's hash preimage is little-endian except its 32-byte target; wire integers are big-endian; all exactly as in the Rust core. A node penalizes malformed messages. Any change to hashing or encoding needs a PROTOCOL.md test vector in `test/vectors_test.dart` or `test/protocol_test.dart`.
+   - **A number in a transaction has one form** (`ByteReader.varint`): the shortest. A padded one is refused, or the client would take a transaction the node doesn't.
+   - **A signature covers its network** (`NetworkInfo.tag`): sign with the tag of the network the node is on.
 7. **Web integers are JavaScript doubles:**
    - `<<` and `>>` wrap at 32 bits;
    - `ByteData` has no 64-bit accessors;
    - integers are exact only up to 2^53.
 
    So use `~/`, `*` and `%` for anything past 32 bits, `ByteWriter.u64` and `ByteReader.u64` for u64, and `BigInt` for u128 (targets, work). **A u64 that may hold any value is never an `int`:** a header's nonce and a Hello's stay their 8 bytes from the wire to the hash (`BlockHeader.nonce`, `u64Bytes` for a small one at hand). A miner may start anywhere, and murmur-miner starts at random; read as numbers, such nonces rounded from 2^53 in a browser and wrapped from 2^63 elsewhere, the header hashed to something else, and valid blocks were refused (testnet block 27802 stopped every browser). `ByteReader.u64` now refuses 2^53 and above instead of rounding. The vectors are in `integration_test/support/header_nonce_checks.dart`, run on the VM by the unit tests and in a browser by the acceptance tests: the two failed at different values. Past bugs: `1 << 40` became 0, which froze a timer, and a 64-bit shift broke the subsidy.
-8. **No user-facing text in Dart.** Strings live in `lib/l10n/app_*.arb`, in ICU format with plurals. Arabic has six plural forms. The client layer returns codes (`LinkError`, `TxProblem`, `TxStatusCode`), and `lib/ui/l10n.dart` words them. A new key goes into **all nine** ARB files. Format numbers with `formatAmount`, times with `formatTime`, `formatClock` and `formatElapsed`, and never with `toString()` in the UI.
+8. **No user-facing text in Dart.** Strings live in `lib/l10n/app_*.arb`, in ICU format with plurals. Arabic has six plural forms. The client layer returns codes (`LinkError`, `TxProblem`, `TxStatusCode`), and `lib/ui/l10n.dart` words them. A new key goes into **all nine** ARB files. Format times with `formatTime`, `formatClock` and `formatElapsed`, and never with `toString()` in the UI.
+   - **Amounts are units in the code and tokens on screen.** The chain counts in units, a million to the token; nothing but `lib/ui/l10n.dart` turns one into the other. Show an amount with `formatAmount` (tokens, up to six decimals, never the units), read one with `parseAmount`, put one in a field with `amountText`, and count things (heights, replies) with `formatCount`. An amount in an ARB string is a `String` placeholder, formatted by the caller. No amount goes through a `double`.
    - **Emphasis:** in explanations, `**key words**` in an ARB string show in bold copper (`Emphasized` in `ui/common.dart`). Each language marks its own key words, and translations keep the markers.
    - **Structure over paragraphs:** the user asked for no big blocks of text. Explain with short points, each an icon plus one emphasized line (`InfoPoint`), as in the fee card, the Invitations page and the Public name dialog. Fold details that only some want (the fee card's "Why this fee").
    - **Copper is the only accent colour.** A second colour (teal and others) was tried and rejected by the user.
@@ -109,10 +117,12 @@ set TMP=%TEMP%
 
 ```
 lib/
-  protocol/   pure Dart, no Flutter: bytes, models (tx, header, block), wire codec (tags 0–23),
-              commitments (state tree, block filter, header-history MMR), consensus (MTP, LWMA retarget),
+  protocol/   pure Dart, no Flutter: bytes, models (tx, header, block), wire codec (tags 0–31),
+              commitments (state tree and its entries, block filter, header-history MMR),
+              consensus (MTP, the difficulty rule),
               header_chain (headers packed in memory),
-              network parameters and checkpoints, alias messages (Section 7.8), invitation codes
+              network parameters and checkpoints, alias messages (Section 7.8), invitation codes,
+              Murmur emoji (the ":name:" codes in a message)
   crypto/     Ed25519 wallet; address = SHA-256(public key)
   services/   node_client (everything stateful), secure_channel (X25519 + HKDF + ChaCha20-Poly1305),
               transport_{io,web} (TCP, or WebSocket), chain_cache_{io,web} (files, or IndexedDB),
@@ -156,39 +166,47 @@ It's a `ChangeNotifier` that the UI rebuilds from (`AppBuilder`). The client han
 3. message content for everything already fetched, newest first (`_missingContent`), so each batch of blocks is followed by its text and lists fill in while older blocks still arrive;
 4. blocks a page, or a filter match, asked for;
 5. settling own pending transactions, and GetTx for wanted txids;
-6. the newest stretch of blocks a list needs;
-7. back-filling headers to genesis (after a checkpoint start);
-8. the filter scan for watched items;
-9. one prefetch batch;
-10. with a cache only, the rest of the chain, oldest first.
+6. a page of a thread or of an address's history being followed, from the node's index (`_readLists`);
+7. the newest stretch of blocks a list needs;
+8. back-filling headers to genesis (after a checkpoint start);
+9. the filter scan for watched items (only what a node without an index left to filters);
+10. one prefetch batch.
+
+**The client never downloads the whole chain.** It used to, with a local copy, to count every balance; the chain grows for ever, and nothing shown needs it. Don't bring that back.
 
 When nothing is left, it waits. `_wake()` resumes it: views call things like `requestOlder`, `requestTx`, `requestBlock`, `watchAddress` and `account(...)`, which only record what they want and wake the worker. **Views never await the network.** Each request type has a single waiter (`_headersWaiter`, `_stateWaiter`, and so on), so two concurrent requests of the same type would clash. `feeInfo()` is the only request made from outside the worker, and it shares one in-flight future for that reason.
 
 **Heights and indexes:**
 - `_headers[i]` is height `i + 1`. It's packed (`HeaderChain`): `_headers[i]` rebuilds a `BlockHeader`, so loops over many heights read fields instead (`_headers.prevHashAt(h - 1)`, `minedBy`, `hashIs`).
-- `_low` is the lowest known header: 1, or near the checkpoint until back-filled. Below it, entries are null. Use `_hdr(h)` only for `h >= _low`, and `headerAt(h)` otherwise.
+- `_low` is the lowest header checked in sequence: 1, or near the checkpoint until back-filled. Below it, a header is known only if something old needed it and it came by proof (`_fetchOldHeaders`). Use `_hdr(h)` only for `h >= _low`, and `headerAt(h)` otherwise.
 - `_blocks` is aligned with `_headers`; null means not fetched.
 - `_top..height` is the fetched newest stretch.
-- Blocks `1.._counted` have been replayed into `_balances`, `_nonces`, `_byAddress` and the rest. This happens only with a cache, and gives history rows their before/after balances and the state-root self-check (`_checkStateRoot`).
 
-**Proven state.** `account()`, `provenPool`, `provenIssued` and `provenFlagged()` return proven values, or null until the proof arrives. Calling them also watches the key, so it's re-proven at each new tip. Balances and nonces come from proofs, never from counting, unless the whole chain is counted.
+**Proven state.** `account()`, `provenPool`, `provenIssued`, `provenFlagged()` and `publishedAlias()` return proven values, or null until the proof arrives. Calling them also watches the key, so it's re-proven at each new tip (a name only every 100 blocks, or when a block holds a new one for it: many are watched and they rarely change). Balances and nonces come from proofs, never from counting. A history row's balance is worked back from the proven one, until a block the address mined.
 
-**Filters.** `watchAddress` and `watchThread` add items. `_scanFilters` downloads filters (1000 per request), checks each against its header, and queues matching blocks. `historyPending(address)` says whether a matching block is still unfetched. `activityOf` yields history newest first, and stops at the first block that may match but isn't fetched yet.
+**The node's index** (PROTOCOL.md Section 7.6). `watchThread` and `watchAddress` read a list a page at a time, newest first (`_ListRead`, `_readPage`): a thread's replies and flags (GetThread), what an address sent and what credited it (GetAddress). The newest page is proven against the state entry at the block the node answered for: its count, and its digest by chaining the page's txids; an earlier page by chaining into the one after it. Each entry's merkle branch places it in its block. So a thread or a history is whole, at any chain age, without its blocks: `threadComplete`, `historyPending`. The entry is kept proven at the tip, and a change in it reads what's new. What a page brings is kept like a transaction fetched by id (`_loose`).
+- **Old headers on demand** (`_fetchOldHeaders`): an entry in a block below the checked headers needs that block's header, which comes by GetHeaderProof against the tip's `history_root`. The same serves GetTx, so a reply's old thread no longer waits for the back-fill.
+- **A node without the index** (`--no-index`) answers unavailable: the list falls back on filters (below) by itself.
+- **It names what it reads.** GetThread and GetAddress tell the node which thread or address, where filters don't. GetState already names every account proven.
+- **Not used yet:** the flags against an address's messages (GetAddress list 2), which no state entry holds.
+
+**Filters.** With a node that keeps no index, `watchAddress` and `watchThread` add items. `_scanFilters` downloads filters (1000 per request), checks each against its header, and queues matching blocks. `historyPending(address)` says whether a matching block is still unfetched. `activityOf` yields history newest first, and stops at the first block that may match but isn't fetched yet. A filter holds each transaction's sender, a transfer's recipient, a reply's thread, and a flag's target and thread; **not who a reply pays**, so replies to a wallet's threads are found by watching the threads.
 
 **Checkpoint start** (Section 7.7). Only when the network or the constructor has a checkpoint and nothing is cached:
 1. Fetch the checkpoint block.
-2. Fetch the 90 headers before it, with GetHeaderProof, checked by linkage.
+2. Fetch the 11 headers before it, with GetHeaderProof, checked by linkage: what the median-time-past and the next target need.
 3. Take the history peaks through it.
 4. Check every header after it fully.
 5. `_backfillHeaders` checks from genesis up in the background, and must join `_low` exactly; otherwise `checkpointMismatch` stops the client. With a local copy, each batch it checks is stored (`_flushCache`, as a header chain from genesis that stops short of the checkpoint), so a later session starts from the checkpoint again and resumes the back-fill after those headers (`_resumeBackfill`). Stored headers that don't lead to the checkpoint are dropped and the back-fill starts over from genesis (`_restartBackfill`), rather than blaming the checkpoint.
 
-A branch that would replace the checkpoint's block is refused. A cached chain that doesn't contain the checkpoint is ignored. The testnet ships one (`network.dart`, refreshed with every release); the demo network can't, since every demo chain is different.
+A branch that would replace the checkpoint's block is refused. A cached chain that doesn't contain the checkpoint is ignored. The testnet will ship one (`network.dart`, refreshed with every release) once `murmur-testnet-10` has started; the demo network can't, since every demo chain is different.
 
-**Sending.** `checkTransaction` applies consensus rules, the proven balance and Section 2.4's rules. `submit`:
+**Sending.** `checkTransaction` applies consensus rules (the network's least fee included: below it a transaction is invalid), the proven balance and Section 2.4's rules. `submit`:
 1. salts the content;
-2. signs with `nextNonce`: the proven nonce, plus own transactions the proof doesn't count yet, in contiguous nonce order: pending ones, and those mined above the block the proof is from (`_notYetProven`; a proof lags a new block, and without them a reply sent right after one's thread is mined would reuse its nonce);
-3. sends SubmitTx;
-4. keeps the transaction in `_pending` (mine: true).
+2. works out what a reply or a flag names: a reply names its thread (the first message of the thread of whatever message it answers), a flag its target and, unless the target starts the thread, the thread;
+3. signs for this network with `nextNonce`: the proven nonce, plus own transactions the proof doesn't count yet, in contiguous nonce order: pending ones, and those mined above the block the proof is from (`_notYetProven`; a proof lags a new block, and without them a reply sent right after one's thread is mined would reuse its nonce);
+4. sends SubmitTx;
+5. keeps the transaction in `_pending` (mine: true).
 
 A TxStatus of invalid or refused takes the transaction out of nonce and balance accounting (`_inPlay`). Once the proven nonce passes an own pending transaction, `_settleOwnPending` asks for it by id: on the chain, it becomes a proven transaction; unknown, it was replaced and is dropped. On a reorganization, own transactions in the dropped blocks become pending again.
 
@@ -196,6 +214,9 @@ A TxStatus of invalid or refused takes the transaction out of nonce and balance 
 - **New thread:** the Threads tab's button. Only that tab has it.
 - **New transaction:** the Wallet tab's button, once there's a wallet. Also **Send** on an address's page.
 - **Reply and Flag:** from a message.
+- **Public name:** the Wallet tab (a Name).
+
+**Threads are flat** (the owner's decision for testnet-10, for the chain's size and the client's speed). A reply names its thread, not the message it answers, and **pays the thread's author, whoever it answers**: the interface must never suggest that answering someone rewards that person. Who answers whom inside a thread is not on the chain. **A quote convention in the message text is still to be designed** (the owner said later): until then a thread page is its first message and its replies, oldest first, and replying to a reply simply replies in the thread.
 
 **Sign and send**, or Ctrl+Enter (Cmd+Enter on Apple), follows the same steps:
 1. the form is validated;
@@ -228,21 +249,23 @@ A TxStatus of invalid or refused takes the transaction out of nonce and balance 
   - a tinted tile with two ripples and a faint echo of the path (only at 32 px and up).
 
   The user asked for this over the earlier 5×5 pixel grid, which broke the app's style. `flutter test tool/render_brand.dart` previews them in `build/brand_preview.png`.
-- **Published aliases** (PROTOCOL.md Section 7.8, a client convention).
-  - **Format:** `protocol/alias.dart` encodes, parses and validates the 71-byte alias message: prefix, UTF-8, forbidden code points, edge spaces. It's tested with the spec's `bob` vector in `alias_test.dart`.
-  - **Candidates:** `MessageIndex.aliasCandidatesOf` lists an address's mined Orphans with `content_size` 87, latest first.
-  - **Resolving:** `services/aliases.dart` (`resolveAlias`), through `MurmurClient.publishedAlias`, cached per data version. The rule that matters is never to show a replaced alias. So:
-    - the latest candidate decides;
-    - it's trusted only if no block from the tip down to it (its own included) is unfetched while it could hold one of the address's transactions (filter matches, or isn't known);
-    - content that's missing means no known alias, never the older one.
-
-    The address then shows as hex until it's known, which is the safe side.
-  - **Coverage:** resolution covers what's fetched. The wallet's own address and any open address page are watched, so they resolve. Authors in lists resolve when their blocks are among those fetched. Don't watch every displayed author: watching fetches every block touching the address, and for a miner that's every block it mined.
-  - **Setting one:** Wallet tab → **Public name** (`_PublicName`). The name is checked with `aliasProblem`, then sent through `ComposePage(alias:)`: same fee card, check, summary and unlock. An empty name clears it.
+- **Public names** (PROTOCOL.md Section 7.8).
+  - **Format:** `protocol/alias.dart` encodes, parses and validates the 71-byte name message: prefix, UTF-8, forbidden code points, edge spaces. It's tested with the spec's `bob` vector in `alias_test.dart`. The format is a convention between clients; which message is an address's name is on the chain.
+  - **Resolving** (`MurmurClient.publishedAlias`, `nameIn` in `services/aliases.dart`): the state holds, per address, the hash of its latest Name's content. The client proves that entry, fetches the content by the hash and checks it. No entry, an empty name, content that isn't a name or that no node serves: no name, shown as hex. There is nothing older to fall back on, so a replaced name never shows.
+  - **Any author can be resolved:** up to 64 names are one state request and one content request, so every name on screen is watched. (It used to mean fetching every block touching the address.)
+  - **Setting one:** Wallet tab → **Public name** (`_PublicName`). The name is checked with `aliasProblem`, then sent through `ComposePage(alias:)` as a Name transaction: same fee card, check, summary and unlock. It costs what a thread costs. An empty name clears it.
+  - **A Name is a thread's first message on the chain**, so that it can be flagged; the client never shows it as a thread, never offers to reply to it, and a Reply that names one is a payment.
   - **Not text** (Section 2.4: a message whose first byte is `0x00`, such as an alias):
     - it's never a thread (`MessageIndex` skips known ones, and the Threads tab checks `isNonText` live, since content arrives after the snapshot);
     - it's never replied to (Reply buttons are hidden), and a Reply to one is a payment;
     - it's shown as "Public name: bob" or "(not text…)" (`messageText`).
+- **Murmur emoji** (a client convention of this app's; nothing of it is in PROTOCOL.md). The user asked for emoji of the app's own, beside Unicode's, to set it apart from other forums.
+  - **Only the engine is there: the app has no emoji yet, and takes no name** (`murmurEmoji` in `ui/emoji.dart` is empty). The user discarded a first set of sixteen (the app's icons as `:coin:`, `:pickaxe:` and the like, plus drawn reactions) and wants no term reserved. Don't add an emoji, or bring those back, unasked. Meanwhile every message reads as written and Compose shows no picker.
+  - **On the chain it's text:** a name between colons, `:name:`, lower-case letters only (`emojiPieces` in `protocol/emoji.dart`). The user chose that over private-use characters: any other client shows the name, and it can be typed. So an emoji costs its code's bytes in the fee. A name the app doesn't have stays text.
+  - **A name is fixed once mined:** an emoji added to `murmurEmoji` (its name and its `Glyph`) is never renamed or given another meaning afterwards.
+  - **Shown with `MessageText`**, wherever a message's text is: in copper (rule 8), at the text's size. Use it instead of `Text` for message text. Selectable text keeps each code unseen under its glyph, so a copied message is the one that was sent.
+  - **Written with `EmojiPicker`**, under Compose's message field: nothing while there are no emoji; otherwise closed until asked for, each button writing its code at the cursor.
+  - `emoji_test.dart` tries all of it with emoji of its own (`MessageText(emoji:)`, `EmojiPicker(emoji:)`), since the app has none.
 - **Muted addresses:** hidden in Threads, in thread pages (with a count) and in Messages. Wallet history still shows them: money movements are never hidden.
 - **The new-reply badge:** counts replies to the wallet newer than `messagesSeen[address]`. It starts at "now" for a new wallet, and moves forward while the Messages tab is open.
 - **Search:** only over what's loaded (thread text, replies, author names). A full-text search of the chain isn't something a light client can keep up with.
@@ -363,19 +386,27 @@ A TxStatus of invalid or refused takes the transaction out of nonce and balance 
 
 ## Known gaps and next steps
 
+0. **Protocol 11, on a branch, partly tried** (2026-10-08). What is checked: the protocol layer against the node's vectors, the unit and widget tests, and the client against node v0.11.0 on demo chains (`node_test.dart`). What isn't:
+   - **The app hasn't been run by hand or by the acceptance tests** on any flavour since the move (`tool/acceptance_test.dart`, `integration_test/`): its driver still types whole-number amounts and replies with a recipient in mind. The web build compiles; nothing has run in a browser, where the 256-bit arithmetic of the difficulty rule goes through `BigInt`.
+   - **The packaged desktop apps** (`tool/desktop_smoke_test.dart`) and the app's own node with v0.11.0's `murmur-miner` aren't tried.
+   - **The testnet has no checkpoint**, so `tool/refresh_checkpoint.dart`, `tool/check_checkpoint.dart`, `live_release_test.dart` and the release pipeline can't pass for it. Its first comes from `murmur-node ctl checkpoint` on a trusted node, after the network starts.
+   - **The translations of six reworded strings** (the reply's reward, amounts, the least fee) were written with the change and not reviewed.
+   - **README.md** still describes protocol 10 and whole-number amounts.
+   - **`NODE-TESTNET-10.md` and `FOR-NODE-THREADS.md`** (untracked) are the node side's list of changes and the client's request that led to them: delete both when this branch is done.
 1. **One node only.** Section 7.7 recommends at least three, from different sources, following the heaviest valid chain and retrying requests elsewhere. `MurmurClient` would need a node pool, and a way to route each request.
 2. **Little peer discovery.** Natively, a seed name such as `testnet-seed.murmur.info` works as the node: every address it resolves to is tried, through the handshake, and a lost link reconnects by itself (possibly to another of them). There's no `Addr` handling. Browsers can reach only nodes with `--ws-port`, behind TLS for `wss://`.
    - **Web limit, accepted:** in a browser, page code can't see a name's addresses or choose among them. The browser resolves the name, caches the answer, and reuses the same address. It moves on from an address that refuses or doesn't answer, but not from one that accepts the connection and then fails TLS.
    - A web client can't get past such a node by itself. Measured: 72 retries against `node.murmur.info` all went to the same broken address, while the native client reached all three nodes. `node.murmur.info` includes broken nodes on purpose, to test this.
    - **Rejected workarounds:** DNS over HTTPS (a third party), connecting by IP (TLS rejects it), per-node names (the network keeps one name). Don't reintroduce them unasked.
 3. **The testnet checkpoint ages.** A first session checks every header after it before lists show (about 3,000 a second in a browser), and the gap grows by 2,880 a day, so every release refreshes it (Recipes), and the release job refuses one over a week old. Its trust rests on the chain of checkpoints back to the first, and on the testnet's nodes agreeing when it's refreshed: they're all behind one name, run by the project. Checkpoints come only with releases; users choose nodes, never checkpoints, and a running client never takes one from a node.
-4. **Headers in memory: packed; the filter maps aren't.** `_headers` and `_backfill` are `HeaderChain`s (`lib/protocol/header_chain.dart`): 264 bytes a header (wire bytes plus hash) in one byte array, with the last 1,024 used kept as objects. Long loops read fields from the bytes (`prevHashAt`, `minerAt`, `hashIs`…). Measured with `tool/header_bench.dart` on 100,000 valid testnet headers (2026-10-04, `check` against `packed`):
-   - **Memory in a browser** (headless Edge): about 376 bytes a header packed, spare capacity included, against 1,500 as objects. A year of testnet (about 1.05 million headers) is about 400 MB rather than 1.5 GB.
-   - **Checking:** about 360 µs a header in a browser and 165 µs in the Dart VM, decoding included (11 to 17% slower than checking objects already decoded).
+4. **Headers in memory: a slot for every height.** `_headers` and `_backfill` are `HeaderChain`s (`lib/protocol/header_chain.dart`): 280 bytes a header (wire bytes plus hash) in one byte array, with the last 1,024 used kept as objects. Long loops read fields from the bytes (`prevHashAt`, `minerAt`, `hashIs`…). **This is the next thing to break as the chain ages**, in a browser after two to three years:
+   - **The array has a slot for every height**, known or not, so it grows with the chain even for a session that starts from a checkpoint and never looks below it. `_blocks` has an entry per height too.
+   - **The back-fill keeps every header it checks.** Old headers can now come one at a time by proof (`_fetchOldHeaders`), so the back-fill could check and let go, and the headers could be kept from the checkpoint up only. Not done: it changes what `_low`, the local copy and a resumed back-fill mean.
+   - **Measured before protocol 11** (2026-10-04, 232-byte headers): about 376 bytes a header in a browser, spare capacity included; about 360 µs to check one in a browser. With the new difficulty rule a check on the Dart VM takes about 75 µs (`tool/header_bench.dart`, 2026-10-08), where it took 165; the browser hasn't been measured again.
    - **Rollbacks** rebuild the header history from a copy kept every 1,024 heights (`_historyMarks`, the last 16), not from genesis: rebuilt headers compute their work again.
    - **The local copy loads packed too:** the stores hand over headers as they decode them (`storedHeaders`), and `_loadCache` checks and packs each in turn.
-   - **Still to do:** the per-height filter maps (`_filters`, `_filterTested`) hold an entry per block scanned, and aren't packed.
-5. **Flags received aren't found.** An address's history is found through filters, which index `from`, `to` and `reference`. Flags against the address's messages reference the message's txid, not the address. They show only if the flagged messages are watched: a thread page is open, or the chain is counted.
+   - **The per-height filter maps** (`_filters`, `_filterTested`) hold an entry per block scanned, and aren't packed. They matter only with a node that keeps no index.
+5. **Flags received aren't found.** Flags against an address's messages are in neither of its proven lists, and filters hold the flagged message's txid, not its author. The node's index serves them (GetAddress, list 2), unproven: each can be checked, their completeness can't. The client doesn't read that list yet; such flags show only where the flagged message's thread is open.
 6. **No node release for macOS.** The node publishes Linux (x86_64, arm64) and Windows builds only, so on a Mac the node tests need `MURMUR_NODE_BIN` pointing at a node built from `../murmur`, and the macOS desktop build can't bundle a release (gap 9). The chains `demo-chain` builds have empty blocks: a test that needs transactions on the chain before it starts sends them and lets the node mine them.
 7. **The phones' storage path isn't tried on a device.** On Android and iOS the local copy goes under the app's cache folder (`path_provider`'s `getApplicationCacheDirectory`, in `chainCacheBase`): not the support folder, which device backups include, since the copy never leaves the device. The system may clear it when storage runs short, and the copy is then downloaded again. An earlier copy in the temp folder is moved along. Only the choice of folder is unit-tested; a build on a phone should confirm it.
 8. **Transaction signatures in blocks aren't checked.** Merkle roots, filters and PoW are. A block's validity rests on the proof-of-work majority.

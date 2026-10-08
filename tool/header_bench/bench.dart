@@ -15,19 +15,20 @@ import 'package:murmur_client/protocol/network.dart';
 import 'package:murmur_client/protocol/wire.dart';
 
 /// The network the bench chain is on: the public testnet's parameters
-/// (a 90-block retarget window, 30-second blocks).
+/// (30-second blocks, and the difficulty rule that goes with them).
 const benchNetwork = NetworkInfo.whitepaper;
 
 /// `count` valid headers after genesis, one every target interval, each
-/// mined to its retarget target. Slow: about 256 hashes per header.
+/// mined to the target the difficulty rule gives it. Slow: about 256 hashes per header.
 List<BlockHeader> generateChain(int count, {void Function(int done)? progress}) {
   const net = benchNetwork;
   final genesis = net.genesisHeader();
   final chain = <BlockHeader>[genesis];
   final history = HistoryPeaks()..pushHeader(genesis);
   for (var height = 1; height <= count; height++) {
-    final from = height - 1 - net.lwmaWindow < 0 ? 0 : height - 1 - net.lwmaWindow;
-    final target = nextTarget(chain.sublist(from, height), net);
+    final time = net.genesisTimestamp + height * net.targetBlockSecs;
+    final target = nextTarget(
+        parent: chain[height - 1], grandparent: height >= 2 ? chain[height - 2] : null, timestamp: time, net: net);
     final root = history.root;
     BlockHeader header;
     for (var nonce = 0;; nonce++) {
@@ -38,7 +39,7 @@ List<BlockHeader> generateChain(int count, {void Function(int done)? progress}) 
         stateRoot: Uint8List(32),
         filterHash: Uint8List(32),
         historyRoot: root,
-        timestamp: net.genesisTimestamp + height * net.targetBlockSecs,
+        timestamp: time,
         target: target,
         nonce: u64Bytes(nonce),
         miner: Uint8List(32),

@@ -36,7 +36,8 @@ void main() {
       print('the checkpoint at ${current.height} is less than a day old: nothing to do');
       return;
     }
-    if (height <= network.lwmaWindow) fail('the chain is too short for a checkpoint ($height)');
+    // A checkpoint needs the 11 headers before it.
+    if (height <= 11) fail('the chain is too short for a checkpoint ($height)');
     final hash = agreedHashAt(chains, height);
 
     final file = File('lib/protocol/network.dart');

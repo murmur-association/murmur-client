@@ -8,6 +8,7 @@ import 'common.dart';
 import 'brand.dart';
 import 'chain_tab.dart';
 import 'compose_page.dart';
+import 'emoji.dart';
 import 'glyphs.dart';
 
 class TxPage extends StatelessWidget {
@@ -37,7 +38,7 @@ class TxPage extends StatelessWidget {
       // A public name (PROTOCOL.md Section 7.8) is an Orphan underneath,
       // but no thread: called what it is, and not starred.
       final content = client.liveContent(view);
-      final isAlias = tx.kind == TxKind.orphan && content != null && aliasOf(messageOf(content)) != null;
+      final isAlias = tx.kind == TxKind.name && content != null && aliasOf(messageOf(content)) != null;
       final kind = isAlias ? l.publicName : kindLabel(context, tx.kind);
       final canAct = wallets.wallet != null && isMessage;
       final alreadyFlagged = canAct && client.hasFlagged(wallets.wallet!.addressHex, tx.id);
@@ -54,9 +55,9 @@ class TxPage extends StatelessWidget {
             Card(
               child: ListTile(
                 leading: MurmurIcon(tx.kind == TxKind.flag ? Glyph.flag : Glyph.reply),
-                title: Text(target == null
-                    ? l.refNotLocal(shortHex(tx.referenceId!))
-                    : messageOrUnavailable(context, target)),
+                title: target == null
+                    ? Text(l.refNotLocal(shortHex(tx.referenceId!)))
+                    : MessageText(messageOrUnavailable(context, target)),
                 subtitle: Text(tx.kind == TxKind.flag
                     ? l.flaggedMessage
                     : threaded
@@ -73,8 +74,9 @@ class TxPage extends StatelessWidget {
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Text(l.message, style: theme.textTheme.labelLarge),
                   const SizedBox(height: 8),
-                  SelectableText(
+                  MessageText(
                     text ?? messageOrUnavailable(context, view),
+                    selectable: true,
                     style: text == null ? TextStyle(color: theme.colorScheme.outline) : theme.textTheme.bodyLarge,
                   ),
                   if (canAct) ...[
@@ -113,14 +115,15 @@ class TxPage extends StatelessWidget {
           InfoRow(l.transactionId, HashText(tx.id)),
           InfoRow(l.type, Text(kind)),
           InfoRow(l.from, HashText(tx.fromAddress, onTap: () => openAddress(context, tx.fromAddress))),
-          if (tx.toAddress != null)
-            InfoRow(l.to, HashText(tx.toAddress!, onTap: () => openAddress(context, tx.toAddress!))),
-          if (tx.kind == TxKind.orphan)
-            InfoRow(l.burned, Text(l.burnedValue(tx.burned)))
+          // Who it credits: a transfer's recipient, or for a reply the author
+          // of its thread, which the chain pays.
+          if (client.creditedBy(tx) case final paid?)
+            InfoRow(l.to, HashText(paid, onTap: () => openAddress(context, paid))),
+          if (tx.kind.startsThread)
+            InfoRow(l.burned, Text(l.burnedValue(n(tx.burned))))
           else
             InfoRow(l.amount, Text(n(tx.amount))),
           InfoRow(l.fee, Text(n(tx.fee))),
-          InfoRow(l.signedAt, Text(formatTime(context, tx.timestamp))),
           if (tx.messageHash != null) ...[
             InfoRow(l.contentHash, HashText(toHex(tx.messageHash!))),
             InfoRow(l.contentSize, Text(l.contentSizeValue(tx.contentSize, saltLength, tx.contentSize - saltLength))),
@@ -128,7 +131,7 @@ class TxPage extends StatelessWidget {
           if (tx.referenceId != null)
             InfoRow(tx.kind == TxKind.flag ? l.reports : l.repliesTo,
                 HashText(tx.referenceId!, onTap: target == null ? null : () => openTx(context, target.tx.id))),
-          InfoRow(l.weight, Text(l.weightValue(tx.weight, (tx.fee / tx.weight).toStringAsFixed(4)))),
+          InfoRow(l.weight, Text(l.weightValue(tx.weight, n(tx.fee ~/ tx.weight)))),
           InfoRow(l.publicKey, HashText(toHex(tx.pubkey))),
         ]),
       );

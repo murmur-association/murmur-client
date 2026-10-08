@@ -8,40 +8,54 @@ import 'package:murmur_client/protocol/models.dart';
 import 'package:murmur_client/services/node_client.dart';
 import 'package:murmur_client/services/threads.dart';
 
-final alice = Uint8List(32)..fillRange(0, 32, 1);
-final bob = Uint8List(32)..fillRange(0, 32, 2);
-final carol = Uint8List(32)..fillRange(0, 32, 3);
+final _keys = <String, Uint8List>{};
+
+/// An address for tests: that of a made-up public key, `seed` repeated. A
+/// transaction doesn't write its sender, which is the address of its key,
+/// so the helpers below find the key again from the address.
+Uint8List person(int seed) {
+  final key = Uint8List(32)..fillRange(0, 32, seed);
+  final address = sha256Bytes(key);
+  _keys[toHex(address)] = key;
+  return address;
+}
+
+final alice = person(1);
+final bob = person(2);
+final carol = person(3);
 var _serial = 0;
 
 Uint8List _utf(String s) => Uint8List.fromList(s.codeUnits);
 
 /// A transaction mined at `height` (or pending with `height: null`), from
 /// alice unless `from` says otherwise. A distinct dummy signature gives each
-/// a distinct txid.
+/// a distinct txid. A Reply's `reference` is any message of its thread: the
+/// reply names the thread, as replies do. A Flag's is its target.
 TxView txAt(TxKind kind, int? height, {String? text, Uint8List? from, Uint8List? to, TxView? reference}) {
   final sig = Uint8List(64)..buffer.asByteData().setUint32(0, ++_serial);
   final content = text == null ? null : saltedContent(_utf(text));
+  final thread = reference?.tx.threadId;
   final tx = Transaction(
     kind: kind,
-    from: from ?? alice,
+    pubkey: _keys[toHex(from ?? alice)]!,
     nonce: _serial,
     to: to,
-    amount: kind == TxKind.orphan ? 10 : (kind == TxKind.reply ? 1 : 0),
-    fee: 1,
+    amount: 1000000,
+    fee: 500000,
     messageHash: content == null ? null : sha256Bytes(content),
     contentSize: content?.length ?? 0,
-    reference: reference?.tx.hash,
-    timestamp: 1790208000 + (height ?? 1000),
-    pubkey: Uint8List(32),
+    reference: kind == TxKind.reply ? fromHex(thread!) : reference?.tx.hash,
+    thread: kind == TxKind.flag && thread != null && thread != reference!.tx.id ? fromHex(thread) : null,
     signature: sig,
   );
-  return TxView(tx, height: height, blockTime: height == null ? null : 1790208000 + height * 2, content: content);
+  final pending = height == null ? PendingTx(tx, content, mine: false) : null;
+  return TxView(tx,
+      height: height, blockTime: height == null ? null : 1790208000 + height * 2, content: content, pending: pending);
 }
 
-/// A reply from `from` (bob unless given) to `parent`, paying its author
-/// unless `to` says otherwise.
-TxView replyTo(TxView parent, int? height, {Uint8List? from, Uint8List? to, String text = 'reply'}) =>
-    txAt(TxKind.reply, height, text: text, from: from ?? bob, to: to ?? parent.tx.from, reference: parent);
+/// A reply from `from` (bob unless given) in the thread of `message`.
+TxView replyTo(TxView message, int? height, {Uint8List? from, String text = 'reply'}) =>
+    txAt(TxKind.reply, height, text: text, from: from ?? bob, reference: message);
 
 /// The index of these, given oldest first (`MessageIndex.build` takes them
 /// newest first, as the client has them).
@@ -92,16 +106,10 @@ class FakeChain extends MurmurClient {
   List<TxView> repliesOf(TxView v) => _index.repliesOf(v);
 
   @override
-  Iterable<TxView> repliesUnder(TxView v) => _index.repliesUnder(v);
-
-  @override
   int replyCountOf(TxView v) => _index.replyCountOf(v);
 
   @override
   int flagCountOf(TxView v) => _index.flagCountOf(v);
-
-  @override
-  TxView? parentOf(TxView v) => _index.parentOf(v);
 
   @override
   TxView? threadRootOf(TxView v) => _index.threadRootOf(v);

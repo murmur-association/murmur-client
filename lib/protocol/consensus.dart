@@ -1,57 +1,79 @@
 // Header rules the client checks itself (PROTOCOL.md Sections 3.5 and 4):
-// median-time-past and the difficulty retarget. With the proof of work and
-// the history root, they're what makes a header chain valid on its own,
-// without the blocks. Mirrors murmur core's difficulty.rs, in integer
-// arithmetic (BigInt here, u128 there): every node computes the same target.
+// median-time-past and the difficulty rule. With the proof of work and the
+// history root, they're what makes a header chain valid on its own, without
+// the blocks. Mirrors murmur core's difficulty.rs, in integer arithmetic on
+// 256-bit numbers (BigInt here): every node computes the same target.
+
+import 'dart:typed_data';
 
 import 'bytes.dart';
 import 'commitments.dart';
 import 'models.dart';
 import 'network.dart';
 
-final BigInt _u128Max = (BigInt.one << 128) - BigInt.one;
-final BigInt _u64Max = (BigInt.one << 64) - BigInt.one;
+/// Time differences are limited to this many seconds either way, which no
+/// real chain reaches, so that the node's signed 64-bit arithmetic can't
+/// overflow: `floor((2^63 − 1) / 131072)`.
+const _timeLimit = 70368744177663;
 
-/// A header's difficulty: expected hashes per block (its work), capped at
-/// 2^64 − 1, as in difficulty.rs.
-BigInt _difficulty(BlockHeader h) {
-  if (h.target == BigInt.zero) return _u64Max;
-  final d = h.work;
-  return d > _u64Max ? _u64Max : d;
+final BigInt _half48 = BigInt.one << 47;
+final BigInt _c1 = BigInt.from(195766423245049);
+final BigInt _c2 = BigInt.from(971821376);
+final BigInt _c3 = BigInt.from(5127);
+final BigInt _two16 = BigInt.from(65536);
+
+/// `floor(a / b)` for a positive `b`: toward minus infinity, where `~/`
+/// rounds toward zero. Dart's `%` is never negative for a positive divisor.
+BigInt _floorDiv(BigInt a, BigInt b) => (a - a % b) ~/ b;
+
+/// `65536 × 2^(f / 65536)` for `f` in 0..65535, to within 0.013%: the cubic
+/// approximation of Bitcoin Cash's difficulty rule (aserti3-2d).
+BigInt difficultyFactor(int f) {
+  final x = BigInt.from(f);
+  return _two16 + ((_c1 * x + _c2 * x * x + _c3 * x * x * x + _half48) >> 48);
 }
 
-BigInt _target(BigInt difficulty) => _u128Max ~/ (difficulty < BigInt.one ? BigInt.one : difficulty);
+/// `t × 2^(e / 65536)`, limited to 1 below and 2^256 − 1 above. Bits shifted
+/// out at the bottom are dropped.
+BigInt scaleTarget(BigInt t, BigInt e) {
+  final whole = _floorDiv(e, _two16);
+  final f = (e - whole * _two16).toInt();
+  final product = t * difficultyFactor(f);
+  // Far past either limit, without building a number that long.
+  if (whole > BigInt.from(600)) return product == BigInt.zero ? BigInt.one : u256Max;
+  if (whole < BigInt.from(-600)) return BigInt.one;
+  final shift = whole.toInt() - 16;
+  final scaled = shift >= 0 ? product << shift : product >> -shift;
+  if (scaled > u256Max) return u256Max;
+  return scaled < BigInt.one ? BigInt.one : scaled;
+}
 
-/// The target the block after `window` must carry: `window` is the headers
-/// from the parent back through at most `lwmaWindow + 1` blocks, oldest
-/// first (fewer near genesis).
-BigInt nextTarget(List<BlockHeader> window, NetworkInfo net) {
-  if (window.length < 2) {
-    return window.isEmpty ? net.genesisTarget : window.last.target;
-  }
-  final w = window.length > net.lwmaWindow + 1 ? window.sublist(window.length - (net.lwmaWindow + 1)) : window;
-  // Solvetimes in sixths of a second, so T/6 is exactly T.
-  final t = net.targetBlockSecs;
-  final minSt = t, maxSt = 36 * t;
-  var weightedDifficulty = BigInt.zero, weightedSolvetime = BigInt.zero;
-  for (var i = 1; i < w.length; i++) {
-    final weight = BigInt.from(i);
-    // Timestamps can go backwards (only median-time-past is enforced).
-    final raw = (w[i].timestamp - w[i - 1].timestamp) * 6;
-    final solvetime = raw < minSt ? minSt : (raw > maxSt ? maxSt : raw);
-    weightedDifficulty += weight * _difficulty(w[i]);
-    weightedSolvetime += weight * BigInt.from(solvetime);
-  }
-  final rawNext = weightedDifficulty * BigInt.from(6 * t) ~/ weightedSolvetime;
-  final prev = _difficulty(w.last);
-  final swing = BigInt.from(net.maxSwingPct);
-  final hundred = BigInt.from(100);
-  final minAllowed = prev * (hundred - swing) ~/ hundred;
-  var maxAllowed = prev * (hundred + swing) ~/ hundred;
-  // At least one above: at very low difficulty the percentage rounds to nothing.
-  if (maxAllowed < prev + BigInt.one) maxAllowed = prev + BigInt.one;
-  final clamped = rawNext < minAllowed ? minAllowed : (rawNext > maxAllowed ? maxAllowed : rawNext);
-  return _target(clamped);
+int _limited(int seconds) => seconds > _timeLimit ? _timeLimit : (seconds < -_timeLimit ? -_timeLimit : seconds);
+
+/// The target a block stamped `timestamp` must carry, from its parent's
+/// target, how long the parent took, and how long after its parent the block
+/// itself comes (PROTOCOL.md Section 4). The first block after genesis keeps
+/// the genesis target, whatever its time; `grandparent` is null only then.
+Uint8List nextTarget({
+  required BlockHeader parent,
+  required BlockHeader? grandparent,
+  required int timestamp,
+  required NetworkInfo net,
+}) {
+  if (grandparent == null) return net.genesisTarget;
+  final t = net.targetBlockSecs, s = net.difficultySlack;
+  // Signed: a parent may be stamped before its own parent.
+  var took = _limited(parent.timestamp - grandparent.timestamp);
+  if (took > s) took = s;
+  var late = _limited(timestamp - parent.timestamp) - s;
+  if (late < 0) late = 0;
+  // In 1/65536ths of a doubling. BigInt: the limits above allow products
+  // past 2^53, which a browser's numbers don't hold.
+  final exponent = _floorDiv(BigInt.from(took - t) * _two16, BigInt.from(net.difficultyTau)) +
+      _floorDiv(BigInt.from(late) * _two16, BigInt.from(net.difficultyEase));
+  // A parent found exactly on time, and a block within the slack: unchanged.
+  if (exponent == BigInt.zero) return parent.target;
+  return u256Bytes(scaleTarget(parent.targetValue, exponent));
 }
 
 /// The median of the timestamps of the last 11 blocks ending at the parent
@@ -63,9 +85,10 @@ int medianTimePast(List<BlockHeader> lastUpTo11) {
 
 /// Checks header `h` as a node does (PROTOCOL.md Section 7.2): it links to
 /// its parent, meets its target, is later than the median of the last 11
-/// timestamps, carries the retarget's target, and commits to the header
-/// history through its parent (`history`). `at` looks up earlier headers
-/// (genesis included). Throws [FormatException] naming the broken rule.
+/// timestamps, carries the target the difficulty rule gives it, and commits
+/// to the header history through its parent (`history`). `at` looks up
+/// earlier headers (genesis included). Throws [FormatException] naming the
+/// broken rule.
 ///
 /// The client runs this on every header it accepts; `tool/header_bench.dart`
 /// times it.
@@ -75,24 +98,25 @@ void checkHeaderRules(BlockHeader h, BlockHeader? Function(int height) at, Histo
     throw FormatException('header ${h.height} does not link to its parent');
   }
   if (!h.meetsTarget) throw FormatException('header ${h.height} does not meet its proof-of-work target');
-  // The window of earlier headers: the parent back through lwma_window + 1.
-  final window = <BlockHeader>[];
-  for (var i = h.height - 1; i >= 0 && i >= h.height - 1 - net.lwmaWindow; i--) {
+  // The last 11 ending at the parent. Just after a checkpoint they are the
+  // checkpoint's context (the 11 headers before it); a header whose window
+  // isn't all at hand is checked for the rest.
+  final from = h.height - 11 < 0 ? 0 : h.height - 11;
+  final last11 = <BlockHeader>[];
+  for (var i = from; i < h.height; i++) {
     final header = at(i);
     if (header == null) break;
-    window.insert(0, header);
+    last11.add(header);
   }
-  final complete = window.first.height == (h.height - 1 - net.lwmaWindow < 0 ? 0 : h.height - 1 - net.lwmaWindow);
-  // Just after a checkpoint the window is the checkpoint's context (90
-  // headers), enough for both rules.
-  if (complete) {
-    final last11 = window.length > 11 ? window.sublist(window.length - 11) : window;
-    if (h.timestamp <= medianTimePast(last11)) {
-      throw FormatException('header ${h.height} is not later than the median of the last 11');
-    }
-    // An unrecognized network's retarget parameters aren't known.
-    if (net.known && h.target != nextTarget(window, net)) {
-      throw FormatException('header ${h.height} does not carry the retarget\'s target');
+  if (last11.length == h.height - from && h.timestamp <= medianTimePast(last11)) {
+    throw FormatException('header ${h.height} is not later than the median of the last 11');
+  }
+  // An unrecognized network's difficulty parameters aren't known.
+  final grandparent = h.height >= 2 ? at(h.height - 2) : null;
+  if (net.known && (h.height < 2 || grandparent != null)) {
+    final target = nextTarget(parent: parent, grandparent: grandparent, timestamp: h.timestamp, net: net);
+    if (!bytesEqual(h.target, target)) {
+      throw FormatException('header ${h.height} does not carry the target the difficulty rule gives it');
     }
   }
   if (!bytesEqual(h.historyRoot, history.root)) {

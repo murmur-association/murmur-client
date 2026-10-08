@@ -72,12 +72,8 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
-  String transferOf(int amount) {
-    final intl.NumberFormat amountNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String amountString = amountNumberFormat.format(amount);
-
-    return '$amountString の送金';
+  String transferOf(String amount) {
+    return '$amount の送金';
   }
 
   @override
@@ -145,7 +141,7 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
-  String get probFeeTooLow => '手数料は 1 以上にしてください。';
+  String get probFeeTooLow => '手数料がネットワークの最低額を下回っています。';
 
   @override
   String get probMalformed => 'このトランザクションは正しい形式ではありません。';
@@ -157,19 +153,12 @@ class AppLocalizationsJa extends AppLocalizations {
   String get probNeedsRecipient => '受取人を入力してください。';
 
   @override
-  String probAmountBelowFee(int fee) {
-    final intl.NumberFormat feeNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String feeString = feeNumberFormat.format(fee);
-
-    return '金額は手数料（$feeString）以上にしてください。';
+  String probAmountBelowFee(String fee) {
+    return '金額は手数料（$fee）以上にしてください。';
   }
 
   @override
   String get probReplyParentNotMined => '返信できるのは、すでにブロックに含まれているスレッドか返信だけです。';
-
-  @override
-  String get probReplyWrongRecipient => '返信は、返信先メッセージの投稿者に支払う必要があります。';
 
   @override
   String get probFlagNotMessage => '通報できるのはスレッドと返信だけです。';
@@ -190,15 +179,8 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
-  String probInsufficientBalance(int needed, int available) {
-    final intl.NumberFormat neededNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String neededString = neededNumberFormat.format(needed);
-    final intl.NumberFormat availableNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String availableString = availableNumberFormat.format(available);
-
-    return '残高不足です：$neededString 必要ですが、利用可能なのは $availableString です（確認済み残高から未確認トランザクションを引いた額）。';
+  String probInsufficientBalance(String needed, String available) {
+    return '残高不足です：$needed 必要ですが、利用可能なのは $available です（確認済み残高から未確認トランザクションを引いた額）。';
   }
 
   @override
@@ -413,12 +395,8 @@ class AppLocalizationsJa extends AppLocalizations {
   String get balance => '残高';
 
   @override
-  String pendingCommitted(int amount) {
-    final intl.NumberFormat amountNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String amountString = amountNumberFormat.format(amount);
-
-    return '$amountString が未確認トランザクションに充てられています';
+  String pendingCommitted(String amount) {
+    return '$amount が未確認トランザクションに充てられています';
   }
 
   @override
@@ -580,12 +558,8 @@ class AppLocalizationsJa extends AppLocalizations {
   String get statNextReward => '次のブロック報酬';
 
   @override
-  String rewardPlusFees(int amount) {
-    final intl.NumberFormat amountNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String amountString = amountNumberFormat.format(amount);
-
-    return '$amountString + 手数料';
+  String rewardPlusFees(String amount) {
+    return '$amount + 手数料';
   }
 
   @override
@@ -625,21 +599,6 @@ class AppLocalizationsJa extends AppLocalizations {
   String get reward => '報酬';
 
   @override
-  String rewardBreakdown(int subsidy, int payout, int fees) {
-    final intl.NumberFormat subsidyNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String subsidyString = subsidyNumberFormat.format(subsidy);
-    final intl.NumberFormat payoutNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String payoutString = payoutNumberFormat.format(payout);
-    final intl.NumberFormat feesNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String feesString = feesNumberFormat.format(fees);
-
-    return '補助 $subsidyString + バーンプールから $payoutString + 手数料 $feesString';
-  }
-
-  @override
   String get merkleRoot => 'マークルルート';
 
   @override
@@ -676,12 +635,8 @@ class AppLocalizationsJa extends AppLocalizations {
   String get threadGone => 'このスレッドはもうチェーン上にありません。';
 
   @override
-  String paidToParent(int amount) {
-    final intl.NumberFormat amountNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String amountString = amountNumberFormat.format(amount);
-
-    return '元のメッセージの投稿者に $amountString を支払い';
+  String paidToThreadAuthor(String amount) {
+    return 'スレッドの作成者に $amount を支払い';
   }
 
   @override
@@ -739,12 +694,8 @@ class AppLocalizationsJa extends AppLocalizations {
   String get burned => 'バーン';
 
   @override
-  String burnedValue(int amount) {
-    final intl.NumberFormat amountNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String amountString = amountNumberFormat.format(amount);
-
-    return '$amountString（バーンプールを通じてマイナーに戻ります）';
+  String burnedValue(String amount) {
+    return '$amount（バーンプールを通じてマイナーに戻ります）';
   }
 
   @override
@@ -752,9 +703,6 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get fee => '手数料';
-
-  @override
-  String get signedAt => '署名日時';
 
   @override
   String get contentHash => '内容のハッシュ';
@@ -874,7 +822,7 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get explainReply =>
-      '返信では、メッセージの投稿者に少なくとも手数料と同額を支払い（チップとして多めに払うこともできます）、さらにマイナーに手数料を支払います。';
+      '返信では、スレッドの作成者に少なくとも手数料と同額を支払い（チップとして多めに払うこともできます）、さらにマイナーに手数料を支払います。';
 
   @override
   String get explainTransfer => 'メッセージのない通常のトークン送金です。金額は手数料以上にしてください。';
@@ -886,34 +834,28 @@ class AppLocalizationsJa extends AppLocalizations {
   String get enterAddress => '64 文字の 16 進アドレスを入力してください';
 
   @override
-  String get payToAuthor => '投稿者への支払い';
+  String get payToAuthor => 'スレッド作成者への支払い';
 
   @override
-  String get wholeNumber => '整数';
+  String get notAnAmount => '数量を入力してください';
 
   @override
-  String atLeastFee(int fee) {
-    final intl.NumberFormat feeNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String feeString = feeNumberFormat.format(fee);
-
-    return '手数料（$feeString）以上';
+  String atLeastFee(String fee) {
+    return '手数料（$fee）以上';
   }
 
   @override
   String get feeToMiner => '手数料（マイナーへ）';
 
   @override
-  String suggestedFee(int fee) {
-    final intl.NumberFormat feeNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String feeString = feeNumberFormat.format(fee);
-
-    return '推奨：$feeString';
+  String suggestedFee(String fee) {
+    return '推奨：$fee';
   }
 
   @override
-  String get atLeastOne => '1 以上';
+  String atLeastMin(String min) {
+    return '$min 以上';
+  }
 
   @override
   String bytesOf(int count, int max) {
@@ -934,6 +876,14 @@ class AppLocalizationsJa extends AppLocalizations {
     final String countString = countNumberFormat.format(count);
 
     return '長すぎます：$countString バイト';
+  }
+
+  @override
+  String get murmurEmoji => 'Murmur の絵文字';
+
+  @override
+  String murmurEmojiHint(String example) {
+    return 'Murmur でのみ絵として表示されます。ほかのアプリでは $example のように名前が表示されます。';
   }
 
   @override
@@ -981,39 +931,13 @@ class AppLocalizationsJa extends AppLocalizations {
   String get checkAgain => '再確認';
 
   @override
-  String balanceBeforeAfter(int before, int after) {
-    final intl.NumberFormat beforeNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String beforeString = beforeNumberFormat.format(before);
-    final intl.NumberFormat afterNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String afterString = afterNumberFormat.format(after);
-
-    return '$beforeString → $afterString';
+  String balanceBeforeAfter(String before, String after) {
+    return '$before → $after';
   }
 
   @override
-  String balanceBeforeAfterTooltip(int before, int after) {
-    final intl.NumberFormat beforeNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String beforeString = beforeNumberFormat.format(before);
-    final intl.NumberFormat afterNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String afterString = afterNumberFormat.format(after);
-
-    return '残高：前 $beforeString、後 $afterString';
-  }
-
-  @override
-  String chainCounted(int counted, int total) {
-    final intl.NumberFormat countedNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String countedString = countedNumberFormat.format(counted);
-    final intl.NumberFormat totalNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String totalString = totalNumberFormat.format(total);
-
-    return '$totalString ブロック中 $countedString ブロックを集計済み';
+  String balanceBeforeAfterTooltip(String before, String after) {
+    return '残高：前 $before、後 $after';
   }
 
   @override
@@ -1355,12 +1279,8 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
-  String claimHolds(int amount) {
-    final intl.NumberFormat amountNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String amountString = amountNumberFormat.format(amount);
-
-    return 'この招待には $amountString が入っています。最初のスレッドを始めるのに十分です。';
+  String claimHolds(String amount) {
+    return 'この招待には $amount が入っています。最初のスレッドを始めるのに十分です。';
   }
 
   @override
@@ -1732,15 +1652,8 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
-  String feeRecentPoint(int lowest, int median) {
-    final intl.NumberFormat lowestNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String lowestString = lowestNumberFormat.format(lowest);
-    final intl.NumberFormat medianNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String medianString = medianNumberFormat.format(median);
-
-    return '**最近のブロック**は最低 **$lowestString** の手数料を受け入れました（中央値 $medianString）。';
+  String feeRecentPoint(String lowest, String median) {
+    return '**最近のブロック**は最低 **$lowest** の手数料を受け入れました（中央値 $median）。';
   }
 
   @override

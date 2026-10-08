@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 // Thread rules (lib/services/threads.dart): which reply answers which
 // message under PROTOCOL.md Section 2.4, counts, and the list's order.
 
@@ -45,33 +47,36 @@ void main() {
     expect(ix.threadRootOf(reply)!.tx.id, second.tx.id);
   });
 
-  test('a reply counts only if it pays a mined parent message\'s author (Section 2.4)', () {
+  test('a reply is in a thread only if that thread is mined and is a conversation (Section 2.4)', () {
     final root = txAt(TxKind.orphan, 1, text: 'question');
     final good = replyTo(root, 2);
-    final wrongPayee = replyTo(root, 3, to: carol);
     final pendingRoot = txAt(TxKind.orphan, null, text: 'not mined yet');
     final toPending = replyTo(pendingRoot, 4);
-    final transfer = txAt(TxKind.raw, 5, to: alice);
-    final toTransfer = replyTo(transfer, 6);
-    final ix = indexOf([root, good, wrongPayee, transfer, toTransfer, pendingRoot, toPending]);
+    final name = txAt(TxKind.name, 5, text: '\u0000alias:alice');
+    final toName = replyTo(name, 6);
+    final ix = indexOf([root, good, name, toName, pendingRoot, toPending]);
 
     expect(ix.isThreadedReply(good), isTrue);
-    expect(ix.isThreadedReply(wrongPayee), isFalse, reason: 'pays someone other than the author');
-    expect(ix.isThreadedReply(toPending), isFalse, reason: 'parent not on the chain');
-    expect(ix.isThreadedReply(toTransfer), isFalse, reason: 'parent is not a message');
+    expect(ix.isThreadedReply(toPending), isFalse, reason: 'its thread is not on the chain');
+    expect(ix.isThreadedReply(toName), isFalse, reason: 'a name is no conversation: the reply is a payment');
     expect(ix.repliesOf(root).map((v) => v.tx.id), [good.tx.id]);
+    expect(ix.threads.map((t) => t.root.tx.id), {root.tx.id, pendingRoot.tx.id}, reason: 'a name is never a thread');
   });
 
-  test('replies nest and bump their thread', () {
+  test('threads are flat: a reply to a reply is in the same thread, and bumps it', () {
     final older = txAt(TxKind.orphan, 1, text: 'older');
     final newer = txAt(TxKind.orphan, 2, text: 'newer');
     final reply = replyTo(older, 3);
-    final nested = replyTo(reply, 4, from: alice);
-    final pendingReply = replyTo(nested, null, from: carol);
-    final ix = indexOf([older, newer, reply, nested, pendingReply]);
+    final toReply = replyTo(reply, 4, from: alice);
+    final pendingReply = replyTo(toReply, null, from: carol);
+    final ix = indexOf([older, newer, reply, toReply, pendingReply]);
 
+    // Each names the thread, whichever message it answers.
+    expect([reply, toReply, pendingReply].map((v) => v.tx.referenceId), everyElement(older.tx.id));
     expect(ix.threads.first.root.tx.id, older.tx.id);
-    expect(ix.threads.first.replies, 3, reason: 'a pending reply to a mined message counts');
+    expect(ix.threads.first.replies, 3, reason: 'a pending reply in a mined thread counts');
+    expect(ix.repliesOf(older).map((v) => v.tx.id), [reply.tx.id, toReply.tx.id, pendingReply.tx.id]);
+    expect(ix.repliesOf(reply), isEmpty, reason: 'a reply has none of its own');
     expect(ix.threadRootOf(pendingReply)!.tx.id, older.tx.id);
   });
 
@@ -92,6 +97,32 @@ void main() {
     expect((ix.flagCountOf(first), ix.flagCountOf(second)), (2, 0));
     expect(ix.threads.map((t) => t.flags), [0, 2]);
     expect(ix.threads, hasLength(2), reason: 'flags and transfers are not threads');
+  });
+
+  test('a flag counts only against a message of the thread it names', () {
+    final thread = txAt(TxKind.orphan, 1, text: 'thread');
+    final other = txAt(TxKind.orphan, 2, text: 'another thread');
+    final reply = replyTo(thread, 3);
+    final right = txAt(TxKind.flag, 4, from: carol, reference: reply);
+    expect(right.tx.threadId, thread.tx.id, reason: 'a flag of a reply names the reply\'s thread');
+    expect(txAt(TxKind.flag, 4, reference: thread).tx.thread, isNull, reason: 'none to name for a first message');
+    // The chain takes a flag that names any thread on it: one that names
+    // another thread than its target's is valid there, and ignored here.
+    final wrong = TxView(
+      Transaction(
+        kind: TxKind.flag,
+        pubkey: Uint8List(32)..fillRange(0, 32, 1),
+        nonce: 9,
+        fee: 500000,
+        reference: reply.tx.hash,
+        thread: other.tx.hash,
+        signature: Uint8List(64),
+      ),
+      height: 5,
+      blockTime: 1790208010,
+    );
+    final ix = indexOf([thread, other, reply, right, wrong]);
+    expect(ix.flagCountOf(reply), 1);
   });
 }
 
@@ -165,32 +196,32 @@ void _settledOrder() {
     expect(settled.held, isFalse);
   });
 
-  test('the wait is counted from the newest reply under the missing message, through nested replies', () {
+  test('the wait is counted from the newest reply in the missing thread', () {
     final root = txAt(TxKind.orphan, 10, text: 'root');
     final first = replyTo(root, 60);
-    final nested = replyTo(first, 90, from: carol);
+    final later = replyTo(first, 90, from: carol);
     final between = txAt(TxKind.orphan, 75, text: 'between the two replies');
     final above = txAt(TxKind.orphan, 95, text: 'above both');
-    final ix = indexOf([first, between, nested, above]);
-    expect(ix.missingParents, {root.tx.id: activityTime(nested)});
+    final ix = indexOf([first, between, later, above]);
+    expect(ix.missingParents, {root.tx.id: activityTime(later)});
     expect(ids(ix.settledThreads((id) => true).threads), ids([above]));
 
-    // With the first reply missing too, its own parent can't be known yet:
-    // the nested reply waits for the first.
-    final deeper = indexOf([between, nested, above]);
-    expect(deeper.missingParents, {first.tx.id: activityTime(nested)});
+    // With the first reply missing too, the later one still names its
+    // thread: a reply never waits for another reply.
+    final without = indexOf([between, later, above]);
+    expect(without.missingParents, {root.tx.id: activityTime(later)});
   });
 
   test('a reply that is a payment (Section 2.4) leads to no thread, and holds nothing', () {
-    final root = txAt(TxKind.orphan, 10, text: 'root');
-    final wrongPayee = replyTo(root, 50, to: carol); // known parent, not paid: a payment
-    final under = replyTo(wrongPayee, 90); // a reply to that payment
+    final name = txAt(TxKind.name, 10, text: '\u0000alias:alice');
+    final payment = replyTo(name, 90);
     final thread = txAt(TxKind.orphan, 70, text: 'thread');
-    final ix = indexOf([root, wrongPayee, thread, under]);
+    final ix = indexOf([name, thread, payment]);
     expect(ix.missingParents, isEmpty);
-    expect(ids(ix.settledThreads((id) => true).threads), ids([thread, root]));
+    expect(ids(ix.settledThreads((id) => true).threads), ids([thread]));
 
     // Flags and transfers that reference something missing don't either.
+    final root = txAt(TxKind.orphan, 10, text: 'root');
     final flagged = indexOf([thread, txAt(TxKind.flag, 90, from: bob, reference: root)]);
     expect(flagged.missingParents, isEmpty);
   });

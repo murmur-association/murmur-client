@@ -7,9 +7,12 @@ import 'dart:typed_data';
 import 'package:crypto/crypto.dart' as crypto;
 
 final _hexPattern = RegExp(r'^[0-9a-fA-F]*$');
-final _u128Mask = (BigInt.one << 128) - BigInt.one;
+
+/// The largest u256: a target's upper limit, and where work saturates.
+final BigInt u256Max = (BigInt.one << 256) - BigInt.one;
 const _two32 = 0x100000000;
 const _twoTo21 = 0x200000;
+const _twoTo53 = 9007199254740992;
 
 String toHex(List<int> bytes) {
   final sb = StringBuffer();
@@ -52,16 +55,15 @@ bool bytesEqual(List<int> a, List<int> b) {
 Uint8List sha256Bytes(List<int> data) =>
     Uint8List.fromList(crypto.sha256.convert(data).bytes);
 
-/// The low 128 bits of `v`, 16 bytes. Through hex: sixteen BigInt
-/// mask-and-shift steps are slow on the web, and headers carry three u128s
-/// each (the target, and work and targets in their history nodes).
-Uint8List _u128Bytes(BigInt v, Endian endian) {
-  final hex = (v & _u128Mask).toRadixString(16).padLeft(32, '0');
-  final out = fromHex(hex);
-  return endian == Endian.big ? out : Uint8List.fromList(out.reversed.toList());
+/// `v` as the 32 bytes of a u256, most significant first (as a target
+/// or a chain's work is written everywhere). Through hex: BigInt
+/// mask-and-shift steps are slow on the web.
+Uint8List u256Bytes(BigInt v) {
+  if (v.isNegative || v > u256Max) throw ArgumentError('not a u256');
+  return fromHex(v.toRadixString(16).padLeft(64, '0'));
 }
 
-/// A big-endian unsigned integer from bytes, through hex (see _u128Bytes).
+/// A big-endian unsigned integer from bytes, through hex (see u256Bytes).
 BigInt bigIntFromBytes(List<int> bytes) => bytes.isEmpty ? BigInt.zero : BigInt.parse(toHex(bytes), radix: 16);
 
 /// `v` as the 8 bytes of a u64, big-endian (as on the wire): for a value
@@ -104,7 +106,19 @@ class ByteWriter {
     _b.add(_scratch.buffer.asUint8List(0, 8));
   }
 
-  void u128(BigInt v, [Endian endian = Endian.big]) => _b.add(_u128Bytes(v, endian));
+  void u256(BigInt v) => _b.add(u256Bytes(v));
+
+  /// A number in as few bytes as it needs (PROTOCOL.md Section 2.2): groups
+  /// of 7 bits, least significant first, the top bit set on every byte but
+  /// the last (LEB128). By division: shifts are 32-bit on the web.
+  void varint(int v) {
+    if (v < 0 || v >= _twoTo53) throw ArgumentError('not a number a transaction can carry here');
+    while (v >= 0x80) {
+      _b.addByte(0x80 | (v % 0x80));
+      v ~/= 0x80;
+    }
+    _b.addByte(v);
+  }
 
   void bytes(List<int> v) => _b.add(v);
 
@@ -173,7 +187,29 @@ class ByteReader {
     return v;
   }
 
-  BigInt u128() => bigIntFromBytes(take(16));
+  BigInt u256() => bigIntFromBytes(take(32));
+
+  /// See ByteWriter.varint. Only the shortest form is a number: a padded
+  /// one is refused, or the client would take a transaction the node
+  /// doesn't. So is 2^53 and above, as for [u64].
+  int varint() {
+    var value = 0, scale = 1;
+    for (var i = 0;; i++) {
+      final b = u8();
+      final group = b & 0x7f;
+      // From the ninth byte on, any bit is past 2^56.
+      if (i >= 8 ? group != 0 : value + group * scale >= _twoTo53) {
+        throw const FormatException('a number too large to be valid here');
+      }
+      value += group * scale;
+      if (b < 0x80) {
+        if (b == 0 && i > 0) throw const FormatException('a number written longer than it needs');
+        return value;
+      }
+      if (i == 9) throw const FormatException('a number over 64 bits');
+      scale *= 0x80;
+    }
+  }
 
   bool boolean() {
     final v = u8();

@@ -743,7 +743,7 @@ class _CreateInvitationsDialogState extends State<CreateInvitationsDialog> {
             ),
             SizedBox(
               width: 48,
-              child: Text(formatAmount(context, _count),
+              child: Text(formatCount(context, _count),
                   textAlign: TextAlign.center,
                   style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700)),
             ),
@@ -764,7 +764,7 @@ class _CreateInvitationsDialogState extends State<CreateInvitationsDialog> {
             if (available != null && !enough)
               Padding(
                 padding: const EdgeInsets.only(top: 8),
-                child: Text(l.probInsufficientBalance(total, available),
+                child: Text(l.probInsufficientBalance(formatAmount(context, total), formatAmount(context, available)),
                     style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.error)),
               ),
           ],

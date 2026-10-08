@@ -61,7 +61,7 @@ StarredActivity starredActivity(
       continue;
     }
     if (view.tx.kind != TxKind.orphan && view.tx.kind != TxKind.reply) continue;
-    final under = client.repliesUnder(view).toList();
+    final under = client.repliesOf(view);
     final root = client.threadRootOf(view);
     if (root != null && root.confirmed) client.watchThread(root, [view, ...under]);
     for (final reply in under) {

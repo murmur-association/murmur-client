@@ -4,6 +4,7 @@ import '../protocol/models.dart';
 import '../services/node_client.dart';
 import '../services/starred.dart';
 import 'common.dart';
+import 'emoji.dart';
 import 'glyphs.dart';
 import 'thread_page.dart';
 
@@ -130,10 +131,9 @@ class _PersonTile extends StatelessWidget {
       // Until one of their messages is found, the name says it all.
       subtitle: latest == null
           ? null
-          : Text(
+          : MessageText(
               '${firstLine(messageOrUnavailable(context, latest))} · ${whenOf(context, latest)}',
               maxLines: 1,
-              overflow: TextOverflow.ellipsis,
             ),
       trailing: StarButton.person(address),
       onTap: () => openAddress(context, address),
@@ -175,7 +175,7 @@ class _StarredTile extends StatelessWidget {
         fresh: fresh,
         child: Opacity(opacity: view.confirmed ? 1 : 0.5, child: AddressAvatar(tx.fromAddress)),
       ),
-      title: Text(text, maxLines: 1, overflow: TextOverflow.ellipsis),
+      title: MessageText(text, maxLines: 1),
       subtitle: PersonLine(tx.fromAddress, '$kind · ${whenOf(context, view)}'),
       trailing: Row(mainAxisSize: MainAxisSize.min, children: [
         if (isRoot) CountBadges(replies: client.replyCountOf(view), flags: client.flagCountOf(view)),

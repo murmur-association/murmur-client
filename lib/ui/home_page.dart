@@ -99,7 +99,8 @@ class _HomePageState extends State<HomePage> with RouteAware {
       final t = activityTime(v);
       if (v.confirmed && t <= seen) break; // newest first: the rest were seen
       final tx = v.tx;
-      if (tx.kind != TxKind.reply || tx.toAddress != me || tx.fromAddress == me) continue;
+      // Replies in the wallet's threads: those are what credit it.
+      if (tx.kind != TxKind.reply || client.creditedBy(tx) != me || tx.fromAddress == me) continue;
       if (prefs.muted.contains(tx.fromAddress)) continue;
       newest = max(newest ?? 0, t);
       if (t > seen && ++count == 99) break;
@@ -144,7 +145,7 @@ class _HomePageState extends State<HomePage> with RouteAware {
       }
       Widget starredIcon(bool filled) => Badge(
             isLabelVisible: starredNew > 0,
-            label: Text(starredNew >= 99 ? '99+' : formatAmount(context, starredNew)),
+            label: Text(starredNew >= 99 ? '99+' : formatCount(context, starredNew)),
             child: Semantics(
               label: starredNew > 0 ? l.starredNew(starredNew) : null,
               child: MurmurIcon(Glyph.star, filled: filled),
@@ -152,7 +153,7 @@ class _HomePageState extends State<HomePage> with RouteAware {
           );
       Widget messagesIcon(bool filled) => Badge(
             isLabelVisible: newReplies > 0,
-            label: Text(newReplies >= 99 ? '99+' : formatAmount(context, newReplies)),
+            label: Text(newReplies >= 99 ? '99+' : formatCount(context, newReplies)),
             child: Semantics(
               label: newReplies > 0 ? l.newReplies(newReplies) : null,
               child: MurmurIcon(Glyph.outbox, filled: filled),

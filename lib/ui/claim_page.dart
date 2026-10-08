@@ -92,7 +92,7 @@ class _ClaimPageState extends State<ClaimPage> {
                   ] else
                     MurmurIcon(Glyph.wallet, size: 72, color: theme.colorScheme.primary),
                   const SizedBox(height: 16),
-                  Text(balance == null || balance == 0 ? l.inviteChecking : l.claimHolds(balance),
+                  Text(balance == null || balance == 0 ? l.inviteChecking : l.claimHolds(formatAmount(context, balance)),
                       textAlign: TextAlign.center),
                   const SizedBox(height: 24),
                   FilledButton.icon(

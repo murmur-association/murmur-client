@@ -194,7 +194,7 @@ abstract class AppLocalizations {
   ///
   /// In en, this message translates to:
   /// **'Transfer of {amount}'**
-  String transferOf(int amount);
+  String transferOf(String amount);
 
   /// No description provided for @flagOn.
   ///
@@ -283,7 +283,7 @@ abstract class AppLocalizations {
   /// No description provided for @probFeeTooLow.
   ///
   /// In en, this message translates to:
-  /// **'The fee must be at least 1.'**
+  /// **'The fee is below the network\'s minimum.'**
   String get probFeeTooLow;
 
   /// No description provided for @probMalformed.
@@ -308,19 +308,13 @@ abstract class AppLocalizations {
   ///
   /// In en, this message translates to:
   /// **'The amount must be at least the fee ({fee}).'**
-  String probAmountBelowFee(int fee);
+  String probAmountBelowFee(String fee);
 
   /// No description provided for @probReplyParentNotMined.
   ///
   /// In en, this message translates to:
   /// **'You can only reply to a thread or reply that is already in a block.'**
   String get probReplyParentNotMined;
-
-  /// No description provided for @probReplyWrongRecipient.
-  ///
-  /// In en, this message translates to:
-  /// **'A reply must pay the author of the message it answers.'**
-  String get probReplyWrongRecipient;
 
   /// No description provided for @probFlagNotMessage.
   ///
@@ -344,7 +338,7 @@ abstract class AppLocalizations {
   ///
   /// In en, this message translates to:
   /// **'Insufficient balance: {needed} needed, {available} available (confirmed balance minus pending transactions).'**
-  String probInsufficientBalance(int needed, int available);
+  String probInsufficientBalance(String needed, String available);
 
   /// No description provided for @probNotLive.
   ///
@@ -662,7 +656,7 @@ abstract class AppLocalizations {
   ///
   /// In en, this message translates to:
   /// **'{amount} committed to pending transactions'**
-  String pendingCommitted(int amount);
+  String pendingCommitted(String amount);
 
   /// No description provided for @blocksMined.
   ///
@@ -896,7 +890,7 @@ abstract class AppLocalizations {
   ///
   /// In en, this message translates to:
   /// **'{amount} + fees'**
-  String rewardPlusFees(int amount);
+  String rewardPlusFees(String amount);
 
   /// No description provided for @statBurnPool.
   ///
@@ -970,12 +964,6 @@ abstract class AppLocalizations {
   /// **'Reward'**
   String get reward;
 
-  /// No description provided for @rewardBreakdown.
-  ///
-  /// In en, this message translates to:
-  /// **'{subsidy} subsidy + {payout} from the burn pool + {fees} fees'**
-  String rewardBreakdown(int subsidy, int payout, int fees);
-
   /// No description provided for @merkleRoot.
   ///
   /// In en, this message translates to:
@@ -1024,11 +1012,11 @@ abstract class AppLocalizations {
   /// **'This thread is no longer on the chain.'**
   String get threadGone;
 
-  /// No description provided for @paidToParent.
+  /// No description provided for @paidToThreadAuthor.
   ///
   /// In en, this message translates to:
-  /// **'paid {amount} to the parent\'s author'**
-  String paidToParent(int amount);
+  /// **'paid {amount} to the thread\'s author'**
+  String paidToThreadAuthor(String amount);
 
   /// No description provided for @actionReply.
   ///
@@ -1136,7 +1124,7 @@ abstract class AppLocalizations {
   ///
   /// In en, this message translates to:
   /// **'{amount} (returned to miners through the burn pool)'**
-  String burnedValue(int amount);
+  String burnedValue(String amount);
 
   /// No description provided for @amount.
   ///
@@ -1149,12 +1137,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Fee'**
   String get fee;
-
-  /// No description provided for @signedAt.
-  ///
-  /// In en, this message translates to:
-  /// **'Signed at'**
-  String get signedAt;
 
   /// No description provided for @contentHash.
   ///
@@ -1291,7 +1273,7 @@ abstract class AppLocalizations {
   /// No description provided for @explainReply.
   ///
   /// In en, this message translates to:
-  /// **'Your reply pays the author of the message at least the fee (you can tip more), plus the fee to the miner.'**
+  /// **'Your reply pays the thread\'s author at least the fee (you can tip more), plus the fee to the miner.'**
   String get explainReply;
 
   /// No description provided for @explainTransfer.
@@ -1315,20 +1297,20 @@ abstract class AppLocalizations {
   /// No description provided for @payToAuthor.
   ///
   /// In en, this message translates to:
-  /// **'Pay to author'**
+  /// **'Pay the thread\'s author'**
   String get payToAuthor;
 
-  /// No description provided for @wholeNumber.
+  /// No description provided for @notAnAmount.
   ///
   /// In en, this message translates to:
-  /// **'Whole number'**
-  String get wholeNumber;
+  /// **'Enter an amount'**
+  String get notAnAmount;
 
   /// No description provided for @atLeastFee.
   ///
   /// In en, this message translates to:
   /// **'At least the fee ({fee})'**
-  String atLeastFee(int fee);
+  String atLeastFee(String fee);
 
   /// No description provided for @feeToMiner.
   ///
@@ -1340,13 +1322,13 @@ abstract class AppLocalizations {
   ///
   /// In en, this message translates to:
   /// **'Suggested: {fee}'**
-  String suggestedFee(int fee);
+  String suggestedFee(String fee);
 
-  /// No description provided for @atLeastOne.
+  /// No description provided for @atLeastMin.
   ///
   /// In en, this message translates to:
-  /// **'At least 1'**
-  String get atLeastOne;
+  /// **'At least {min}'**
+  String atLeastMin(String min);
 
   /// No description provided for @bytesOf.
   ///
@@ -1359,6 +1341,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Too long: {count} bytes'**
   String tooLong(int count);
+
+  /// Button under the message field that opens Murmur's own emoji
+  ///
+  /// In en, this message translates to:
+  /// **'Murmur emoji'**
+  String get murmurEmoji;
+
+  /// Under the emoji picker; example is an emoji's code, such as :murmur:
+  ///
+  /// In en, this message translates to:
+  /// **'Drawn only in Murmur. Other apps show the name, such as {example}.'**
+  String murmurEmojiHint(String example);
 
   /// No description provided for @sendingNeedsLive.
   ///
@@ -1436,19 +1430,13 @@ abstract class AppLocalizations {
   ///
   /// In en, this message translates to:
   /// **'{before} → {after}'**
-  String balanceBeforeAfter(int before, int after);
+  String balanceBeforeAfter(String before, String after);
 
   /// No description provided for @balanceBeforeAfterTooltip.
   ///
   /// In en, this message translates to:
   /// **'Balance: {before} before, {after} after'**
-  String balanceBeforeAfterTooltip(int before, int after);
-
-  /// No description provided for @chainCounted.
-  ///
-  /// In en, this message translates to:
-  /// **'{counted} of {total} blocks counted'**
-  String chainCounted(int counted, int total);
+  String balanceBeforeAfterTooltip(String before, String after);
 
   /// No description provided for @loadingOlder.
   ///
@@ -1934,7 +1922,7 @@ abstract class AppLocalizations {
   ///
   /// In en, this message translates to:
   /// **'This invitation holds {amount}: enough to start your first threads.'**
-  String claimHolds(int amount);
+  String claimHolds(String amount);
 
   /// No description provided for @claimCreateWallet.
   ///
@@ -2558,7 +2546,7 @@ abstract class AppLocalizations {
   ///
   /// In en, this message translates to:
   /// **'**Recent blocks** took fees as low as **{lowest}** (median {median}).'**
-  String feeRecentPoint(int lowest, int median);
+  String feeRecentPoint(String lowest, String median);
 
   /// Words between ** show in bold copper (Emphasized); keep the markers around the key words
   ///

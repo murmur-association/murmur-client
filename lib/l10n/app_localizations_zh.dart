@@ -72,12 +72,8 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String transferOf(int amount) {
-    final intl.NumberFormat amountNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String amountString = amountNumberFormat.format(amount);
-
-    return '转账 $amountString';
+  String transferOf(String amount) {
+    return '转账 $amount';
   }
 
   @override
@@ -145,7 +141,7 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get probFeeTooLow => '手续费至少为 1。';
+  String get probFeeTooLow => '手续费低于网络的最低要求。';
 
   @override
   String get probMalformed => '此交易格式不正确。';
@@ -157,19 +153,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get probNeedsRecipient => '请输入收款人。';
 
   @override
-  String probAmountBelowFee(int fee) {
-    final intl.NumberFormat feeNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String feeString = feeNumberFormat.format(fee);
-
-    return '金额不能低于手续费（$feeString）。';
+  String probAmountBelowFee(String fee) {
+    return '金额不能低于手续费（$fee）。';
   }
 
   @override
   String get probReplyParentNotMined => '只能回复已经打包进区块的话题或回复。';
-
-  @override
-  String get probReplyWrongRecipient => '回复必须向所回复消息的作者付款。';
 
   @override
   String get probFlagNotMessage => '只能举报话题和回复。';
@@ -190,15 +179,8 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String probInsufficientBalance(int needed, int available) {
-    final intl.NumberFormat neededNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String neededString = neededNumberFormat.format(needed);
-    final intl.NumberFormat availableNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String availableString = availableNumberFormat.format(available);
-
-    return '余额不足：需要 $neededString，可用 $availableString（已确认余额减去待确认交易）。';
+  String probInsufficientBalance(String needed, String available) {
+    return '余额不足：需要 $needed，可用 $available（已确认余额减去待确认交易）。';
   }
 
   @override
@@ -412,12 +394,8 @@ class AppLocalizationsZh extends AppLocalizations {
   String get balance => '余额';
 
   @override
-  String pendingCommitted(int amount) {
-    final intl.NumberFormat amountNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String amountString = amountNumberFormat.format(amount);
-
-    return '$amountString 已用于待确认交易';
+  String pendingCommitted(String amount) {
+    return '$amount 已用于待确认交易';
   }
 
   @override
@@ -577,12 +555,8 @@ class AppLocalizationsZh extends AppLocalizations {
   String get statNextReward => '下一区块奖励';
 
   @override
-  String rewardPlusFees(int amount) {
-    final intl.NumberFormat amountNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String amountString = amountNumberFormat.format(amount);
-
-    return '$amountString + 手续费';
+  String rewardPlusFees(String amount) {
+    return '$amount + 手续费';
   }
 
   @override
@@ -622,21 +596,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get reward => '奖励';
 
   @override
-  String rewardBreakdown(int subsidy, int payout, int fees) {
-    final intl.NumberFormat subsidyNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String subsidyString = subsidyNumberFormat.format(subsidy);
-    final intl.NumberFormat payoutNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String payoutString = payoutNumberFormat.format(payout);
-    final intl.NumberFormat feesNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String feesString = feesNumberFormat.format(fees);
-
-    return '补贴 $subsidyString + 销毁池 $payoutString + 手续费 $feesString';
-  }
-
-  @override
   String get merkleRoot => '默克尔根';
 
   @override
@@ -673,12 +632,8 @@ class AppLocalizationsZh extends AppLocalizations {
   String get threadGone => '此话题已不在链上。';
 
   @override
-  String paidToParent(int amount) {
-    final intl.NumberFormat amountNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String amountString = amountNumberFormat.format(amount);
-
-    return '向原消息作者支付了 $amountString';
+  String paidToThreadAuthor(String amount) {
+    return '向话题作者支付了 $amount';
   }
 
   @override
@@ -736,12 +691,8 @@ class AppLocalizationsZh extends AppLocalizations {
   String get burned => '销毁';
 
   @override
-  String burnedValue(int amount) {
-    final intl.NumberFormat amountNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String amountString = amountNumberFormat.format(amount);
-
-    return '$amountString（通过销毁池返还给矿工）';
+  String burnedValue(String amount) {
+    return '$amount（通过销毁池返还给矿工）';
   }
 
   @override
@@ -749,9 +700,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get fee => '手续费';
-
-  @override
-  String get signedAt => '签名时间';
 
   @override
   String get contentHash => '内容哈希';
@@ -869,7 +817,7 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get explainReply => '你的回复至少向消息作者支付一份手续费（可以多给作为小费），另外还要向矿工支付手续费。';
+  String get explainReply => '你的回复至少向话题作者支付一份手续费（可以多给作为小费），另外还要向矿工支付手续费。';
 
   @override
   String get explainTransfer => '不带消息的普通代币转账。金额不能低于手续费。';
@@ -881,34 +829,28 @@ class AppLocalizationsZh extends AppLocalizations {
   String get enterAddress => '请输入 64 个字符的十六进制地址';
 
   @override
-  String get payToAuthor => '支付给作者';
+  String get payToAuthor => '支付给话题作者';
 
   @override
-  String get wholeNumber => '整数';
+  String get notAnAmount => '请输入数量';
 
   @override
-  String atLeastFee(int fee) {
-    final intl.NumberFormat feeNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String feeString = feeNumberFormat.format(fee);
-
-    return '不低于手续费（$feeString）';
+  String atLeastFee(String fee) {
+    return '不低于手续费（$fee）';
   }
 
   @override
   String get feeToMiner => '手续费（归矿工）';
 
   @override
-  String suggestedFee(int fee) {
-    final intl.NumberFormat feeNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String feeString = feeNumberFormat.format(fee);
-
-    return '建议：$feeString';
+  String suggestedFee(String fee) {
+    return '建议：$fee';
   }
 
   @override
-  String get atLeastOne => '至少为 1';
+  String atLeastMin(String min) {
+    return '至少 $min';
+  }
 
   @override
   String bytesOf(int count, int max) {
@@ -929,6 +871,14 @@ class AppLocalizationsZh extends AppLocalizations {
     final String countString = countNumberFormat.format(count);
 
     return '太长：$countString 字节';
+  }
+
+  @override
+  String get murmurEmoji => 'Murmur 表情';
+
+  @override
+  String murmurEmojiHint(String example) {
+    return '仅在 Murmur 中显示为图形。其他应用会显示名称，例如 $example。';
   }
 
   @override
@@ -976,39 +926,13 @@ class AppLocalizationsZh extends AppLocalizations {
   String get checkAgain => '重新查询';
 
   @override
-  String balanceBeforeAfter(int before, int after) {
-    final intl.NumberFormat beforeNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String beforeString = beforeNumberFormat.format(before);
-    final intl.NumberFormat afterNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String afterString = afterNumberFormat.format(after);
-
-    return '$beforeString → $afterString';
+  String balanceBeforeAfter(String before, String after) {
+    return '$before → $after';
   }
 
   @override
-  String balanceBeforeAfterTooltip(int before, int after) {
-    final intl.NumberFormat beforeNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String beforeString = beforeNumberFormat.format(before);
-    final intl.NumberFormat afterNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String afterString = afterNumberFormat.format(after);
-
-    return '余额：之前 $beforeString，之后 $afterString';
-  }
-
-  @override
-  String chainCounted(int counted, int total) {
-    final intl.NumberFormat countedNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String countedString = countedNumberFormat.format(counted);
-    final intl.NumberFormat totalNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String totalString = totalNumberFormat.format(total);
-
-    return '已统计 $countedString / $totalString 个区块';
+  String balanceBeforeAfterTooltip(String before, String after) {
+    return '余额：之前 $before，之后 $after';
   }
 
   @override
@@ -1347,12 +1271,8 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String claimHolds(int amount) {
-    final intl.NumberFormat amountNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String amountString = amountNumberFormat.format(amount);
-
-    return '这份邀请含 $amountString：足够发起你的第一批话题。';
+  String claimHolds(String amount) {
+    return '这份邀请含 $amount：足够发起你的第一批话题。';
   }
 
   @override
@@ -1717,15 +1637,8 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String feeRecentPoint(int lowest, int median) {
-    final intl.NumberFormat lowestNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String lowestString = lowestNumberFormat.format(lowest);
-    final intl.NumberFormat medianNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String medianString = medianNumberFormat.format(median);
-
-    return '**最近的区块**接受的手续费低至 **$lowestString**（中位数 $medianString）。';
+  String feeRecentPoint(String lowest, String median) {
+    return '**最近的区块**接受的手续费低至 **$lowest**（中位数 $median）。';
   }
 
   @override

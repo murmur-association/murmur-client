@@ -1,8 +1,9 @@
 // Fee suggestions (whitepaper Section 5.2: one fee market for every
 // transaction type).
 //
-// Fees are per byte, and a transaction weighs 264 bytes plus its content
-// (PROTOCOL.md Section 2.3), so what to pay depends on the message's size.
+// Fees are per byte, and a transaction weighs its own bytes (at most 196)
+// plus its content (PROTOCOL.md Section 2.3), so what to pay depends on the
+// message's size. No fee may be below the network's minimum.
 // The node sends its mempool's fee bars (GetFees / Fees, Section 7.6): the
 // pending transaction a new one must beat to make the next block, and the
 // cheapest one when the mempool is full. When it doesn't answer, the client
@@ -15,8 +16,10 @@ import 'dart:math';
 import '../protocol/models.dart';
 import '../protocol/wire.dart';
 
-/// Lowest fee consensus accepts (core mempool.rs, `MIN_FEE`).
-const minFee = 1;
+/// Lowest fee consensus accepts (PROTOCOL.md Section 6, `min_fee`): half a
+/// token, the same on every network so far. A transaction paying less is
+/// invalid.
+const minFee = unitsPerToken ~/ 2;
 
 /// Pending transactions a node's mempool holds (core mempool.rs).
 const mempoolCapacity = 50000;
@@ -26,7 +29,7 @@ const mempoolCapacity = 50000;
 const feeWindow = 20;
 
 /// The largest transaction: a full message with its salt.
-const largestWeight = txBaseBytes + maxContentSize;
+const largestWeight = txMaxOwnBytes + maxContentSize;
 
 enum FeeSource {
   /// The node's own mempool figures.

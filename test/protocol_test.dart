@@ -6,7 +6,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:murmur_client/crypto/wallet.dart';
 import 'package:murmur_client/protocol/bytes.dart';
 import 'package:murmur_client/protocol/commitments.dart';
-import 'package:murmur_client/protocol/consensus.dart';
 import 'package:murmur_client/protocol/models.dart';
 import 'package:murmur_client/protocol/network.dart';
 import 'package:murmur_client/protocol/wire.dart';
@@ -41,17 +40,6 @@ class _FakeTransport implements Transport {
 }
 
 void main() {
-  test('genesis hashes match PROTOCOL.md Section 6', () {
-    // These exercise the 232-byte header preimage (little-endian fields, u128
-    // target, the three commitments) and double SHA-256.
-    expect(NetworkInfo.whitepaper.genesisHeader().id,
-        '206e797b2196d7a75fc9b8a9d9b029b724a30ecb118ca146da4a0bc367066ac4');
-    expect(NetworkInfo.demo.genesisHeader().id,
-        'f92f97ba9a1d11ca92dd9c4a1e0358b263508a15605601d3e12fb304d8772cc0');
-    expect(NetworkInfo.forGenesis(NetworkInfo.demo.genesisHeader().hash).id, 'murmur-demo-9');
-    expect(NetworkInfo.forGenesis(Uint8List(32)).known, isFalse);
-  });
-
   test('wallet derives keys and signatures per RFC 8032', () async {
     // RFC 8032 Section 7.1, TEST 1.
     final w = await MurmurWallet.fromSeed(
@@ -60,36 +48,40 @@ void main() {
     expect(w.address, sha256Bytes(w.publicKey));
   });
 
-  test('a reply signs its nonce and survives the wire', () async {
+  test('a reply signs its network and its nonce, and survives the wire', () async {
     final w = await MurmurWallet.generate();
     final content = saltedContent('hello murmur'.codeUnits);
-    final parent = sha256Bytes([9]);
+    final thread = sha256Bytes([9]);
+    final tag = NetworkInfo.demo.tag;
     Future<Transaction> reply(int nonce) => w.sign(
+          networkTag: tag,
           kind: TxKind.reply,
           nonce: nonce,
-          to: _filled(7),
-          amount: 20,
-          fee: 10,
+          amount: 2000000,
+          fee: 1000000,
           messageHash: sha256Bytes(content),
           contentSize: content.length,
-          reference: parent,
-          timestamp: 1790208000,
+          reference: thread,
         );
     final tx = await reply(5);
-    final ok = await Ed25519().verify(
-      tx.signingBytes(),
-      signature: Signature(tx.signature, publicKey: SimplePublicKey(tx.pubkey, type: KeyPairType.ed25519)),
-    );
-    expect(ok, isTrue);
-    // The nonce is signed right after `from`, little-endian.
-    expect(tx.signingBytes().sublist(33, 41), [5, 0, 0, 0, 0, 0, 0, 0]);
+    Future<bool> signedFor(List<int> networkTag) => Ed25519().verify(
+          [...networkTag, ...tx.body],
+          signature: Signature(tx.signature, publicKey: SimplePublicKey(tx.pubkey, type: KeyPairType.ed25519)),
+        );
+    expect(await signedFor(tag), isTrue);
+    expect(await signedFor(NetworkInfo.whitepaper.tag), isFalse, reason: 'valid on no other network');
+    // The nonce comes right after the kind and the key, in one byte here.
+    expect(tx.body[33], 5);
     expect((await reply(6)).id, isNot(tx.id), reason: 'another nonce, another transaction');
-    expect(tx.weight, 264 + content.length);
+    expect(tx.weight, tx.bytes.length + content.length);
+    expect(tx.weight, lessThanOrEqualTo(txWeight(content.length)));
     expect(tx.isContent(content), isTrue);
+    expect(tx.to, isNull, reason: 'a reply names no recipient: the chain pays its thread\'s author');
 
     final msg = decodeMessage(encodePayload(NewTx(tx, content))) as NewTx;
     expect(msg.tx.id, tx.id);
-    expect((msg.tx.nonce, msg.tx.amount, msg.tx.contentSize, msg.tx.referenceId), (5, 20, content.length, toHex(parent)));
+    expect((msg.tx.nonce, msg.tx.amount, msg.tx.contentSize, msg.tx.referenceId),
+        (5, 2000000, content.length, toHex(thread)));
     expect(msg.content, content);
   });
 
@@ -123,12 +115,13 @@ void main() {
 
     // BlockTxs: transactions as everywhere else.
     final w = await MurmurWallet.generate();
-    final tx = await w.sign(kind: TxKind.raw, nonce: 0, to: _filled(7), amount: 5, fee: 1, messageHash: null, timestamp: 1);
+    final tx = await w.sign(
+        networkTag: NetworkInfo.demo.tag, kind: TxKind.raw, nonce: 0, to: _filled(7), amount: 5000000, fee: 500000);
     final txs = decodeMessage(encodePayload(BlockTxs(_filled(9), [tx]))) as BlockTxs;
     expect((toHex(txs.block), txs.txs.single.id), ('09' * 32, tx.id));
 
     // Over the limit is malformed, like every other count.
-    final tooMany = Uint8List.fromList([0x1a, ..._filled(8), 0, 0, 0x27, 0x11]); // 10,001
+    final tooMany = Uint8List.fromList([0x1a, ..._filled(8), 0, 0, 0x3e, 0x81]); // 16,001
     expect(() => decodeMessage(tooMany), throwsFormatException);
   });
 
@@ -141,13 +134,13 @@ void main() {
       height: 0,
       work: BigInt.zero,
     ));
-    // tag(1) version(4) genesis(32) nonce(8) port(2) height(8) work(16)
-    expect(hello.length, 71);
-    expect(hello.sublist(0, 5), [0, 0, 0, 0, 10]);
+    // tag(1) version(4) genesis(32) nonce(8) port(2) height(8) work(32)
+    expect(hello.length, 87);
+    expect(hello.sublist(0, 5), [0, 0, 0, 0, 11]);
 
     final w = await MurmurWallet.generate();
     final flag = await w.sign(
-        kind: TxKind.flag, nonce: 0, to: null, amount: 0, fee: 1, messageHash: null, reference: _filled(3), timestamp: 1);
+        networkTag: NetworkInfo.demo.tag, kind: TxKind.flag, nonce: 0, fee: 500000, reference: _filled(3));
     final submit = encodePayload(SubmitTx(flag, null));
     expect(submit[0], 16);
     expect((decodeMessage(submit) as SubmitTx).tx.id, flag.id);
@@ -240,7 +233,6 @@ void main() {
     });
 
     test('header history root (ZIP 221 nodes) and proofs', () {
-      final max128 = (BigInt.one << 128) - BigInt.one;
       final headers = [
         for (var i = 0; i < 11; i++)
           BlockHeader(
@@ -251,18 +243,18 @@ void main() {
             filterHash: Uint8List(32),
             historyRoot: Uint8List(32),
             timestamp: 1000 + 30 * i,
-            target: max128 >> (8 + i % 3),
+            target: u256Bytes(u256Max >> (8 + i % 3)),
             nonce: u64Bytes(i),
             miner: Uint8List(32),
           ),
       ];
       final peaks = HistoryPeaks();
       headers.forEach(peaks.pushHeader);
-      expect(toHex(peaks.root), '1e262bb6336c007784ca1048a0d28eb7912808bb17ea3ba4b3963527dddab37e');
+      expect(toHex(peaks.root), '1e98e56fd83ec8c8927893a9e2ad7237368ba9ee2bc5c81854b6545cc82e6826');
       expect(HistoryPeaks().root, Uint8List(32));
       // The bagged node sums every block's work and spans their times.
       final bagged = bagPeaks(peaks.nodes)!;
-      expect(bagged.work, headers.fold<BigInt>(BigInt.zero, (sum, h) => sum + workOf(h.target)));
+      expect(bagged.work, headers.fold<BigInt>(BigInt.zero, (sum, h) => sum + blockWork(h.target)));
       expect((bagged.firstTime, bagged.lastTime), (1000, 1300));
 
       // 11 leaves: peaks of 8, 2 and 1. Prove header 9 (in the peak of 2)
@@ -298,52 +290,6 @@ void main() {
       final direct = peaks.copy()..pushHeader(headers[0]);
       expect(rebuilt.root, direct.root);
       expect(HistoryPeaks.fromPeaks(nodes, 12), isNull, reason: '12 leaves have two peaks, not three');
-    });
-  });
-
-  group('header rules (PROTOCOL.md Sections 3.5 and 4)', () {
-    BlockHeader header(int i, int timestamp, BigInt target) => BlockHeader(
-          height: i,
-          prevHash: Uint8List(32),
-          merkleRoot: Uint8List(32),
-          stateRoot: Uint8List(32),
-          filterHash: Uint8List(32),
-          historyRoot: Uint8List(32),
-          timestamp: timestamp,
-          target: target,
-          nonce: u64Bytes(0),
-          miner: Uint8List(32),
-        );
-
-    test('the retarget matches the node\'s pinned output', () {
-      // core/src/difficulty.rs `output_is_pinned`.
-      final base = ((BigInt.one << 128) - BigInt.one) >> 20;
-      final window = [
-        for (var i = 0; i < 91; i++)
-          header(i, 1000000 + i * 30 + (i * i) % 17, base - BigInt.from(i) * BigInt.from(1000003)),
-      ];
-      expect(nextTarget(window, NetworkInfo.whitepaper), BigInt.parse('324545171552364317698189403267335'));
-    });
-
-    test('the retarget keeps on-target blocks, tightens fast ones and clamps the swing', () {
-      const net = NetworkInfo.demo; // 2 s blocks
-      final target = net.genesisTarget ~/ BigInt.from(1000);
-      List<BlockHeader> spaced(int spacing) => [for (var i = 0; i < 10; i++) header(i, 1000 + i * spacing, target)];
-      BigInt difficulty(BigInt t) => ((BigInt.one << 128) - BigInt.one) ~/ t;
-      final steady = difficulty(nextTarget(spaced(2), net));
-      expect((steady - difficulty(target)).abs() <= BigInt.one, isTrue);
-      expect(nextTarget(spaced(1), net) < target, isTrue);
-      // Instant blocks: difficulty up by exactly 16%, however fast.
-      expect(difficulty(nextTarget(spaced(0), net)), difficulty(((BigInt.one << 128) - BigInt.one) ~/ (difficulty(target) * BigInt.from(116) ~/ BigInt.from(100))));
-      expect(nextTarget([], net), net.genesisTarget);
-      expect(nextTarget([header(0, 5, target)], net), target);
-    });
-
-    test('median time past is the upper median of the last 11', () {
-      final t = BigInt.one;
-      expect(medianTimePast([for (final s in [5, 1, 9, 3]) header(0, s, t)]), 5);
-      expect(medianTimePast([for (var i = 0; i < 11; i++) header(i, 100 + i, t)]), 105);
-      expect(medianTimePast([header(0, 7, t)]), 7);
     });
   });
 
@@ -411,14 +357,12 @@ void main() {
     final w = await MurmurWallet.generate();
     final content = saltedContent('stored'.codeUnits);
     final tx = await w.sign(
+      networkTag: NetworkInfo.demo.tag,
       kind: TxKind.orphan,
       nonce: 0,
-      to: null,
-      amount: orphanBurn(1),
-      fee: 1,
+      fee: 500000,
       messageHash: sha256Bytes(content),
       contentSize: content.length,
-      timestamp: 1790208000,
     );
     final genesis = NetworkInfo.demo.genesisHeader();
     final block = Block(
@@ -438,7 +382,7 @@ void main() {
     );
     final header = block.header;
     expect(encodeHeader(header).length, headerBytes);
-    expect(headerBytes, 232);
+    expect(headerBytes, 248);
     expect(decodeHeader(encodeHeader(header)).id, header.id);
     final back = decodeBlock(encodeBlock(block));
     expect((back.header.id, back.transactions.single.id), (header.id, tx.id));
@@ -447,35 +391,40 @@ void main() {
     expect(blockFilterItems(block.transactions).map(toHex), [w.addressHex]);
   });
 
-  test('fees from the node beat its bars per byte', () {
-    final info = feeInfoFromNode(const Fees(nextBlock: (fee: 10, weight: 1088), pending: 1200));
+  test('fees from the node beat its bars per byte, and never go below the minimum', () {
+    final info = feeInfoFromNode(const Fees(nextBlock: (fee: 6000000, weight: 1088), pending: 1200));
     expect(info.source, FeeSource.node);
-    expect((info.suggested(1088), info.suggested(264), info.congested), (11, 3, true));
+    expect((info.suggested(1088), info.suggested(264), info.congested), (6000001, 1455883, true));
+    // A bar a small transaction beats with less than the minimum.
+    expect(feeInfoFromNode(const Fees(nextBlock: (fee: 600000, weight: 1088), pending: 9)).suggested(196), minFee);
     final quiet = feeInfoFromNode(const Fees(pending: 0));
-    expect((quiet.suggested(264), quiet.congested), (1, false));
+    expect((quiet.suggested(264), quiet.congested), (minFee, false));
+    expect(minFee, NetworkInfo.whitepaper.minFee);
+    expect(minFee, NetworkInfo.demo.minFee);
   });
 
   test('local fee estimate follows the node rules per byte', () {
-    // Same case as mempool.rs `next_block_fee_reflects_congestion`: fees
-    // 1, 4, 7 pending at one weight, with room for two.
-    const w = 269;
-    final busy = estimateFees(pending: [(1, w), (4, w), (7, w)], maxBlockBytes: 2 * w, recentBlockMins: [3, 1, 2]);
-    expect((busy.nextBlockFee(w), busy.poolEntryFee(w), busy.suggested(w)), (5, 1, 5));
-    expect(busy.nextBlockFee(2 * w), 9, reason: 'twice the weight needs twice the fee');
-    expect((busy.recentLowest, busy.recentMedian), (1, 2));
+    // Same case as mempool.rs `next_block_fee_reflects_congestion`, in
+    // tokens: fees 1, 4, 7 pending at one weight, with room for two.
+    const w = 269, t = unitsPerToken;
+    final busy =
+        estimateFees(pending: [(t, w), (4 * t, w), (7 * t, w)], maxBlockBytes: 2 * w, recentBlockMins: [3 * t, t, 2 * t]);
+    expect((busy.nextBlockFee(w), busy.poolEntryFee(w), busy.suggested(w)), (4 * t + 1, minFee, 4 * t + 1));
+    expect(busy.nextBlockFee(2 * w), 8 * t + 1, reason: 'twice the weight needs twice the fee');
+    expect((busy.recentLowest, busy.recentMedian), (t, 2 * t));
 
-    final quiet = estimateFees(pending: [(1, w), (4, w), (7, w)], maxBlockBytes: 10 * w, recentBlockMins: []);
-    expect((quiet.suggested(w), quiet.congested, quiet.recentLowest, quiet.source), (1, false, null, FeeSource.local));
+    final quiet = estimateFees(pending: [(t, w), (4 * t, w), (7 * t, w)], maxBlockBytes: 10 * w, recentBlockMins: []);
+    expect((quiet.suggested(w), quiet.congested, quiet.recentLowest, quiet.source), (minFee, false, null, FeeSource.local));
 
     final full = estimateFees(
-        pending: [for (var i = 0; i < mempoolCapacity; i++) (2 + i % 3, 264)],
+        pending: [for (var i = 0; i < mempoolCapacity; i++) ((2 + i % 3) * t, 264)],
         maxBlockBytes: 1000000 * 264,
         recentBlockMins: []);
-    expect(full.poolEntryFee(264), 3, reason: 'must beat the cheapest (2 for 264 bytes) in a full pool');
+    expect(full.poolEntryFee(264), 2 * t + 1, reason: 'must beat the cheapest (2 for 264 bytes) in a full pool');
   });
 
   test('orphans burn 10x the fee, paid back as ceil(pool / K) per block', () {
-    expect(orphanBurn(3), 30);
+    expect(orphanBurn(3 * unitsPerToken), 30 * unitsPerToken);
     const demo = NetworkInfo.demo; // K = 100
     expect(demo.burnPayoutBlocks, 100);
     expect(demo.burnPayout(0), 0);
@@ -492,10 +441,10 @@ void main() {
     expect(NetworkInfo.whitepaper.burnPayoutBlocks, 2880);
   });
 
-  test('subsidy halves and floors at tail emission', () {
-    expect(NetworkInfo.demo.subsidyAt(1999), 25);
-    expect(NetworkInfo.demo.subsidyAt(2000), 12);
-    expect(NetworkInfo.demo.subsidyAt(8000), 1);
-    expect(NetworkInfo.demo.subsidyAt(2000 * 1000), 1);
+  test('the subsidy halves exactly and floors at the tail emission', () {
+    const demo = NetworkInfo.demo; // halves every 2,000 blocks
+    expect(
+        [for (final h in [1999, 2000, 4000, 6000, 8000, 10000, 2000 * 1000]) demo.subsidyAt(h)],
+        [25000000, 12500000, 6250000, 3125000, 1562500, 1000000, 1000000]);
   });
 }

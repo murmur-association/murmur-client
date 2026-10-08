@@ -21,8 +21,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'support/messages.dart';
 
-final _dave = Uint8List(32)..fillRange(0, 32, 4);
-final _eve = Uint8List(32)..fillRange(0, 32, 5);
+final _dave = person(4);
+final _eve = person(5);
 
 /// The block time `txAt` gives height `h`.
 int _time(int h) => 1790208000 + h * 2;
@@ -34,7 +34,7 @@ void main() {
   });
 
   group('activity', () {
-    test('replies under a starred thread or message are its activity; own, muted, withdrawn and pending are not', () {
+    test('replies in a starred thread are its activity; own, muted, withdrawn and pending are not', () {
       final root = txAt(TxKind.orphan, 10, text: 'a thread');
       final first = replyTo(root, 20);
       final nested = replyTo(first, 30, from: carol);
@@ -51,7 +51,8 @@ void main() {
       final activity = starredActivity(chain,
           starred: {root.tx.id, first.tx.id, missing}, people: const {}, me: toHex(_dave), muted: {toHex(_eve)});
 
-      expect(activity.messages, {root.tx.id: _time(30), first.tx.id: _time(30)});
+      // A starred reply has no replies of its own: threads are flat.
+      expect(activity.messages, {root.tx.id: _time(30)});
       expect(activity.people, isEmpty);
       // Followed: the thread's blocks are looked for, and what isn't known
       // is asked of the node.

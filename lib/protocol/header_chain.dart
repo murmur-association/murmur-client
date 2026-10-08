@@ -1,10 +1,11 @@
-// The header chain, packed. An object per header costs about 1,200 bytes
-// in a browser (six byte arrays and a BigInt each), five times its 232-byte
-// wire encoding; a year of testnet would need about 1.5 GB. So headers are
-// kept here as their wire bytes plus their 32-byte hash, 264 bytes each, in
+// The header chain, packed. An object per header costs well over a
+// thousand bytes in a browser (eight byte arrays each), several times its
+// 248-byte wire encoding; a year of testnet would need about 1.5 GB. So
+// headers are kept here as their wire bytes plus their 32-byte hash, 280
+// bytes each, in
 // one growing byte array, and rebuilt as BlockHeader objects only when asked
-// for (a small cache keeps the recently used ones, such as the retarget
-// window). The fields long loops need (previous hash, miner, timestamp,
+// for (a small cache keeps the recently used ones, such as the last 11 a
+// new header's time is checked against). The fields long loops need (previous hash, miner, timestamp,
 // roots) are read straight from the bytes.
 
 import 'dart:collection';
@@ -26,10 +27,10 @@ class HeaderChain {
   static const _stateAt = 72;
   static const _filterAt = 104;
   static const _timeAt = 168;
-  static const _minerAt = 200;
+  static const _minerAt = 216;
 
-  /// How many headers to keep as objects: the retarget window (91) and what
-  /// views show, many times over.
+  /// How many headers to keep as objects: what the header rules read (the
+  /// last 11) and what views show, many times over.
   static const _recentMax = 1024;
 
   Uint8List _bytes = Uint8List(0);
@@ -54,7 +55,7 @@ class HeaderChain {
   }
 
   // A header just stored is likely read again soon (the next headers'
-  // retarget reads the 90 before them), so it's kept as it is.
+  // rules read the 11 before them), so it's kept as it is.
   void _write(int i, BlockHeader h) {
     final at = i * _slot;
     _bytes

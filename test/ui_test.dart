@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:murmur_client/crypto/wallet.dart';
 import 'package:murmur_client/protocol/models.dart';
+import 'package:murmur_client/protocol/network.dart';
 import 'package:murmur_client/services/activity.dart';
 import 'package:murmur_client/services/node_client.dart';
 import 'package:murmur_client/services/storage.dart';
@@ -56,14 +57,14 @@ void main() {
     }
   });
 
-  testWidgets('amounts use the locale digit grouping', (tester) async {
+  testWidgets('counts use the locale digit grouping', (tester) async {
     final seen = <String, String>{};
     for (final code in ['en', 'es', 'de']) {
       await tester.pumpWidget(Localizations(
         locale: Locale(code),
         delegates: AppLocalizations.localizationsDelegates,
         child: Builder(builder: (context) {
-          seen[code] = formatAmount(context, 1234567);
+          seen[code] = formatCount(context, 1234567);
           return const SizedBox();
         }),
       ));
@@ -234,16 +235,63 @@ void main() {
     expect(to, ReturnTo.funder);
   });
 
-  test('balance change: the sender pays amount and fee, the recipient gets the amount', () async {
+  test('balance change: the sender pays amount and fee, and whoever is credited gets the amount', () async {
     final a = await MurmurWallet.generate();
     final b = await MurmurWallet.generate();
+    final client = MurmurClient();
+    addTearDown(client.dispose);
     Future<Transaction> transfer(MurmurWallet from, MurmurWallet to, int amount, int fee) => from.sign(
-        kind: TxKind.raw, nonce: 0, to: to.address, amount: amount, fee: fee, messageHash: null, timestamp: 1790208000);
-    final ab = await transfer(a, b, 20, 2);
-    expect(MurmurClient.balanceChange(ab, a.addressHex), -22);
-    expect(MurmurClient.balanceChange(ab, b.addressHex), 20);
-    final self = await transfer(a, a, 20, 2);
-    expect(MurmurClient.balanceChange(self, a.addressHex), -2, reason: 'paying yourself costs only the fee');
+        networkTag: NetworkInfo.demo.tag, kind: TxKind.raw, nonce: 0, to: to.address, amount: amount, fee: fee);
+    final ab = await transfer(a, b, 20000000, 500000);
+    expect(client.balanceChange(ab, a.addressHex), -20500000);
+    expect(client.balanceChange(ab, b.addressHex), 20000000);
+    final self = await transfer(a, a, 20000000, 500000);
+    expect(client.balanceChange(self, a.addressHex), -500000, reason: 'paying yourself costs only the fee');
+  });
+
+  testWidgets('amounts are shown and read in tokens, with up to six decimals', (tester) async {
+    late BuildContext en, es;
+    Widget probe(String code, void Function(BuildContext) take) => Localizations(
+          locale: Locale(code),
+          delegates: AppLocalizations.localizationsDelegates,
+          child: Builder(builder: (context) {
+            take(context);
+            return const SizedBox();
+          }),
+        );
+    await tester.pumpWidget(Column(children: [probe('en', (c) => en = c), probe('es', (c) => es = c)]));
+    await tester.pumpAndSettle();
+    // Units in, tokens out: no trailing zeros, never the units themselves.
+    expect(formatAmount(en, 25000000), '25');
+    expect(formatAmount(en, 500000), '0.5');
+    expect(formatAmount(en, 1234567890123), '1,234,567.890123');
+    expect(formatAmount(es, 1234567890123), '1.234.567,890123');
+    expect(formatAmount(en, 1), '0.000001');
+    expect(formatAmount(en, 0), '0');
+    expect(formatSigned(en, -1500000), '-1.5');
+    expect(amountText(en, 1500000), '1.5');
+    expect(amountText(es, 1234500000), '1234,5');
+    // And back: what a field holds, in units.
+    expect(parseAmount(en, '0.5'), 500000);
+    expect(parseAmount(en, ' 1,234.000001 '), 1234000001);
+    expect(parseAmount(es, '1.234,5'), 1234500000);
+    expect(parseAmount(es, '0,5'), 500000);
+    expect(parseAmount(en, '25'), 25000000);
+    for (final context in [en, es]) {
+      for (final units in [0, 1, 500000, 999999, 1000000, 25000000, 210000000000000]) {
+        expect(parseAmount(context, formatAmount(context, units)), units);
+        expect(parseAmount(context, amountText(context, units)), units);
+      }
+    }
+    // Refused rather than guessed: a seventh decimal, a point where the
+    // language groups with it, two separators, nothing, a sign.
+    expect(parseAmount(en, '0.0000001'), isNull);
+    expect(parseAmount(es, '1.5'), isNull, reason: 'in Spanish the point groups thousands: not read as 15');
+    expect(parseAmount(en, '1,5'), isNull);
+    expect(parseAmount(en, '1.2.3'), isNull);
+    expect(parseAmount(en, ''), isNull);
+    expect(parseAmount(en, '-1'), isNull);
+    expect(parseAmount(en, 'abc'), isNull);
   });
 
   test('filters: a transfer is never a message, flags are off by default', () {

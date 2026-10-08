@@ -133,6 +133,7 @@ class _ChainSummary extends StatelessWidget {
     final theme = Theme.of(context);
     // Proven against the tip's state root, so shown as soon as the proof arrives.
     String n(int? v) => v == null ? '…' : formatAmount(context, v);
+    String count(int v) => formatCount(context, v);
     final reward = client.nextBlockReward;
     final prefs = AppScope.of(context).prefs;
     final storing = prefs.storageConsent == StorageConsent.allowed;
@@ -150,9 +151,9 @@ class _ChainSummary extends StatelessWidget {
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Wrap(children: [
             stat(l.statNetwork, net?.id ?? '—'),
-            stat(l.statHeight, n(client.height)),
-            stat(l.statNodeHeight, n(client.peerHeight)),
-            if (net != null) stat(l.statNextReward, reward == null ? '…' : l.rewardPlusFees(reward)),
+            stat(l.statHeight, count(client.height)),
+            stat(l.statNodeHeight, count(client.peerHeight)),
+            if (net != null) stat(l.statNextReward, reward == null ? '…' : l.rewardPlusFees(formatAmount(context, reward))),
             stat(l.statBurnPool, n(client.provenPool)),
             stat(l.statCirculating, n(client.circulating)),
             stat(l.node, client.host == null ? '—' : '${client.host}:${client.port}'),
@@ -169,11 +170,6 @@ class _ChainSummary extends StatelessWidget {
                 l.checkingToGenesis(client.checkingFromCheckpoint!, client.checkedTowardGenesis),
                 style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
               ),
-            ),
-          if (client.countsChain && !client.complete && client.height > 0 && client.checkingFromCheckpoint == null)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: ChainProgress(client: client, label: l.loadingOlder, style: theme.textTheme.labelMedium),
             ),
           Row(children: [
             Expanded(

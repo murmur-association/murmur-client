@@ -4,6 +4,7 @@ import '../protocol/models.dart';
 import '../services/node_client.dart';
 import 'common.dart';
 import 'compose_page.dart';
+import 'emoji.dart';
 import 'glyphs.dart';
 
 /// A thread: its root message and every reply beneath it, as a tree.
@@ -33,8 +34,8 @@ class ThreadPage extends StatelessWidget {
         );
       }
 
-      // Depth-first, replies oldest first under each message. Replies from
-      // muted addresses are left out, with what answers them.
+      // The thread's first message, then its replies, oldest first: threads
+      // are flat. Replies from muted addresses are left out.
       final muted = AppScope.of(context).prefs.muted;
       final entries = <(TxView, int)>[];
       final seen = <String>{};
@@ -151,7 +152,7 @@ class _MessageCard extends StatelessWidget {
             const SizedBox(width: 8),
             Expanded(
               child: Text(
-                tx.kind == TxKind.reply ? '$when · ${l.paidToParent(tx.amount)}' : when,
+                tx.kind == TxKind.reply ? '$when · ${l.paidToThreadAuthor(formatAmount(context, tx.amount))}' : when,
                 style: theme.textTheme.bodySmall,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -159,8 +160,9 @@ class _MessageCard extends StatelessWidget {
             CountBadges(replies: client.replyCountOf(view), flags: client.flagCountOf(view)),
           ]),
           const SizedBox(height: 8),
-          SelectableText(
+          MessageText(
             text ?? messageOrUnavailable(context, view),
+            selectable: true,
             style: text == null
                 ? TextStyle(color: theme.colorScheme.outline)
                 : (isRoot ? theme.textTheme.titleMedium : theme.textTheme.bodyLarge),

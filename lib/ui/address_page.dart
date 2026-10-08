@@ -69,7 +69,7 @@ class AddressPage extends StatelessWidget {
                     const SizedBox(height: 12),
                     Text(l.balance, style: theme.textTheme.labelLarge),
                     BalanceText(client: client, address: address, style: theme.textTheme.headlineMedium),
-                    if (pending > 0) Text(l.pendingCommitted(pending)),
+                    if (pending > 0) Text(l.pendingCommitted(formatAmount(context, pending))),
                     // Counted from the chain, so only known with a local copy.
                     if (client.blocksMinedBy(address) > 0) Text(l.blocksMined(client.blocksMinedBy(address))),
                     if (wallets.wallet != null && !isMine) ...[

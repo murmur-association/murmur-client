@@ -6,6 +6,7 @@ import 'package:flutter/widgets.dart';
 import 'package:intl/intl.dart';
 
 import '../l10n/app_localizations.dart';
+import '../protocol/models.dart' show unitsPerToken;
 import '../protocol/wire.dart' show protocolVersion;
 import '../services/node_client.dart';
 
@@ -29,9 +30,63 @@ const languageNames = {
 };
 
 /// A whole number with the locale's digit grouping: 1,234,567 in English,
-/// 1.234.567 in Spanish.
-String formatAmount(BuildContext context, int value) =>
+/// 1.234.567 in Spanish. For counts and heights; amounts go through
+/// [formatAmount].
+String formatCount(BuildContext context, int value) =>
     NumberFormat.decimalPattern(context.l10n.localeName).format(value);
+
+/// An amount, given in units as the chain holds it, in tokens as people read
+/// it: the locale's digit grouping and up to six decimals, without trailing
+/// zeros (1,234.5 in English, 1.234,5 in Spanish). Units are never shown.
+String formatAmount(BuildContext context, int units) => formatAmountIn(context.l10n.localeName, units);
+
+/// [formatAmount] where only the locale is at hand. Whole and fraction are
+/// formatted apart, as integers: no amount goes through a floating-point
+/// number.
+String formatAmountIn(String locale, int units) {
+  if (units < 0) return '-${formatAmountIn(locale, -units)}';
+  final format = NumberFormat.decimalPattern(locale);
+  final whole = format.format(units ~/ unitsPerToken);
+  var fraction = units % unitsPerToken;
+  if (fraction == 0) return whole;
+  var digits = 6;
+  while (fraction % 10 == 0) {
+    fraction ~/= 10;
+    digits--;
+  }
+  return '$whole${format.symbols.DECIMAL_SEP}${NumberFormat('0' * digits, locale).format(fraction)}';
+}
+
+/// An amount as a field holds it, for the user to edit: tokens with the
+/// locale's decimal separator, plain digits, no grouping.
+String amountText(BuildContext context, int units) {
+  final separator = NumberFormat.decimalPattern(context.l10n.localeName).symbols.DECIMAL_SEP;
+  final fraction = (units % unitsPerToken).toString().padLeft(6, '0').replaceFirst(RegExp(r'0+$'), '');
+  return '${units ~/ unitsPerToken}${fraction.isEmpty ? '' : '$separator$fraction'}';
+}
+
+/// What the user typed as an amount, in units, or null if it isn't one:
+/// tokens with up to six decimals after the locale's decimal separator. The
+/// locale's digit grouping is taken only where it is whole groups of three,
+/// so "1.5" typed in Spanish (where the point groups) is refused rather
+/// than read as 15.
+int? parseAmount(BuildContext context, String typed) {
+  final symbols = NumberFormat.decimalPattern(context.l10n.localeName).symbols;
+  final text = typed.trim().replaceAll(RegExp(r"[\s'’_]"), '');
+  final parts = text.split(symbols.DECIMAL_SEP);
+  if (parts.length > 2) return null;
+  var whole = parts[0];
+  if (whole.contains(symbols.GROUP_SEP)) {
+    final groups = whole.split(symbols.GROUP_SEP);
+    final first = groups.first;
+    if (first.isEmpty || first.length > 3 || groups.skip(1).any((g) => g.length != 3)) return null;
+    whole = groups.join();
+  }
+  final fraction = parts.length == 2 ? parts[1] : '';
+  // Fifteen digits of tokens are far more than exist, and stay exact.
+  if (!RegExp(r'^\d{1,9}$').hasMatch(whole) || !RegExp(r'^\d{0,6}$').hasMatch(fraction)) return null;
+  return int.parse(whole) * unitsPerToken + int.parse(fraction.padRight(6, '0'));
+}
 
 /// An amount with its sign, for balance changes.
 String formatSigned(BuildContext context, int value) =>
@@ -101,13 +156,13 @@ String txProblemText(AppLocalizations l, TxProblem p) => switch (p.kind) {
       TxProblemKind.malformed => l.probMalformed,
       TxProblemKind.needsMessage => l.probNeedsMessage,
       TxProblemKind.needsRecipient => l.probNeedsRecipient,
-      TxProblemKind.amountBelowFee => l.probAmountBelowFee(p.a),
+      TxProblemKind.amountBelowFee => l.probAmountBelowFee(formatAmountIn(l.localeName, p.a)),
       TxProblemKind.replyParentNotMined => l.probReplyParentNotMined,
-      TxProblemKind.replyWrongRecipient => l.probReplyWrongRecipient,
       TxProblemKind.flagNotMessage => l.probFlagNotMessage,
       TxProblemKind.alreadyFlagged => l.probAlreadyFlagged,
       TxProblemKind.messageTooLong => l.probMessageTooLong(p.a, p.b),
-      TxProblemKind.insufficientBalance => l.probInsufficientBalance(p.a, p.b),
+      TxProblemKind.insufficientBalance =>
+        l.probInsufficientBalance(formatAmountIn(l.localeName, p.a), formatAmountIn(l.localeName, p.b)),
       TxProblemKind.checkingBalance => l.checkingBalance,
       TxProblemKind.notLive => l.probNotLive,
       TxProblemKind.connectionLost => l.probConnectionLost,
