@@ -50,7 +50,7 @@ void main() {
   }
 
   group('sync', () {
-    test('starts from a checkpoint, checks back to genesis, and stores the back-fill batch by batch', () async {
+    test('starts from a checkpoint and checks back to genesis, keeping none of the headers below it', () async {
       final node = await long();
       final cp = checkpointOf(node);
       final cache = MemoryCache();
@@ -61,10 +61,44 @@ void main() {
       expect(c.headerAt(cp.height)!.id, cp.hash);
       await until(c, () => c.checkingFromCheckpoint == null);
       expect(fromCheckpoint, isTrue);
-      expect(c.headerAt(1)!.id, node.hashAt(1));
-      // The first batch was stored before the back-fill joined.
-      expect(cache.saves, contains((1, 2000)));
-      expect(cache.headers.length, node.height, reason: 'the joined chain is stored');
+      expect(c.headersFromNode, greaterThan(cp.height - 12), reason: 'every header from genesis was checked');
+      // Checked, and let go: the chain is held from the checkpoint's context.
+      expect(c.headerAt(1), isNull);
+      expect(c.headerAt(cp.height - 12), isNull);
+      expect(c.headerAt(cp.height - 11)!.id, node.hashAt(cp.height - 11));
+      // The local copy holds the same, and how far the check got, batch by
+      // batch, in place of the headers checked.
+      await until(c, () => cache.headers.length == node.height - (cp.height - 12));
+      expect(cache.headers.first.height, cp.height - 11);
+      expect(cache.headers.last.id, node.hashAt(node.height));
+      await until(c, () => cache.marks.length >= 2);
+      expect(cache.marks.first.length, lessThan(8000), reason: 'a mark, not the headers');
+      c
+        ..useCache(null)
+        ..disconnect();
+
+      // The next session takes both up: nothing below the checkpoint is
+      // fetched again, and the headers above it come from the copy.
+      final again = await node.connect(MurmurClient(checkpoint: cp)..useCache(cache));
+      await until(again, () => again.checkingFromCheckpoint == null && again.height == node.height);
+      expect(again.headersFromNode, lessThan(100), reason: 'only the stored headers above the checkpoint, checked again');
+      expect(again.headerAt(1), isNull);
+    });
+
+    test('older blocks than the checkpoint: their headers come by proof, a batch at a time', () async {
+      final node = await long();
+      final cp = checkpointOf(node);
+      final c = await node.connect(MurmurClient(checkpoint: cp));
+      await until(c, () => c.checkingFromCheckpoint == null);
+      final wanted = cp.height - 300;
+      expect(c.headerAt(wanted), isNull);
+      await until(c, what: 'blocks below the checkpoint', () {
+        c.requestOlder();
+        return c.blockAt(wanted) != null;
+      });
+      expect(c.headerAt(wanted)!.id, node.hashAt(wanted));
+      expect(c.oldHeadersProven, greaterThan(250));
+      expect(c.headerAt(1), isNull, reason: 'only as far as was asked for');
     });
 
     test('a checkpoint that is not on the chain stops the client', () async {
@@ -80,30 +114,64 @@ void main() {
       expect(kind, LinkErrorKind.checkpointMismatch);
     });
 
-    test('an interrupted back-fill resumes after the headers in the local copy', () async {
+    test('an interrupted back-fill resumes from the mark in the local copy', () async {
       final node = await long();
-      // What an interrupted back-fill leaves: the chain's first 500 headers.
-      final cache = MemoryCache((await headersOf(node)).take(500).toList());
-      final c = await node.connect(MurmurClient(checkpoint: checkpointOf(node))..useCache(cache));
+      final cp = checkpointOf(node);
+      // What an interrupted back-fill leaves: the mark after its first
+      // batch of 2,000 headers.
+      final first = MemoryCache();
+      final one = await node.connect(MurmurClient(checkpoint: cp)..useCache(first));
+      await until(one, () => first.marks.isNotEmpty);
+      one
+        ..useCache(null)
+        ..disconnect();
+      final cache = MemoryCache(null, first.marks.first);
+      final c = await node.connect(MurmurClient(checkpoint: cp)..useCache(cache));
       await until(c, () => c.checkingFromCheckpoint == null);
-      expect(c.headerAt(500)!.id, node.hashAt(500));
-      expect(c.headerAt(501)!.id, node.hashAt(501));
-      expect(c.headersFromNode, lessThanOrEqualTo(node.height - 500), reason: 'headers 1 to 500 were not fetched again');
-      expect(cache.headers.length, node.height);
+      expect(c.headersFromNode, lessThanOrEqualTo(node.height - 2000),
+          reason: 'headers 1 to 2,000 were not fetched again');
+      expect(c.headerAt(cp.height)!.id, cp.hash);
     });
 
-    test('stored headers of another chain are dropped, and the back-fill starts over from genesis', () async {
+    test('a mark of another chain is dropped, and the back-fill starts over from genesis', () async {
       final other = await TestNode.build(500, mineTo: await someoneElse());
       await other.start();
-      final stored = await headersOf(other);
+      final theirs = MemoryCache();
+      final onOther = await other.connect(MurmurClient(checkpoint: Checkpoint(400, other.hashAt(400)))..useCache(theirs));
+      await until(onOther, () => theirs.marks.isNotEmpty);
+      onOther
+        ..useCache(null)
+        ..disconnect();
       await other.stop();
       final node = await long();
       final cp = checkpointOf(node);
-      final c = await node.connect(MurmurClient(checkpoint: cp)..useCache(MemoryCache(stored)));
+      final c = await node.connect(MurmurClient(checkpoint: cp)..useCache(MemoryCache(null, theirs.marks.last)));
       await until(c, () => c.checkingFromCheckpoint == null);
       expect(c.headersFromNode, greaterThan(cp.height - 12), reason: 'checked from genesis');
-      expect(c.headerAt(1)!.id, node.hashAt(1));
       expect(c.headerAt(cp.height)!.id, cp.hash);
+    });
+
+    test('a copy kept from genesis, before a checkpoint shipped: its headers above the checkpoint are taken in', () async {
+      final node = await long();
+      final cp = checkpointOf(node);
+      final cache = MemoryCache(await headersOf(node));
+      final c = MurmurClient(checkpoint: cp)..useCache(cache);
+      await node.connect(c);
+      await until(c, () => c.checkingFromCheckpoint == null);
+      expect(c.height, node.height);
+      expect(c.headerAt(1), isNull, reason: 'held from the checkpoint, whatever the copy holds');
+      // And the copy is rewritten to hold the same.
+      await until(c, () => cache.headers.first.height == cp.height - 11);
+      expect(cache.headers.length, node.height - (cp.height - 12));
+    });
+
+    test('a damaged mark is no mark: the back-fill starts from genesis', () async {
+      final node = await long();
+      final cp = checkpointOf(node);
+      final c = await node.connect(
+          MurmurClient(checkpoint: cp)..useCache(MemoryCache(null, Uint8List.fromList(List.filled(300, 7)))));
+      await until(c, () => c.checkingFromCheckpoint == null);
+      expect(c.headersFromNode, greaterThan(cp.height - 12));
     });
 
     test('a reorganization rebuilds the header history from the nearest mark', () async {

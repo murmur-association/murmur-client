@@ -17,8 +17,13 @@ import 'models.dart';
 import 'wire.dart';
 
 /// Headers by index (index i holds height i + 1, as the client numbers
-/// them), any of which may be unknown: below a checkpoint, until the
-/// headers there are checked.
+/// them), any of which may be unknown.
+///
+/// What it holds doesn't grow with the chain's age, only with the headers
+/// it is given: the unknown indexes before the first header take no room (a
+/// chain that starts at a checkpoint), the headers from there on are packed
+/// side by side, and a header put below them (an old one, fetched on its
+/// own) is kept apart.
 class HeaderChain {
   static const _slot = headerBytes + 32;
 
@@ -33,11 +38,18 @@ class HeaderChain {
   /// last 11) and what views show, many times over.
   static const _recentMax = 1024;
 
+  /// The packed headers: slot 0 is index [_base].
   Uint8List _bytes = Uint8List(0);
 
   /// 1 where a slot holds a header.
   Uint8List _known = Uint8List(0);
+
+  /// The first index that has a slot. Below it, [_apart].
+  int _base = 0;
   int _length = 0;
+
+  /// Headers below [_base], each as its slot's bytes.
+  final _apart = <int, Uint8List>{};
   final _recent = <int, BlockHeader>{}; // in use order: a LinkedHashMap
 
   int get length => _length;
@@ -45,25 +57,39 @@ class HeaderChain {
   bool get isNotEmpty => _length > 0;
 
   /// Bytes held for headers, for measuring.
-  int get bytesHeld => _bytes.length + _known.length;
+  int get bytesHeld => _bytes.length + _known.length + _apart.length * _slot;
+
+  /// The first index whose headers are packed side by side: what [snapshot]
+  /// starts at.
+  int get packedFrom => _base;
 
   void _grow(int slots) {
     if (slots <= _known.length) return;
+    final used = _length - _base;
     final capacity = max(slots, max(1024, _known.length * 2));
-    _bytes = Uint8List(capacity * _slot)..setRange(0, _length * _slot, _bytes);
-    _known = Uint8List(capacity)..setRange(0, _length, _known);
+    _bytes = Uint8List(capacity * _slot)..setRange(0, used * _slot, _bytes);
+    _known = Uint8List(capacity)..setRange(0, used, _known);
   }
 
   // A header just stored is likely read again soon (the next headers'
   // rules read the 11 before them), so it's kept as it is.
   void _write(int i, BlockHeader h) {
-    final at = i * _slot;
-    _bytes
-      ..setRange(at, at + headerBytes, encodeHeader(h))
-      ..setRange(at + headerBytes, at + _slot, h.hash);
-    _known[i] = 1;
+    if (i < _base) {
+      _apart[i] = Uint8List(_slot)
+        ..setRange(0, headerBytes, encodeHeader(h))
+        ..setRange(headerBytes, _slot, h.hash);
+    } else {
+      final at = (i - _base) * _slot;
+      _bytes
+        ..setRange(at, at + headerBytes, encodeHeader(h))
+        ..setRange(at + headerBytes, at + _slot, h.hash);
+      _known[i - _base] = 1;
+    }
     _remember(i, h);
   }
+
+  /// The bytes that hold index `i`'s slot, and where it starts in them.
+  (Uint8List, int) _where(int i) => i < _base ? (_apart[i]!, 0) : (_bytes, (i - _base) * _slot);
 
   void _remember(int i, BlockHeader h) {
     _recent
@@ -74,14 +100,40 @@ class HeaderChain {
 
   /// Appends `h`, or an unknown slot for null.
   void add(BlockHeader? h) {
-    _grow(_length + 1);
+    // Unknown, with nothing packed yet: no slot is kept for it.
+    if (h == null && _length == _base) {
+      _base = ++_length;
+      return;
+    }
+    _grow(_length - _base + 1);
     final i = _length++;
     if (h != null) {
       _write(i, h);
     } else {
-      _known[i] = 0;
+      _known[i - _base] = 0;
       _recent.remove(i);
     }
+  }
+
+  /// Makes the next header added the one at index `i`, leaving every index
+  /// before it unknown (an empty chain only).
+  void startAt(int i) {
+    if (_length != 0) throw StateError('the chain is not empty');
+    _base = _length = i;
+  }
+
+  /// Lets go of the packed headers below index `i`: they become unknown.
+  void dropBelow(int i) {
+    if (i <= _base) return;
+    final keepFrom = min(i, _length);
+    final used = _length - keepFrom;
+    final bytes = Uint8List(max(used, 1024) * _slot)
+      ..setRange(0, used * _slot, Uint8List.sublistView(_bytes, (keepFrom - _base) * _slot));
+    final known = Uint8List(max(used, 1024))..setRange(0, used, Uint8List.sublistView(_known, keepFrom - _base));
+    _bytes = bytes;
+    _known = known;
+    _base = keepFrom;
+    _recent.removeWhere((at, _) => at < keepFrom);
   }
 
   void addAll(Iterable<BlockHeader?> headers) {
@@ -91,7 +143,7 @@ class HeaderChain {
   }
 
   /// Whether index `i` holds a header.
-  bool isKnown(int i) => i >= 0 && i < _length && _known[i] == 1;
+  bool isKnown(int i) => i >= 0 && i < _length && (i < _base ? _apart.containsKey(i) : _known[i - _base] == 1);
 
   /// The header at index `i`, rebuilt from its bytes (or recently used);
   /// null if that slot is unknown.
@@ -102,10 +154,12 @@ class HeaderChain {
     return h;
   }
 
-  BlockHeader _decode(int i) => _decodeFrom(_bytes, i);
+  BlockHeader _decode(int i) {
+    final (bytes, at) = _where(i);
+    return _decodeAt(bytes, at);
+  }
 
-  static BlockHeader _decodeFrom(Uint8List bytes, int i) {
-    final at = i * _slot;
+  static BlockHeader _decodeAt(Uint8List bytes, int at) {
     final h = decodeHeader(Uint8List.sublistView(bytes, at, at + headerBytes));
     return BlockHeader(
       height: h.height,
@@ -122,7 +176,7 @@ class HeaderChain {
     );
   }
 
-  /// Puts `h` at index `i` (below the length: a back-filled header).
+  /// Puts `h` at index `i` (below the length: an old header).
   void operator []=(int i, BlockHeader h) {
     RangeError.checkValidIndex(i, this);
     _write(i, h);
@@ -130,8 +184,8 @@ class HeaderChain {
 
   /// A copy of `length` bytes at `offset` in slot `i`.
   Uint8List _field(int i, int offset, int length) {
-    final at = i * _slot + offset;
-    return Uint8List.fromList(Uint8List.sublistView(_bytes, at, at + length));
+    final (bytes, slot) = _where(i);
+    return Uint8List.fromList(Uint8List.sublistView(bytes, slot + offset, slot + offset + length));
   }
 
   Uint8List? hashAt(int i) => isKnown(i) ? _field(i, headerBytes, 32) : null;
@@ -143,8 +197,8 @@ class HeaderChain {
   int? timestampAt(int i) {
     if (!isKnown(i)) return null;
     // ByteReader, not getUint64: the web has no 64-bit accessors (rule 7).
-    final at = i * _slot + _timeAt;
-    return ByteReader(Uint8List.sublistView(_bytes, at, at + 8)).u64();
+    final (bytes, slot) = _where(i);
+    return ByteReader(Uint8List.sublistView(bytes, slot + _timeAt, slot + _timeAt + 8)).u64();
   }
 
   /// Whether the miner at index `i` is `address`, without copying.
@@ -155,26 +209,19 @@ class HeaderChain {
 
   bool _matches(int i, int offset, Uint8List value) {
     if (!isKnown(i) || value.length != 32) return false;
-    final at = i * _slot + offset;
+    final (bytes, slot) = _where(i);
     for (var k = 0; k < 32; k++) {
-      if (_bytes[at + k] != value[k]) return false;
+      if (bytes[slot + offset + k] != value[k]) return false;
     }
     return true;
-  }
-
-  /// Puts `source`'s first `count` headers at the same indexes here, byte
-  /// for byte (the back-fill joining the chain).
-  void copyStart(HeaderChain source, int count) {
-    RangeError.checkValueInInterval(count, 0, min(_length, source._length));
-    _bytes.setRange(0, count * _slot, source._bytes);
-    _known.setRange(0, count, source._known);
-    _recent.removeWhere((i, _) => i < count);
   }
 
   /// Drops everything from index `start` on.
   void truncate(int start) {
     if (start >= _length) return;
     _length = max(0, start);
+    if (_base > _length) _base = _length;
+    _apart.removeWhere((i, _) => i >= _length);
     _recent.removeWhere((i, _) => i >= _length);
   }
 
@@ -183,7 +230,11 @@ class HeaderChain {
   void takeFrom(HeaderChain other) {
     _bytes = other._bytes;
     _known = other._known;
+    _base = other._base;
     _length = other._length;
+    _apart
+      ..clear()
+      ..addAll(other._apart);
     _recent
       ..clear()
       ..addAll(other._recent);
@@ -193,18 +244,20 @@ class HeaderChain {
   void clear() {
     _bytes = Uint8List(0);
     _known = Uint8List(0);
-    _length = 0;
+    _base = _length = 0;
+    _apart.clear();
     _recent.clear();
   }
 
-  /// The headers as they are now, as a read-only list rebuilt as it's read
+  /// The packed headers as they are now (the first is index [packedFrom]),
+  /// as a read-only list rebuilt as it's read
   /// (without filling the cache): for storing them, which reads only those
   /// that changed, across awaits. It shares the packed bytes, which growing
   /// or clearing replace rather than change, so it costs nothing and stays
   /// readable while the chain moves on. (A reorganization during a save may
   /// show it newer headers; the next save rewrites from the fork anyway.)
   /// Unknown slots can't be read.
-  List<BlockHeader> snapshot() => _Snapshot(_bytes, _known, _length);
+  List<BlockHeader> snapshot() => _Snapshot(_bytes, _known, _length - _base);
 }
 
 class _Snapshot extends ListBase<BlockHeader> {
@@ -222,8 +275,8 @@ class _Snapshot extends ListBase<BlockHeader> {
   @override
   BlockHeader operator [](int i) {
     RangeError.checkValidIndex(i, this);
-    if (_known[i] != 1) throw StateError('header ${i + 1} is not known');
-    return HeaderChain._decodeFrom(_bytes, i);
+    if (_known[i] != 1) throw StateError('that header is not known');
+    return HeaderChain._decodeAt(_bytes, i * HeaderChain._slot);
   }
 
   @override

@@ -91,7 +91,8 @@ class _WebChainCache implements ChainCache {
   @override
   Future<CachedChain?> load(String genesis) async {
     if (await _genesis() != genesis) return null;
-    final t = _tx(['headers', 'blocks', 'contents']);
+    final t = _tx(['meta', 'headers', 'blocks', 'contents']);
+    final mark = _result(t.objectStore('meta').get('backfill'.toJS));
     final headerChunks = BytesBuilder(copy: false);
     final blocks = <int, Block>{};
     final contents = <String, Uint8List>{};
@@ -106,7 +107,9 @@ class _WebChainCache implements ChainCache {
       }),
       _each(t.objectStore('contents'), (k, v) => contents[(k as JSString).toDart] = _bytes(v)),
     ]);
-    return CachedChain(storedHeaders(headerChunks.takeBytes()), blocks, contents);
+    final kept = await mark;
+    return CachedChain(storedHeaders(headerChunks.takeBytes()), blocks, contents,
+        mark: kept == null ? null : _bytes(kept));
   }
 
   @override
@@ -131,6 +134,13 @@ class _WebChainCache implements ChainCache {
       store.put(w.takeBytes().toJS, c.toJS);
     }
     store.delete(web.IDBKeyRange.lowerBound(chunks.toJS));
+    await _finished(t);
+  }
+
+  @override
+  Future<void> saveMark(Uint8List mark) async {
+    final t = _tx(['meta'], 'readwrite');
+    t.objectStore('meta').put(mark.toJS, 'backfill'.toJS);
     await _finished(t);
   }
 

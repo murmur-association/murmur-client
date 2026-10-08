@@ -15,11 +15,16 @@ import '../protocol/wire.dart';
 import 'chain_cache_io.dart' if (dart.library.js_interop) 'chain_cache_web.dart' as impl;
 
 class CachedChain {
-  CachedChain(this.headers, this.blocks, this.contents);
+  CachedChain(this.headers, this.blocks, this.contents, {this.mark});
 
-  /// Headers from height 1 up, read once: the stores decode them as they
-  /// are read, so a long chain is never held as objects.
+  /// Headers in height order, read once: the stores decode them as they are
+  /// read, so a long chain is never held as objects. From height 1, or from
+  /// the checkpoint a session started at: a header says its own height.
   final Iterable<BlockHeader> headers;
+
+  /// How far the headers below a checkpoint were checked from genesis
+  /// (`saveMark`), if that was kept.
+  final Uint8List? mark;
 
   /// Downloaded blocks by height (not necessarily all of them).
   final Map<int, Block> blocks;
@@ -43,10 +48,14 @@ abstract class ChainCache {
   /// is, or the store holds another network.
   Future<CachedChain?> load(String genesis);
 
-  /// Stores the header chain, which changed from height `changedFrom` on.
-  /// Headers above the list's end, and a different network's data, are
-  /// dropped.
+  /// Stores the header chain, which changed from its entry number
+  /// `changedFrom` on (1 is the list's first, whatever its height). Headers
+  /// beyond the list's end, and a different network's data, are dropped.
   Future<void> saveHeaders(String genesis, List<BlockHeader> headers, int changedFrom);
+
+  /// Stores how far the headers below a checkpoint are checked from
+  /// genesis: a few hundred bytes, in place of those headers.
+  Future<void> saveMark(Uint8List mark);
 
   Future<void> saveBlocks(List<Block> blocks);
 

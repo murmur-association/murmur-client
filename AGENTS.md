@@ -168,7 +168,7 @@ It's a `ChangeNotifier` that the UI rebuilds from (`AppBuilder`). The client han
 5. settling own pending transactions, and GetTx for wanted txids;
 6. a page of a thread or of an address's history being followed, from the node's index (`_readLists`);
 7. the newest stretch of blocks a list needs;
-8. back-filling headers to genesis (after a checkpoint start);
+8. checking the headers from genesis up to the checkpoint (after a checkpoint start), keeping none;
 9. the filter scan for watched items (only what a node without an index left to filters);
 10. one prefetch batch.
 
@@ -177,9 +177,10 @@ It's a `ChangeNotifier` that the UI rebuilds from (`AppBuilder`). The client han
 When nothing is left, it waits. `_wake()` resumes it: views call things like `requestOlder`, `requestTx`, `requestBlock`, `watchAddress` and `account(...)`, which only record what they want and wake the worker. **Views never await the network.** Each request type has a single waiter (`_headersWaiter`, `_stateWaiter`, and so on), so two concurrent requests of the same type would clash. `feeInfo()` is the only request made from outside the worker, and it shares one in-flight future for that reason.
 
 **Heights and indexes:**
-- `_headers[i]` is height `i + 1`. It's packed (`HeaderChain`): `_headers[i]` rebuilds a `BlockHeader`, so loops over many heights read fields instead (`_headers.prevHashAt(h - 1)`, `minedBy`, `hashIs`).
-- `_low` is the lowest header checked in sequence: 1, or near the checkpoint until back-filled. Below it, a header is known only if something old needed it and it came by proof (`_fetchOldHeaders`). Use `_hdr(h)` only for `h >= _low`, and `headerAt(h)` otherwise.
-- `_blocks` is aligned with `_headers`; null means not fetched.
+- `_headers[i]` is height `i + 1`. It's packed (`HeaderChain`): `_headers[i]` rebuilds a `BlockHeader`, so loops over many heights read fields instead (`_headers.prevHashAt(h - 1)`, `minedBy`, `hashIs`). **What it holds doesn't grow with the chain's age:** the heights below a checkpoint take no room, and an old header fetched on its own is kept apart.
+- `_low` is the lowest height from which every header up to the tip is known: 1, or near the checkpoint, and lower as a view asks for older blocks (`_extendDown`: a batch of headers by proof, then their blocks). Below it, a header is known only if something old needed it and it came by proof (`_fetchOldHeaders`). Use `_hdr(h)` only for `h >= _low`, and `headerAt(h)` otherwise.
+- `_joint` is the lowest header taken in sequence and checked against the ones before it: 1, or the first of a checkpoint's context. It never moves: the check from genesis joins there, and no branch may fork below it.
+- `_blocks` is aligned with `_headers` (`_BlockStore`: only the fetched ones take room); null means not fetched.
 - `_top..height` is the fetched newest stretch.
 
 **Proven state.** `account()`, `provenPool`, `provenIssued`, `provenFlagged()` and `publishedAlias()` return proven values, or null until the proof arrives. Calling them also watches the key, so it's re-proven at each new tip (a name only every 100 blocks, or when a block holds a new one for it: many are watched and they rarely change). Balances and nonces come from proofs, never from counting. A history row's balance is worked back from the proven one, until a block the address mined.
@@ -197,7 +198,7 @@ When nothing is left, it waits. `_wake()` resumes it: views call things like `re
 2. Fetch the 11 headers before it, with GetHeaderProof, checked by linkage: what the median-time-past and the next target need.
 3. Take the history peaks through it.
 4. Check every header after it fully.
-5. `_backfillHeaders` checks from genesis up in the background, and must join `_low` exactly; otherwise `checkpointMismatch` stops the client. With a local copy, each batch it checks is stored (`_flushCache`, as a header chain from genesis that stops short of the checkpoint), so a later session starts from the checkpoint again and resumes the back-fill after those headers (`_resumeBackfill`). Stored headers that don't lead to the checkpoint are dropped and the back-fill starts over from genesis (`_restartBackfill`), rather than blaming the checkpoint.
+5. `_backfillHeaders` checks every header from genesis up in the background, and must join `_joint` exactly; otherwise `checkpointMismatch` stops the client. **Each header is checked and let go:** only the last few stay, which the next is checked against. None is kept afterwards, since any old header can come by proof against the tip, and the join shows that the tip's history is the one checked from genesis. With a local copy, how far the check got is stored after each batch as a mark of a few kilobytes (`_BackfillMark`: the height, the last 11 headers, the history's peaks), so a later session resumes there (`_resumeMark`), or finds the check done. A mark that doesn't lead to the checkpoint is dropped and the check starts over from genesis (`_restartBackfill`), rather than blaming the checkpoint.
 
 A branch that would replace the checkpoint's block is refused. A cached chain that doesn't contain the checkpoint is ignored. The testnet ships one once it is a day old (`network.dart`, refreshed with every release); the demo network can't, since every demo chain is different.
 
@@ -320,7 +321,8 @@ A TxStatus of invalid or refused takes the transaction out of nonce and balance 
 **Paging** (`ui/paged_list.dart`). A list shows a screenful plus one row, then ten more at the bottom. `fetch(n)` must be cheap for small `n`, since sources are lazy iterables over the chain. `loadingMore` plus `onNeedMore` pull older blocks.
 
 **Cache** (`services/chain_cache*.dart`):
-- Headers are saved only once they're known from genesis (`_low == 1`).
+- Headers are saved as they are held: from genesis, or from the checkpoint's context up (each says its own height). Beside them, the back-fill's mark.
+- **A session with a checkpoint always starts from it** (two requests), then takes the stored headers above it, checked like a node's (`_attachStored`). So what is held starts at the newest checkpoint however old the copy, and a copy from an older checkpoint, or from genesis, is rewritten to match.
 - Blocks and content are saved as they arrive.
 - Everything is re-checked on load: link, PoW, history root, checkpoint, merkle root, filter, content hash.
 - A cache from another network (by genesis hash) is dropped.
@@ -405,9 +407,11 @@ A TxStatus of invalid or refused takes the transaction out of nonce and balance 
    - A web client can't get past such a node by itself. Measured: 72 retries against `node.murmur.info` all went to the same broken address, while the native client reached all three nodes. `node.murmur.info` includes broken nodes on purpose, to test this.
    - **Rejected workarounds:** DNS over HTTPS (a third party), connecting by IP (TLS rejects it), per-node names (the network keeps one name). Don't reintroduce them unasked.
 3. **The testnet checkpoint ages.** A first session checks every header after it before lists show (about 3,000 a second in a browser), and the gap grows by 2,880 a day, so every release refreshes it (Recipes), and the release job refuses one over a week old. Its trust rests on the chain of checkpoints back to the first, and on the testnet's nodes agreeing when it's refreshed: they're all behind one name, run by the project. Checkpoints come only with releases; users choose nodes, never checkpoints, and a running client never takes one from a node.
-4. **Headers in memory: a slot for every height.** `_headers` and `_backfill` are `HeaderChain`s (`lib/protocol/header_chain.dart`): 280 bytes a header (wire bytes plus hash) in one byte array, with the last 1,024 used kept as objects. Long loops read fields from the bytes (`prevHashAt`, `minerAt`, `hashIs`…). **This is the next thing to break as the chain ages**, in a browser after two to three years:
-   - **The array has a slot for every height**, known or not, so it grows with the chain even for a session that starts from a checkpoint and never looks below it. `_blocks` has an entry per height too.
-   - **The back-fill keeps every header it checks.** Old headers can now come one at a time by proof (`_fetchOldHeaders`), so the back-fill could check and let go, and the headers could be kept from the checkpoint up only. Not done: it changes what `_low`, the local copy and a resumed back-fill mean.
+4. **Headers in memory no longer grow with the chain** (done 2026-10-08). `_headers` and `_backfill` are `HeaderChain`s (`lib/protocol/header_chain.dart`): 280 bytes a header (wire bytes plus hash) in one byte array, with the last 1,024 used kept as objects. What is held: the headers from the release's checkpoint up (a week of blocks, about 6 MB, more for a release left unupdated), and the old ones a view asked for. What is left:
+   - **Loops over every height remain** (`historyPending`, `activityOf` and the filter scan with a node that keeps no index; `heightOfBlock`): they cost time, not memory, and only from `_low` up or with such a node.
+   - **Browsing below the checkpoint costs a proof per header** (`_extendDown`, 128 at a time, each a couple of kilobytes): fine for paging back, heavy for reading a chain's whole past, which a light client shouldn't do anyway. Those headers aren't stored in the local copy, so blocks stored below the checkpoint are fetched again.
+   - **A desktop app never updated** keeps its old checkpoint, and so every header since: its growth is by the release's age, not the chain's.
+   - **Not measured in a browser** since the change; the web build compiles and the acceptance tests pass in Chrome.
    - **Measured before protocol 11** (2026-10-04, 232-byte headers): about 376 bytes a header in a browser, spare capacity included; about 360 µs to check one in a browser. With the new difficulty rule a check on the Dart VM takes about 75 µs (`tool/header_bench.dart`, 2026-10-08), where it took 165; the browser hasn't been measured again.
    - **Rollbacks** rebuild the header history from a copy kept every 1,024 heights (`_historyMarks`, the last 16), not from genesis: rebuilt headers compute their work again.
    - **The local copy loads packed too:** the stores hand over headers as they decode them (`storedHeaders`), and `_loadCache` checks and packs each in turn.

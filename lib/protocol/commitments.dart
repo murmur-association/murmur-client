@@ -440,6 +440,39 @@ class HistoryPeaks {
 
   HistoryPeaks copy() => HistoryPeaks._(List.of(_peaks), count);
 
+  /// The peaks as bytes, to keep and take up again later ([parse]): the
+  /// leaf count, then each peak's hash and the fields its parent covers.
+  Uint8List get bytes {
+    final w = ByteWriter()..u64(count);
+    for (final (_, node) in _peaks) {
+      w
+        ..bytes(node.hash)
+        ..u256(node.work)
+        ..u64(node.firstTime)
+        ..u64(node.lastTime)
+        ..bytes(node.firstTarget)
+        ..bytes(node.lastTarget);
+    }
+    return w.take();
+  }
+
+  /// What [bytes] gave, read from `r`; a FormatException if it's cut short.
+  static HistoryPeaks parse(ByteReader r) {
+    final count = r.u64();
+    final nodes = [
+      for (var i = _peakLevels(count).length; i > 0; i--)
+        HistoryNode(
+          hash: r.hash32(),
+          work: r.u256(),
+          firstTime: r.u64(),
+          lastTime: r.u64(),
+          firstTarget: r.take(32),
+          lastTarget: r.take(32),
+        ),
+    ];
+    return fromPeaks(nodes, count)!;
+  }
+
   void push(HistoryNode leaf) {
     var level = 0;
     var node = leaf;

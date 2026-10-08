@@ -30,6 +30,22 @@ void main() {
     expect((await cache.load(genesis))!.contents.keys, [b]);
   });
 
+  test('the back-fill mark is kept beside the headers, replaced by the next, and cleared with the rest', () async {
+    final dir = await Directory.systemTemp.createTemp('murmur-cache-test');
+    addTearDown(() => dir.delete(recursive: true));
+    final cache = FileChainCache(dir);
+    final genesis = 'ab' * 32;
+    await cache.saveHeaders(genesis, const [], 1);
+    expect((await cache.load(genesis))!.mark, isNull);
+    await cache.saveMark(Uint8List.fromList([1, 2, 3]));
+    await cache.saveMark(Uint8List.fromList([4, 5]));
+    expect((await cache.load(genesis))!.mark, [4, 5]);
+    await cache.clear();
+    expect(await cache.load(genesis), isNull);
+    await cache.saveHeaders(genesis, const [], 1);
+    expect((await cache.load(genesis))!.mark, isNull);
+  });
+
   test('the local copy goes to the application data folder, or on a phone the app cache folder', () {
     String base(Map<String, String> env, {bool phone = false, String? appCache}) =>
         chainCacheBase(phone: phone, env: env, temp: '/tmp', appCache: appCache);

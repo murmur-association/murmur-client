@@ -2,6 +2,11 @@
 
 Newest first. Each release is a `vX.Y.Z` tag matching `version` in `pubspec.yaml`; see [README](README.md#releases-and-deployment). Entries marked **Breaking** need action from users.
 
+## Unreleased
+
+- **Changed: the app's memory no longer grows with the chain.** It used to keep every block header since the chain began once it had checked them. It now checks them and lets them go, keeps the ones from the release's checkpoint on, and fetches an older one, proven, when a page needs it. The local copy shrinks the same way, and a later start resumes the check where it stopped.
+- **Changed: scrolling back past the checkpoint** in Threads loads older blocks a batch at a time, without waiting for the check from genesis to finish.
+
 ## v0.5.0: murmur-testnet-10, flat threads with quotes, old threads at once (2026-10-08)
 
 **Breaking: a new network and protocol.** The app speaks protocol 11 and joins `murmur-testnet-10`; it no longer reaches `murmur-testnet-9`. Nothing carries over: wallets keep their keys, and start with nothing on the new chain. The desktop apps ship node release v0.11.0.

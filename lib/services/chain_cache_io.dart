@@ -58,10 +58,11 @@ class FileChainCache implements ChainCache {
   FileChainCache(Directory dir)
       : _genesisFile = File('${dir.path}/genesis'),
         _headersFile = File('${dir.path}/headers.bin'),
+        _markFile = File('${dir.path}/backfill.bin'),
         _blocksFile = File('${dir.path}/blocks.log'),
         _contentsFile = File('${dir.path}/contents.log');
 
-  final File _genesisFile, _headersFile, _blocksFile, _contentsFile;
+  final File _genesisFile, _headersFile, _markFile, _blocksFile, _contentsFile;
 
   Future<String?> _genesis() async => await _genesisFile.exists() ? (await _genesisFile.readAsString()).trim() : null;
 
@@ -93,7 +94,7 @@ class FileChainCache implements ChainCache {
         // End of the log.
       }
     }
-    return CachedChain(headers, blocks, contents);
+    return CachedChain(headers, blocks, contents, mark: await _markFile.exists() ? await _markFile.readAsBytes() : null);
   }
 
   @override
@@ -118,6 +119,9 @@ class FileChainCache implements ChainCache {
       await file.close();
     }
   }
+
+  @override
+  Future<void> saveMark(Uint8List mark) => _markFile.writeAsBytes(mark);
 
   @override
   Future<void> saveBlocks(List<Block> blocks) async {
@@ -179,7 +183,7 @@ class FileChainCache implements ChainCache {
 
   @override
   Future<void> clear() async {
-    for (final f in [_genesisFile, _headersFile, _blocksFile, _contentsFile]) {
+    for (final f in [_genesisFile, _headersFile, _markFile, _blocksFile, _contentsFile]) {
       if (await f.exists()) await f.delete();
     }
   }
