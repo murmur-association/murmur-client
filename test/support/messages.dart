@@ -97,7 +97,7 @@ class FakeChain extends MurmurClient {
   void requestTx(String txid) => requested.add(txid);
 
   @override
-  void watchAddress(String address) => watchedAddresses.add(address);
+  void watchAddress(String address, {bool flags = false}) => watchedAddresses.add(address);
 
   @override
   void watchThread(TxView root, Iterable<TxView> messages) => watchedThreads.add(root.tx.id);

@@ -336,7 +336,7 @@ void main() {
       // Asked for before connecting, so they come before the headers back
       // to genesis are checked: each needs a header below the checkpoint.
       reader.requestTx(thread.id);
-      reader.watchAddress(miner.addressHex);
+      reader.watchAddress(miner.addressHex, flags: true);
       addTearDown(reader.dispose);
       await reader.connect('127.0.0.1', node.port);
       await until(reader, what: 'the thread by id', () => mined(reader, thread));
@@ -355,6 +355,10 @@ void main() {
       // What the wallet sent, and the reply that credited it.
       expect(history, containsAll([thread.id, reply.id]));
       expect(history.indexOf(reply.id), lessThan(history.indexOf(thread.id)), reason: 'newest first');
+      // The flag against its thread is in neither proven list: the node
+      // lists it apart, and it is proven to be on the chain.
+      await until(reader, what: 'the flag against its thread',
+          () => reader.activityOf(miner.addressHex).any((v) => v.tx.id == flag.id));
 
       // A reply mined later reaches the thread without being asked for.
       final more = await writer.submit(

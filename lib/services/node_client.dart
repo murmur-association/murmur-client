@@ -234,6 +234,29 @@ class _ListRead {
   bool get complete => total != null && have >= total!;
 }
 
+/// The flags against an address's messages, read from the node's index
+/// (GetAddress, list 2). No state entry holds this list, so each flag is
+/// proven to be on the chain, but not that the node gave them all.
+class _FlagRead {
+  /// The list's length as the node last said; null until first read.
+  int? total;
+
+  /// Entries after this number are in.
+  int low = 0;
+
+  /// The tip's height and the reorganizations seen when the newest page was
+  /// last asked for: nothing says when the list grows, so it's asked again
+  /// now and then.
+  int checkedAt = 0;
+  int reorgs = 0;
+
+  /// The node keeps no index.
+  bool unavailable = false;
+
+  /// The flags read, by txid: where each is (height, index in its block).
+  final Map<String, (int, int)> entries = {};
+}
+
 class _Aborted implements Exception {}
 
 class MurmurClient extends ChangeNotifier {
@@ -772,7 +795,17 @@ class MurmurClient extends ChangeNotifier {
   /// node's index and proven against its account's entry, so its history is
   /// complete at once, at any chain age. With a node that keeps no index,
   /// every block touching it is found by its filter and fetched instead.
-  void watchAddress(String address) {
+  ///
+  /// With `flags`, the flags against its messages are read from the index
+  /// too. No state entry holds those: each is proven to be on the chain, but
+  /// not that the node gave them all, and a node without an index gives none.
+  void watchAddress(String address, {bool flags = false}) {
+    if (flags) {
+      _flagReads.putIfAbsent(address, () {
+        _wake();
+        return _FlagRead();
+      });
+    }
     final item = fromHex(address);
     final key = accountKey(item);
     for (final list in [AddressList.sent, AddressList.credited]) {
@@ -793,6 +826,13 @@ class MurmurClient extends ChangeNotifier {
   /// message's txid, an address's by `address:list`.
   final Map<String, _ListRead> _threadReads = {};
   final Map<String, _ListRead> _addressReads = {};
+
+  /// The flags against addresses' messages being read, by address.
+  final Map<String, _FlagRead> _flagReads = {};
+
+  /// How many blocks pass before the newest flags against an address are
+  /// asked for again.
+  static const _flagsEvery = 10;
 
   /// Whether `address`'s two lists are read whole, so its history needs no
   /// block and no filter.
@@ -940,6 +980,11 @@ class MurmurClient extends ChangeNotifier {
       ...?_addressReads['$address:0']?.entries,
       ...?_addressReads['$address:1']?.entries,
     };
+    // Flags the node listed against it: those of a message it wrote.
+    _flagReads[address]?.entries.forEach((id, where) {
+      final flag = lookupTx(id)?.tx;
+      if (flag != null && _involves(flag, address)) at[id] = where;
+    });
     for (final MapEntry(key: id, value: where) in _txIndex.entries) {
       if (at.containsKey(id)) continue;
       if (_involves(_blocks[where.$1 - 1]!.transactions[where.$2], address)) at[id] = where;
@@ -2254,6 +2299,7 @@ class MurmurClient extends ChangeNotifier {
     _minedCounts.clear();
     _threadReads.clear();
     _addressReads.clear();
+    _flagReads.clear();
     _headersUnproven.clear();
     _pending.clear();
     _wantedHeights.clear();
@@ -2511,7 +2557,65 @@ class MurmurClient extends ChangeNotifier {
       await _readPage(read, gen);
       return true;
     }
+    for (final MapEntry(key: address, value: read) in _flagReads.entries) {
+      if (read.unavailable) continue;
+      final more = read.total != null && read.low > 0;
+      if (!more && read.total != null && read.reorgs == _reorgs && height < read.checkedAt + _flagsEvery) continue;
+      await _readFlags(address, read, gen);
+      return true;
+    }
     return false;
+  }
+
+  /// Reads one page of the flags against `address`'s messages: the next
+  /// page back, or the newest.
+  Future<void> _readFlags(String address, _FlagRead read, int gen) async {
+    final back = read.total != null && read.low > 0 && read.reorgs == _reorgs;
+    final msg = GetAddress(fromHex(address), AddressList.flagsAgainst, back ? read.low : 0, maxPageEntries);
+    final page = (await _request(_addressWaiter = Completer<Address>(), msg)).page;
+    if (gen != _generation) throw _Aborted();
+    if (!page.available) {
+      read.unavailable = true;
+      return;
+    }
+    final end = page.start + page.entries.length;
+    if (back && (page.entries.isEmpty || end != read.low)) {
+      // Not the list we were reading any more: from its end again.
+      read.total = null;
+      return;
+    }
+    if (page.entries.any((e) => e.tx.kind != TxKind.flag)) {
+      throw const FormatException('the node listed something that is not a flag');
+    }
+    await _takeEntries(page.entries, read.entries, gen);
+    if (back) {
+      read.low = page.start;
+      return;
+    }
+    // The newest page: what was read before still counts if this one
+    // reaches down to it.
+    final old = read.total;
+    if (old == null || read.reorgs != _reorgs || page.start > old) read.low = page.start;
+    read
+      ..total = page.total
+      ..checkedAt = height
+      ..reorgs = _reorgs;
+  }
+
+  /// Takes a page's entries in: each is on the chain, where it says, since
+  /// its branch leads to its block's merkle root.
+  Future<void> _takeEntries(List<TxOnChain> entries, Map<String, (int, int)> into, int gen) async {
+    await _fetchOldHeaders([for (final e in entries) e.height], gen);
+    for (final e in entries) {
+      final header = headerAt(e.height);
+      if (header == null ||
+          !bytesEqual(header.hash, e.blockHash) ||
+          !bytesEqual(merkleRootFromBranch(e.tx.hash, e.index, e.branch), header.merkleRoot)) {
+        throw FormatException('the node sent a transaction not proven in block ${e.height}');
+      }
+      into[e.tx.id] = (e.height, e.index);
+      _storeLoose(e.tx, e.height, e.index);
+    }
   }
 
   Future<ListPage?> _askPage(_ListRead read, int end, int count) async {
@@ -2596,19 +2700,8 @@ class MurmurClient extends ChangeNotifier {
         ..total = total
         ..digest = digest;
     }
-    // Each entry is on the chain, where it says: its branch leads to its
-    // block's merkle root. (That it is in the list, the digest has shown.)
-    await _fetchOldHeaders([for (final e in page.entries) e.height], gen);
-    for (final e in page.entries) {
-      final header = headerAt(e.height);
-      if (header == null ||
-          !bytesEqual(header.hash, e.blockHash) ||
-          !bytesEqual(merkleRootFromBranch(e.tx.hash, e.index, e.branch), header.merkleRoot)) {
-        throw FormatException('the node sent a transaction not proven in block ${e.height}');
-      }
-      read.entries[e.tx.id] = (e.height, e.index);
-      _storeLoose(e.tx, e.height, e.index);
-    }
+    // That each entry is in the list, the digest has shown.
+    await _takeEntries(page.entries, read.entries, gen);
     if (back) {
       read
         ..have += page.entries.length
