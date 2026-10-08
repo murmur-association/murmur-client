@@ -117,6 +117,10 @@ class MessageIndex {
     }
     for (final list in ix._replies.values) {
       list.sort((a, b) {
+        // A pending reply comes after every mined one, whatever the clocks
+        // say: a block's time may run ahead of this device's, and a reply
+        // can only answer (and quote) what is on the chain.
+        if (a.confirmed != b.confirmed) return a.confirmed ? -1 : 1;
         final byTime = activityTime(a).compareTo(activityTime(b));
         return byTime != 0 ? byTime : position[a.tx.id]!.compareTo(position[b.tx.id]!);
       });

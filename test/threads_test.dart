@@ -327,4 +327,13 @@ void _settledOrder() {
       load([50, 90, 20, 80, 70, 5, 60, 10, 40, 30], askById: askById);
     }
   });
+
+  test('a pending reply comes after the mined ones, even when a block is dated ahead of the clock', () {
+    final thread = txAt(TxKind.orphan, 1, text: 'thread');
+    // Mined in a block dated far ahead of now, as a fast chain's can be.
+    final mined = replyTo(thread, 400000000, text: 'mined');
+    final pending = replyTo(thread, null, text: 'pending');
+    final ix = indexOf([thread, pending, mined]);
+    expect([for (final r in ix.repliesOf(ix.threads.single.root)) r.tx.id], [mined.tx.id, pending.tx.id]);
+  });
 }

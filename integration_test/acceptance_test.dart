@@ -62,12 +62,15 @@ void main() {
     await app.waitFor(find.text(replyText), what: 'the reply in its thread');
     expect(find.text(threadText), findsWidgets);
 
-    // An answer to the reply (the last Reply button, once the reply is
+    // An answer to the reply (its own Reply button, once the reply is
     // mined): in the same thread, with the reply quoted above it.
-    await app.press<TextButton>(l.actionReply);
+    await app.press<TextButton>(l.actionReply,
+        within: find.ancestor(of: find.text(replyText), matching: find.byType(Card)));
     await app.writeAndSend(answerText);
+    await app.waitFor(find.byType(ThreadPage), what: 'the thread again');
     await app.waitFor(find.text(answerText), what: 'the answer in the thread');
-    expect(find.text(replyText), findsNWidgets(2), reason: 'the reply, and the same quoted above its answer');
+    await app.waitUntil(() => find.text(replyText).evaluate().length == 2,
+        what: 'the reply, and the same quoted above its answer');
 
     // The Threads tab lists it, with its replies counted once they're mined.
     await app.backHome();

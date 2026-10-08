@@ -154,11 +154,13 @@ class AppDriver {
     }
   }
 
-  /// A button of type `T` labelled `label`, enabled.
-  Future<void> press<T extends ButtonStyleButton>(String label) async {
-    await _reveal(find.text(label));
+  /// A button of type `T` labelled `label`, enabled. With `within`, the one
+  /// inside what that finds (a message's card, say).
+  Future<void> press<T extends ButtonStyleButton>(String label, {Finder? within}) async {
+    final text = within == null ? find.text(label) : find.descendant(of: within, matching: find.text(label));
+    await _reveal(text);
     // By what it is, not its exact type: a button with an icon is a subclass.
-    final button = find.ancestor(of: find.text(label), matching: find.byWidgetPredicate((w) => w is T));
+    final button = find.ancestor(of: text, matching: find.byWidgetPredicate((w) => w is T));
     await waitUntil(() => button.evaluate().isNotEmpty && tester.widget<T>(button.last).onPressed != null,
         what: 'the "$label" button to be there and enabled');
     await tap(button, what: 'the "$label" button');
