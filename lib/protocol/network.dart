@@ -100,11 +100,10 @@ class NetworkInfo {
     halvingInterval: 4200000,
     maxBlockBytes: 2000000,
     burnPayoutBlocks: 2880,
-    // No checkpoint yet: murmur-testnet-10 hasn't started, and its genesis
-    // date (so its genesis hash) is still to be set. Its first comes from
-    // `murmur-node ctl checkpoint` on a node the project trusts; from then
-    // on tool/refresh_checkpoint.dart writes the line, with every release
-    // (AGENTS.md, Recipes), and test/network_test.dart checks its form.
+    // No checkpoint while the network is under a day old: sessions start
+    // from genesis. tool/refresh_checkpoint.dart puts the first in place of
+    // these lines, and refreshes it with every release (AGENTS.md, Recipes).
+    // checkpoint: none yet
   );
 
   static const demo = NetworkInfo(

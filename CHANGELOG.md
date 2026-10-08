@@ -2,16 +2,19 @@
 
 Newest first. Each release is a `vX.Y.Z` tag matching `version` in `pubspec.yaml`; see [README](README.md#releases-and-deployment). Entries marked **Breaking** need action from users.
 
-## Unreleased
+## v0.5.0: murmur-testnet-10, flat threads with quotes, old threads at once (2026-10-08)
 
 **Breaking: a new network and protocol.** The app speaks protocol 11 and joins `murmur-testnet-10`; it no longer reaches `murmur-testnet-9`. Nothing carries over: wallets keep their keys, and start with nothing on the new chain. The desktop apps ship node release v0.11.0.
 
 - **Changed: tokens have decimals.** Amounts are shown and typed in tokens with up to six decimals. The least fee is 0.5 token: a reply costs at least 1 token, a new thread or a public name at least 5.5.
 - **Changed: threads are flat.** A reply goes in its thread, whichever message it answers, and pays **the author of the thread**, not the author of the message answered. A thread page shows the first message and its replies, oldest first.
+- **Added: quotes.** Reply to a reply, and your answer shows that reply above it; tap it to read it whole. The answer names it in a short first line (`>3fa9c21e`), so nothing is copied and it costs ten bytes of the fee.
+- **Added: flags against your messages** show in Messages and on an address's page wherever they are on the chain, read from the node. The node could leave some out: unlike the rest, that list can't be proven complete.
 - **Changed: old threads and histories open at once.** A thread's replies and flags, and what an address sent and received, are read from the node in a couple of requests and proven, however old they are, where the app used to search the chain since they began. A node that keeps no such index is still searched the old way.
 - **Changed: public names are proven, and show for everyone.** A name is now a transaction of its own kind, and the app proves which name an address has, where it had to find the address's messages first. Names set on the old network don't carry over.
 - **Changed: the app no longer downloads the whole chain** with "keep a local copy" on. The copy holds what was fetched and checked. With the download went a block's reward breakdown, the balance beside old history rows of an address that mines, and the app's own recount of the chain's state.
 - **Changed: a message's time is its block's.** A transaction no longer carries a time of its own.
+- **Changed: no checkpoint while the testnet is young.** For its first day the app checks the chain from its first block, which takes a moment; releases after that ship a checkpoint again.
 - **Added: an engine for emoji of the app's own**, written as `:name:` in a message. It has no emoji yet, so nothing shows.
 
 ## v0.4.2: large header nonces, and copying on an iPhone (2026-10-07)

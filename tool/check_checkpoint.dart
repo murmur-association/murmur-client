@@ -24,13 +24,21 @@ final maxAge = 7 * 86400 ~/ network.targetBlockSecs;
 void main() {
   test('the shipped ${network.id} checkpoint is on the live chain, and recent', () async {
     final shipped = network.checkpoint;
-    if (shipped == null) fail('${network.id} ships no checkpoint');
     final chains = await checkedChains(print);
     addTearDown(() {
       for (final c in chains) {
         c.client.dispose();
       }
     });
+    // A network under a week old may ship none: a first session then checks
+    // from genesis, no more than an aged checkpoint asks of it.
+    if (shipped == null) {
+      final tip = chains.map((c) => c.height).reduce(min);
+      print('no checkpoint shipped: ${chains.length} nodes\' chains checked from genesis, $tip blocks');
+      expect(tip, lessThanOrEqualTo(maxAge),
+          reason: 'the chain is over a week old: run `flutter test tool/refresh_checkpoint.dart` and commit it');
+      return;
+    }
     expect(agreedHashAt(chains, shipped.height), shipped.hash);
     final age = chains.map((c) => c.height).reduce(min) - shipped.height;
     print('checkpoint ${shipped.height}: on ${chains.length} nodes\' chains, $age blocks below the tip');

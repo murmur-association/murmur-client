@@ -1,10 +1,10 @@
 # Murmur client
 
-A Flutter light client for the Murmur chain, speaking **protocol 10** (networks `murmur-demo-9` and `murmur-testnet-9`, which keep their names). The node, the whitepaper and the protocol specification live in the [murmur repository](https://gitlab.com/murmur-association/murmur); section numbers below refer to its [PROTOCOL.md](https://gitlab.com/murmur-association/murmur/-/blob/main/PROTOCOL.md). With the client you can:
+A Flutter light client for the Murmur chain, speaking **protocol 11** (networks `murmur-testnet-10` and `murmur-demo-10`). The node, the whitepaper and the protocol specification live in the [murmur repository](https://gitlab.com/murmur-association/murmur); section numbers below refer to its [PROTOCOL.md](https://gitlab.com/murmur-association/murmur/-/blob/main/PROTOCOL.md). With the client you can:
 
-- read threads and their replies, newest activity first, with reply and flag counts;
+- read threads and their replies, newest activity first, with reply and flag counts, and see which reply an answer is for;
 - browse blocks, transactions and addresses, and search by height, txid, block hash or address;
-- keep a wallet, and sign and send threads (Orphans), Replies, transfers (Raw) and Flags;
+- keep a wallet, and sign and send threads (Orphans), Replies, transfers (Raw), Flags and public names (Names);
 - use it in English, Spanish, Italian, Portuguese, German, Dutch, Arabic, Chinese or Japanese.
 
 ## The four tabs
@@ -46,31 +46,35 @@ All text is in ARB files in `lib/l10n` (one per language, ICU message format wit
 
 The client connects to a node like a peer that has no blocks, and every connection is **encrypted** (PROTOCOL.md Section 7.4): an X25519 key exchange, then each message sealed with ChaCha20-Poly1305. Natively it dials the node's P2P port (`--port`, 7878 by default). In the browser it opens a WebSocket: to a node's own `--ws-port`, or to the local bridge. Nodes hold no keys, so the client signs everything itself, and it never uses the node's control port.
 
-Every header is checked as a node checks it (Section 7.2): it links to its parent, meets its proof of work, is later than the median of the last 11 timestamps, carries the difficulty retarget's target, and commits to the header history before it (a Merkle Mountain Range whose nodes also carry work, times and targets, as in ZIP 221).
+Every header is checked as a node checks it (Section 7.2): it links to its parent, meets its proof of work, is later than the median of the last 11 timestamps, carries the target the difficulty rule gives it, and commits to the header history before it (a Merkle Mountain Range whose nodes also carry work, times and targets, as in ZIP 221).
 
-**Starting from a checkpoint** (Section 7.7): a network can ship a checkpoint (a height and block hash) in `lib/protocol/network.dart`. A first session then starts there instead of at genesis: it fetches the checkpoint block, the 90 headers before it (checked by their links back from it, and giving the retarget its context) and the header history through it (checked against its `history_root`), then checks everything after it fully. Usable within a second, whatever the chain's length. In the background it then fetches and checks every header from genesis up; they must lead to the checkpoint, or the client stops and says the release or every node reached is wrong. The testnet ships one, refreshed with every release from the live network (`tool/refresh_checkpoint.dart`: every testnet node is asked separately and must agree, on a chain checked from genesis that holds the checkpoint before it) and checked again before the release is built. The demo network can't ship one: every demo node mines its own chain.
+**Starting from a checkpoint** (Section 7.7): a network can ship a checkpoint (a height and block hash) in `lib/protocol/network.dart`. A first session then starts there instead of at genesis: it fetches the checkpoint block, the 11 headers before it (checked by their links back from it: what the next header's time and target are checked against) and the header history through it (checked against its `history_root`), then checks everything after it fully. Usable within a second, whatever the chain's length. In the background it then fetches and checks every header from genesis up; they must lead to the checkpoint, or the client stops and says the release or every node reached is wrong. The testnet ships one once it is a day old, refreshed with every release from the live network (`tool/refresh_checkpoint.dart`: every testnet node is asked separately and must agree, on a chain checked from genesis that holds the checkpoint before it) and checked again before the release is built. The demo network can't ship one: every demo node mines its own chain.
 
 If the newest block is old for the network (about 20 block intervals), a banner says the node may be behind or cut off.
 
 What it shows is checked against those headers, because every header commits to its block's transactions, its **filter** and the **state** after it (Section 3.6):
 
 - **Balances, nonces, flags, the burn pool and the supply** come as state proofs (`GetState`) against the tip's `state_root`. They're exact at once, without the chain, and a node can't lie about them.
-- **An address's history, and a thread's replies,** are found with block filters (`GetFilters`), each checked against its header's `filter_hash`. Only the blocks that match are fetched, and a node can't hide one. The node never learns which address the client looks for.
-- **A transaction the client lacks** (a reply's parent, a flagged message, a page opened by id) comes by id (`GetTx`) with a merkle branch to its block.
+- **An address's history, and a thread's replies and flags,** are read from the node's index a page at a time, newest first (`GetAddress`, `GetThread`, Section 7.6). The state holds each list's length and a digest of its transaction IDs, so a page is proven whole: a node can't leave an entry out or add one. Each entry comes with a merkle branch to its block, and a block older than the headers at hand gets its header by proof against the newest block (`GetHeaderProof`). So a thread or a history is complete at once, however old the chain, without downloading its blocks. The node learns which thread or address is read.
+  - **Flags against an address's messages** are the exception: no state entry holds that list, so each flag shown is proven to be on the chain, but not that the node listed them all.
+  - **A node that keeps no index** (`--no-index`) is read through block filters instead (`GetFilters`), each checked against its header's `filter_hash`: only the blocks that match are fetched, more slowly, and that node never learns which address the client looks for.
+- **A transaction the client lacks** (a reply's thread, a flagged message, a page opened by id) comes by id (`GetTx`) with a merkle branch to its block.
 - **Lists read newest first** (threads, blocks) fetch blocks newest first, as far as the screen needs, then their message content (`GetContent`), then one more batch.
 - **Fees** come from the node's mempool (`GetFees`); if it doesn't answer, the client estimates from what it has seen.
 - **Sending:** transactions are signed on the device with the sender's next **nonce** (proven, plus its own pending transactions) and submitted with `SubmitTx`. The node answers accepted, already known, invalid or refused (with its reason), shown on the transaction's page. The answer is advisory: the client still waits for the block.
-- **Local copy:** with the user's consent (a banner on first visit, and a switch in the Chain tab), everything fetched is kept on the device: IndexedDB in the browser, files natively. With it, the client also fetches the rest of the chain once in the background and replays it. That gives every history row its balance before and after, and lets the client check the node's `state_root` against its own count; a mismatch is reported. Without it, nothing beyond what's needed is downloaded. Nothing is sent to anyone else; turning it off deletes it. The wallet seed and settings are always kept locally, since the app needs them to work.
+- **Local copy:** with the user's consent (a banner on first visit, and a switch in the Chain tab), everything fetched is kept on the device: IndexedDB in the browser, files natively. The client never downloads the whole chain, with or without it: the chain grows for ever, and nothing shown needs it. Nothing is sent to anyone else; turning it off deletes it. The wallet seed and settings are always kept locally, since the app needs them to work.
 
 The client rolls back on reorgs, follows the blocks and transactions the node relays, and sends a `Ping` every 60 s.
 
 - **Message content:** blocks travel without content. The client takes it from relayed transactions and sync replies, and asks for the rest with `GetContent`. It keeps content only if its hash and length match the transaction. Any node may delete content, so an old message can show as "content not available".
 - **Salted messages:** content is a 16-byte salt followed by the message (at most 1024 bytes), and the transaction's hash covers both, so once content is deleted its hash can't be matched against guesses of the text. The client draws a fresh salt from the platform's secure random source for every message, and never shows it.
-- **Threads:** a Reply names its parent by transaction ID, and a Flag names the message it reports the same way. The client applies PROTOCOL.md §2.4: a reply belongs to a thread only if its parent is a mined thread or reply and the reply pays that message's author; a flag counts only against a thread or reply, once per address (proven with the state tree before flagging).
+- **Threads are flat:** a Reply names its thread (the thread's first message, by transaction ID) and pays the thread's author, whichever message it answers. A Flag names the message it reports and that message's thread, and counts once per address (proven with the state tree before flagging). PROTOCOL.md Section 2.4.
+- **Quotes:** which reply an answer is for isn't on the chain. An answer to a reply starts with a line of its own, `>` and the first eight hex characters of that reply's transaction ID, and the app shows the answered reply above the answer, from the thread itself. Nothing is copied onto the chain, and other clients show the line as written. This is a convention of this app (`lib/protocol/quote.dart`), not part of the protocol.
+- **Amounts** are counted on the chain in units, a million to the token; the app shows and reads tokens, with up to six decimals. The least fee is half a token, by consensus.
 - **Thread cost:** a thread (Orphan) burns 10× its fee, so starting one costs 11× the fee. Burned tokens go to a burn pool that pays each block's miner `ceil(pool / K)`.
 - **Fees** are per byte, and a transaction weighs 264 bytes plus its content, so the send form suggests a fee for the message you're writing.
 
-The client doesn't check the signatures inside blocks, but everything it shows is tied to headers it checked fully (proof of work, time, retarget and history). Peers aren't authenticated by the transport, so connect to a node you trust; a TLS proxy in front of a node's `--ws-port` gives browsers `wss://`, which the client uses automatically on pages served over HTTPS.
+The client doesn't check the signatures inside blocks, but everything it shows is tied to headers it checked fully (proof of work, time, target and history). Peers aren't authenticated by the transport, so connect to a node you trust; a TLS proxy in front of a node's `--ws-port` gives browsers `wss://`, which the client uses automatically on pages served over HTTPS.
 
 A page opened with `?node=host:port` (for example `http://localhost:8080/?node=127.0.0.1:7880`) connects to that node or bridge.
 
@@ -105,7 +109,7 @@ Platform notes:
   The bridge binds to localhost only, always dials the one configured node, and accepts only pages served from localhost.
 - **Paths with an apostrophe** (such as `C:\Users\o'brien`) break `flutter test` and web builds, because Flutter pastes the path into generated Dart code. Work around it by mapping a drive letter: `subst M: "C:\Users\o'brien"`, then work from `M:\murmur-client` with `TEMP`/`TMP` set to `M:\AppData\Local\Temp`.
 
-**Which node a fresh install uses:** `127.0.0.1:7878` natively and `127.0.0.1:7880` (the bridge) on the web, until the user picks another. Builds for the public testnet (`murmur-testnet-9`) set their own default:
+**Which node a fresh install uses:** `127.0.0.1:7878` natively and `127.0.0.1:7880` (the bridge) on the web, until the user picks another. Builds for the public testnet (`murmur-testnet-10`) set their own default:
 
 ```
 # Web: the TLS proxy in front of node 1's WebSocket listener
@@ -175,7 +179,7 @@ The page is built for the root of its domain; to serve it from a subfolder, chan
 
 To run it at once, press **Run** on the schedule. To stop automatic releases, deactivate the schedule; releases by hand (`flutter test tool/refresh_checkpoint.dart`, the version, the CHANGELOG, the tag) work as before.
 
-After `dart run tool/bundle_node.dart --for-tests`, which downloads the pinned `murmur-node` release (`tool/node_release.dart`) and checks it against its `SHA256SUMS`, `flutter test` also runs `test/node_test.dart`, as CI does: the node builds demo chains (`murmur-node demo-chain`), the test starts it on them, and checks sync, checkpoints, reorganizations, proofs, filters, the local copy against the state root, sending, threads, flags and invitations, with nothing to set up first. With `MURMUR_NODE=host:port` set (for example `MURMUR_NODE=testnet-seed.murmur.info:7878`), `test/live_release_test.dart` runs a quick read-only check against that public node, as the release pipeline does, and `test/live_node_test.dart` the longer ones, which download and count the whole chain.
+After `dart run tool/bundle_node.dart --for-tests`, which downloads the pinned `murmur-node` release (`tool/node_release.dart`) and checks it against its `SHA256SUMS`, `flutter test` also runs `test/node_test.dart`, as CI does: the node builds demo chains (`murmur-node demo-chain`), the test starts it on them, and checks sync, checkpoints, reorganizations, proofs, filters, the local copy, sending, flat threads, flags, the node's index, public names and invitations, with nothing to set up first. With `MURMUR_NODE=host:port` set (for example `MURMUR_NODE=testnet-seed.murmur.info:7878`), `test/live_release_test.dart` runs a quick read-only check against that public node, as the release pipeline does, and `test/live_node_test.dart` the longer ones.
 
 ## Trying it locally
 
@@ -219,12 +223,12 @@ For how the code works, the rules it keeps, recipes and known gaps, see [AGENTS.
 | `tool/check_checkpoint.dart` | Checks the shipped checkpoint against the live network (the release job runs it) |
 | `tool/package_desktop.dart` | Archives the built Windows or Linux app with its node and the notices (the release jobs run it) |
 | `tool/desktop_smoke_test.dart` | Tries the packaged desktop app, the same on Windows and Linux: its own node starts and stops with it, a node left by a crash is replaced, a wallet is saved through the system's secure storage (on Linux inside `tool/linux_session.sh`, a session of its own) |
-| `integration_test/acceptance_test.dart` | The acceptance tests: a wallet, a thread, a reply, an invitation card and a restart, inside the built app, the same on every flavour |
+| `integration_test/acceptance_test.dart` | The acceptance tests: a wallet, a thread, a reply, an answer to it, an invitation card and a restart, inside the built app, the same on every flavour |
 | `tool/acceptance_test.dart` | Runs them on one flavour (this desktop, `ACCEPTANCE_DEVICE=chrome`, `chrome-passkey` with a virtual passkey, or an Android emulator) against a node of its own on a demo chain |
 | `tool/fetch_test_browser.dart` | The pinned Chrome for Testing the browser run uses; never in a release |
 | `tool/fetch_test_graphics.ps1` | Software graphics for the copy tried on the Windows release runner; never in a release |
 | `lib/protocol/commitments.dart` | The state tree, block filter and header history verifiers (PROTOCOL.md Section 3.6) |
-| `lib/protocol/consensus.dart` | The header rules the client checks: median-time-past and the difficulty retarget (Sections 3.5 and 4) |
+| `lib/protocol/consensus.dart` | The header rules the client checks: median-time-past and the difficulty rule (Sections 3.5 and 4) |
 | `lib/services/secure_channel.dart` | The encrypted transport: X25519, HKDF, ChaCha20-Poly1305 (Section 7.4) |
 | `lib/services/activity.dart` | What a transaction is to an address, for the Messages and Wallet filters |
 | `lib/ui/` | Threads, messages, wallet and chain tabs, detail pages, compose form |

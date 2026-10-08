@@ -8,6 +8,10 @@
 // shipped now and checks every header back to genesis, and they must agree.
 // The new checkpoint is a day below the lowest tip, out of any
 // reorganization's reach. Review and commit the one-line change it makes.
+//
+// A network under a day old gets none: the source says "checkpoint: none
+// yet" and sessions start from genesis. The first is written here like any
+// other, by clients that checked every header from genesis.
 
 // ignore_for_file: avoid_print
 
@@ -37,16 +41,24 @@ void main() {
       return;
     }
     // A checkpoint needs the 11 headers before it.
-    if (height <= 11) fail('the chain is too short for a checkpoint ($height)');
+    if (height <= 11) {
+      if (current != null) fail('the chain is too short for a checkpoint ($height)');
+      print('${network.id} is under a day old: no checkpoint yet, sessions start from genesis');
+      return;
+    }
     final hash = agreedHashAt(chains, height);
 
     final file = File('lib/protocol/network.dart');
     final source = file.readAsStringSync();
+    // The shipped line, or the comment that stands for it before the first.
     final line = RegExp(r"checkpoint: Checkpoint\(\d+, '[0-9a-f]{64}'\),");
-    if (line.allMatches(source).length != 1) {
-      fail('expected one shipped checkpoint line in ${file.path}: add the first by hand (AGENTS.md, Recipes)');
+    final none = RegExp(r'(?:[ \t]*//[^\n]*\n)*[ \t]*// checkpoint: none yet');
+    final place = current == null ? none : line;
+    if (place.allMatches(source).length != 1) {
+      fail('expected one shipped checkpoint line, or "// checkpoint: none yet", in ${file.path}');
     }
-    file.writeAsStringSync(source.replaceFirst(line, "checkpoint: Checkpoint($height, '$hash'),"));
+    file.writeAsStringSync(
+        source.replaceFirst(place, "${current == null ? '    ' : ''}checkpoint: Checkpoint($height, '$hash'),"));
     print('${chains.length} nodes agree: ${network.id} $height $hash');
     print('written to ${file.path} (was ${current?.height}): review and commit it');
   }, timeout: const Timeout(Duration(minutes: 20)));

@@ -33,6 +33,7 @@ void main() {
   final stamp = DateTime.now().millisecondsSinceEpoch;
   final threadText = 'Acceptance thread $stamp';
   final replyText = 'Acceptance reply $stamp';
+  final answerText = 'Acceptance answer $stamp';
 
   testWidgets('a wallet from its seed, a thread, a reply to it, and an invitation card', (tester) async {
     freshDevice();
@@ -61,13 +62,20 @@ void main() {
     await app.waitFor(find.text(replyText), what: 'the reply in its thread');
     expect(find.text(threadText), findsWidgets);
 
-    // The Threads tab lists it, with its reply counted once that's mined.
+    // An answer to the reply (the last Reply button, once the reply is
+    // mined): in the same thread, with the reply quoted above it.
+    await app.press<TextButton>(l.actionReply);
+    await app.writeAndSend(answerText);
+    await app.waitFor(find.text(answerText), what: 'the answer in the thread');
+    expect(find.text(replyText), findsNWidgets(2), reason: 'the reply, and the same quoted above its answer');
+
+    // The Threads tab lists it, with its replies counted once they're mined.
     await app.backHome();
     await app.waitFor(find.byType(ThreadsTab), what: 'the home page again');
     await app.waitFor(find.descendant(of: find.byType(ThreadsTab), matching: find.text(threadText)),
         what: 'the thread in the list');
-    await app.waitUntil(() => app.client.threads().any((t) => t.root.tx.fromAddress == me && t.replies == 1),
-        what: 'the reply to be mined and counted');
+    await app.waitUntil(() => app.client.threads().any((t) => t.root.tx.fromAddress == me && t.replies == 2),
+        what: 'the replies to be mined and counted');
 
     // One invitation card: funding it asks the passphrase once, for the
     // signature and for the cards' codes together.
