@@ -1,13 +1,15 @@
 import 'package:flutter/material.dart';
 
 import '../protocol/models.dart';
+import '../protocol/quote.dart';
 import '../services/node_client.dart';
 import 'common.dart';
 import 'compose_page.dart';
 import 'emoji.dart';
 import 'glyphs.dart';
 
-/// A thread: its root message and every reply beneath it, as a tree.
+/// A thread: its first message and its replies, oldest first. Threads are
+/// flat; a reply that answers another reply shows it quoted.
 class ThreadPage extends StatelessWidget {
   const ThreadPage({super.key, required this.rootTxid, this.focusTxid});
 
@@ -37,22 +39,27 @@ class ThreadPage extends StatelessWidget {
       // The thread's first message, then its replies, oldest first: threads
       // are flat. Replies from muted addresses are left out.
       final muted = AppScope.of(context).prefs.muted;
-      final entries = <(TxView, int)>[];
-      final seen = <String>{};
+      final replies = client.repliesOf(root);
+      // Each with its place among the replies: what it may quote is before it.
+      final entries = <(TxView, int)>[(root, 0)];
       var mutedReplies = 0;
-      void walk(TxView v, int depth) {
-        if (!seen.add(v.tx.id)) return;
-        if (depth > 0 && muted.contains(v.tx.fromAddress)) {
+      for (var i = 0; i < replies.length; i++) {
+        if (muted.contains(replies[i].tx.fromAddress)) {
           mutedReplies++;
-          return;
-        }
-        entries.add((v, depth));
-        for (final r in client.repliesOf(v)) {
-          walk(r, depth + 1);
+        } else {
+          entries.add((replies[i], i + 1));
         }
       }
+      // The replies a reply answers, as far as they're shown here.
+      List<TxView> quoted(TxView reply, int place) {
+        final earlier = [for (final r in replies.take(place - 1)) r.tx.id];
+        return [
+          for (final quote in quotesOf(client, reply))
+            if (quotedReply(earlier, quote) case final id?)
+              if (!muted.contains(replies[earlier.indexOf(id)].tx.fromAddress)) replies[earlier.indexOf(id)],
+        ];
+      }
 
-      walk(root, 0);
       // Every block referencing the thread or its replies is found by its
       // filter and fetched, so the thread is complete wherever its replies are.
       client.watchThread(root, [for (final (v, _) in entries) v]);
@@ -88,13 +95,14 @@ class ThreadPage extends StatelessWidget {
                     textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodySmall),
               );
             }
-            final (view, depth) = entries[i];
+            final (view, place) = entries[i];
             final card = Padding(
-              padding: EdgeInsetsDirectional.only(start: 20.0 * depth.clamp(0, 6)),
+              padding: EdgeInsetsDirectional.only(start: place == 0 ? 0 : 20),
               child: _MessageCard(
                 view: view,
                 client: client,
-                isRoot: depth == 0,
+                quoted: place == 0 ? const [] : quoted(view, place),
+                isRoot: place == 0,
                 highlighted: view.tx.id == focusTxid,
                 canAct: wallets.wallet != null,
                 flagged: wallets.wallet != null && client.hasFlagged(wallets.wallet!.addressHex, view.tx.id),
@@ -112,6 +120,7 @@ class _MessageCard extends StatelessWidget {
   const _MessageCard({
     required this.view,
     required this.client,
+    required this.quoted,
     required this.isRoot,
     required this.highlighted,
     required this.canAct,
@@ -120,6 +129,9 @@ class _MessageCard extends StatelessWidget {
 
   final TxView view;
   final MurmurClient client;
+
+  /// The replies this one answers.
+  final List<TxView> quoted;
   final bool isRoot;
   final bool highlighted;
   final bool canAct;
@@ -160,6 +172,7 @@ class _MessageCard extends StatelessWidget {
             CountBadges(replies: client.replyCountOf(view), flags: client.flagCountOf(view)),
           ]),
           const SizedBox(height: 8),
+          for (final q in quoted) _Quote(q),
           MessageText(
             text ?? messageOrUnavailable(context, view),
             selectable: true,
@@ -191,6 +204,54 @@ class _MessageCard extends StatelessWidget {
             TextButton(onPressed: () => openTx(context, tx.id), child: Text(l.details)),
           ]),
         ]),
+      ),
+    );
+  }
+}
+
+/// A reply another one answers, above the answer: who wrote it and how it
+/// starts. A tap shows all of it.
+class _Quote extends StatelessWidget {
+  const _Quote(this.view);
+
+  final TxView view;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final copper = theme.colorScheme.primary;
+    final author = Row(mainAxisSize: MainAxisSize.min, children: [
+      AddressAvatar(view.tx.fromAddress, size: 16),
+      const SizedBox(width: 6),
+      Flexible(
+        child: Text(nameOf(context, view.tx.fromAddress),
+            overflow: TextOverflow.ellipsis, style: theme.textTheme.bodySmall?.copyWith(color: copper)),
+      ),
+    ]);
+    final text = messageOrUnavailable(context, view);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: InkWell(
+        onTap: () => showAppDialog<void>(
+          context: context,
+          builder: (context) => AlertDialog(
+            scrollable: true,
+            title: author,
+            content: MessageText(text, selectable: true),
+            actions: [FilledButton(onPressed: () => Navigator.of(context).pop(), child: Text(context.l10n.done))],
+          ),
+        ),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsetsDirectional.only(start: 10, top: 2, bottom: 2),
+          decoration: BoxDecoration(border: BorderDirectional(start: BorderSide(color: copper, width: 3))),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            author,
+            const SizedBox(height: 2),
+            MessageText(text.replaceAll('\n', ' '),
+                maxLines: 2, style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+          ]),
+        ),
       ),
     );
   }

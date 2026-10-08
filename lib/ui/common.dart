@@ -9,6 +9,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../protocol/alias.dart';
 import '../protocol/models.dart';
+import '../protocol/quote.dart';
 import '../services/chain_cache.dart';
 import '../services/local_node.dart';
 import '../services/node_client.dart';
@@ -146,10 +147,17 @@ Glyph kindIcon(TxKind k) => switch (k) {
 /// bytes), without the salt. A message that isn't text (PROTOCOL.md Section
 /// 2.4: first byte 0x00) is said for what it is: an alias it sets (Section
 /// 7.8), or data for some other client convention.
-String? messageText(BuildContext context, Uint8List? content) {
+///
+/// Of a `reply`, this is what it says itself: the lines that name the
+/// replies it answers (protocol/quote.dart) are left out; [quotesOf] gives
+/// those.
+String? messageText(BuildContext context, Uint8List? content, {bool reply = false}) {
   if (content == null) return null;
   final message = messageOf(content);
-  if (!isNonText(message)) return utf8.decode(message, allowMalformed: true);
+  if (!isNonText(message)) {
+    final text = utf8.decode(message, allowMalformed: true);
+    return reply ? quotesIn(text).body : text;
+  }
   final alias = aliasOf(message);
   final l = context.l10n;
   return alias == null ? l.nonTextMessage : (alias.isEmpty ? l.aliasCleared : l.aliasSetTo(alias));
@@ -163,7 +171,7 @@ String messageOrUnavailable(BuildContext context, TxView view) {
   final client = AppScope.of(context).client;
   final l = context.l10n;
   if (client.contentWithdrawn(view.tx)) return l.contentWithdrawn;
-  return messageText(context, client.liveContent(view)) ??
+  return messageText(context, client.liveContent(view), reply: view.tx.kind == TxKind.reply) ??
       (client.contentExpected(view.tx) ? l.contentLoading : l.contentUnavailable);
 }
 
@@ -173,7 +181,18 @@ String firstLine(String text) => text.split('\n').map((s) => s.trim()).firstWher
 
 /// A message's text as the client holds it now, or null while it's missing.
 String? liveMessageText(BuildContext context, TxView view) =>
-    messageText(context, AppScope.of(context).client.liveContent(view));
+    messageText(context, AppScope.of(context).client.liveContent(view), reply: view.tx.kind == TxKind.reply);
+
+/// The replies a reply says it answers, each by the start of its txid
+/// (protocol/quote.dart); none while its text isn't at hand.
+List<String> quotesOf(MurmurClient client, TxView view) {
+  if (view.tx.kind != TxKind.reply) return const [];
+  final content = client.liveContent(view);
+  if (content == null) return const [];
+  final message = messageOf(content);
+  if (isNonText(message)) return const [];
+  return quotesIn(utf8.decode(message, allowMalformed: true)).quotes;
+}
 
 /// Text whose `**key words**` show in bold copper: how explanations mark
 /// what matters, so they read at a glance. The markers live in the ARB
