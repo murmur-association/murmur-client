@@ -15,6 +15,12 @@ Newest first. Each release is a `vX.Y.Z` tag matching `version` in `pubspec.yaml
 - **Fixed: replies mined in blocks with the same time** could show in the wrong order when they were read from the node's index.
 - **Changed: scrolling back past the checkpoint** in Threads loads older blocks a batch at a time, without waiting for the check from genesis to finish.
 
+## v0.5.1: checkpoint refresh (2026-10-10)
+
+No protocol or network change.
+
+- **Changed: the testnet checkpoint** is now block 1,500, refreshed from the live network by the scheduled release.
+
 ## v0.5.0: murmur-testnet-10, flat threads with quotes, old threads at once (2026-10-08)
 
 **Breaking: a new network and protocol.** The app speaks protocol 11 and joins `murmur-testnet-10`; it no longer reaches `murmur-testnet-9`. Nothing carries over: wallets keep their keys, and start with nothing on the new chain. The desktop apps ship node release v0.11.0.
