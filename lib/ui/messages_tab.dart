@@ -38,8 +38,8 @@ class MessagesTab extends StatelessWidget {
             fetch: (n) => client.activityOf(me).where(shown).take(n).toList(),
             itemBuilder: (context, v) => TxTile(v, showCounts: true),
             empty: EmptyState(icon: Glyph.outbox, text: l.noMessages),
-            loadingMore: client.historyPending(me),
-            onNeedMore: client.requestOlder,
+            loadingMore: client.historyPending(me) || client.historyHasEarlier(me),
+            onNeedMore: () => client.readEarlierHistory(me),
             header: [
               SliverToBoxAdapter(
                 child: _FilterChips(

@@ -525,6 +525,32 @@ void main() {
       await until(reader, what: 'the whole thread', () => reader.threadComplete(thread.id));
       expect(read(), [for (final r in replies) r.id] + [late.id]);
       expect(reader.threadHasEarlier(thread.id), isFalse);
+
+      // The same for an address's history: its two lists are read from
+      // their newest ends, and it shows as far down as both reach.
+      await until(writer, what: 'the last reply mined', () => mined(writer, late));
+      writer.watchAddress(me);
+      await until(writer, what: 'the whole history, read at once',
+          () => !writer.historyPending(me) && !writer.historyHasEarlier(me) && writer.activityOf(me).length >= 7);
+      final whole = [for (final v in writer.activityOf(me)) v.tx.id];
+      final paged = MurmurClient(checkpoint: cp)..historyPage = 2;
+      paged.watchAddress(me);
+      await node.connect(paged);
+      List<String> rows() => [for (final v in paged.activityOf(me)) v.tx.id];
+      await until(paged, what: 'the newest of the history', () => paged.historyHasEarlier(me) && !paged.historyPending(me));
+      var steps = 0;
+      while (paged.historyHasEarlier(me)) {
+        // What shows is the history's newest part, in order, never a row
+        // that an unread page could come before.
+        final shown = rows();
+        expect(shown.length, lessThan(whole.length));
+        expect(shown, whole.take(shown.length).toList(), reason: 'after $steps more pages');
+        paged.readEarlierHistory(me);
+        await until(paged, what: 'an earlier page', () => !paged.historyPending(me));
+        expect(++steps, lessThan(40));
+      }
+      expect(rows(), whole);
+      expect(steps, greaterThan(2));
     }, timeout: const Timeout(Duration(minutes: 4)));
 
     test('a node without the index: the same thread and history, through filters', () async {

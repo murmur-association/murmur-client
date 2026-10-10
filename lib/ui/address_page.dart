@@ -30,8 +30,8 @@ class AddressPage extends StatelessWidget {
           itemBuilder: (context, v) => TxTile(v, perspective: address),
           dividerIndent: null,
           empty: Padding(padding: const EdgeInsets.all(16), child: Text(l.noTransactions)),
-          loadingMore: client.historyPending(address),
-          onNeedMore: client.requestOlder,
+          loadingMore: client.historyPending(address) || client.historyHasEarlier(address),
+          onNeedMore: () => client.readEarlierHistory(address),
           header: [
             SliverToBoxAdapter(
               child: Card(

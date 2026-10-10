@@ -32,6 +32,7 @@
 // copy (ChainCache) for the next session. The client never downloads the
 // whole chain: that grows for ever, and nothing it shows needs it.
 import 'dart:async';
+import 'dart:collection';
 import 'dart:convert';
 import 'dart:math';
 
@@ -346,6 +347,45 @@ class _BackfillMark {
   }
 }
 
+/// A map that counts its changes, so that what is worked out from it is
+/// worked out again only when it has changed.
+class _Counted<K, V> extends MapBase<K, V> {
+  final _map = <K, V>{};
+
+  /// Raised by every change.
+  int version = 0;
+
+  @override
+  V? operator [](Object? key) => _map[key];
+
+  @override
+  void operator []=(K key, V value) {
+    _map[key] = value;
+    version++;
+  }
+
+  @override
+  V? remove(Object? key) {
+    if (_map.containsKey(key)) version++;
+    return _map.remove(key);
+  }
+
+  @override
+  void clear() {
+    if (_map.isNotEmpty) version++;
+    _map.clear();
+  }
+
+  @override
+  Iterable<K> get keys => _map.keys;
+
+  @override
+  int get length => _map.length;
+
+  @override
+  bool containsKey(Object? key) => _map.containsKey(key);
+}
+
 class _Aborted implements Exception {}
 
 class MurmurClient extends ChangeNotifier {
@@ -502,10 +542,10 @@ class MurmurClient extends ChangeNotifier {
   /// the local copy, and never asked for again.
   final Set<String> _withdrawnContent = {};
 
-  final Map<String, PendingTx> _pending = {};
+  final _pending = _Counted<String, PendingTx>();
 
   /// What the node answered for each transaction this client submitted.
-  final Map<String, TxStatus> _statuses = {};
+  final _statuses = _Counted<String, TxStatus>();
 
   // ---- proofs -------------------------------------------------------------------
 
@@ -952,7 +992,7 @@ class MurmurClient extends ChangeNotifier {
           final entry = value == null ? AccountEntry.empty : AccountEntry.parse(value);
           if (entry == null) return null;
           return list == AddressList.sent ? (entry.nonce, entry.sentDigest) : (entry.credits, entry.creditDigest);
-        }, () => _watchItem(item, 1));
+        }, () => _watchItem(item, 1), wanted: historyPage, page: historyPage);
       });
     }
     // Kept proven at the tip: a change there says there is more to read.
@@ -971,10 +1011,54 @@ class MurmurClient extends ChangeNotifier {
   /// How many blocks pass before the newest of those are asked for again.
   static const _flagsEvery = 10;
 
-  /// Whether `address`'s two lists are read whole, so its history needs no
-  /// block and no filter.
-  bool _addressRead(String address) =>
-      (_addressReads['$address:0']?.complete ?? false) && (_addressReads['$address:1']?.complete ?? false);
+  /// How many entries of an address's list are read at a time. (Tests read
+  /// fewer.)
+  int historyPage = maxPageEntries;
+
+  /// `address`'s two proven lists (what it sent, what credited it), once
+  /// the newest page of each is read: its history then needs no block and
+  /// no filter. Null until then, and with a node that keeps no index.
+  List<_ListRead>? _listsOf(String address) {
+    final sent = _addressReads['$address:0'], credited = _addressReads['$address:1'];
+    if (sent == null || credited == null || sent.total == null || credited.total == null) return null;
+    if (sent.unavailable || credited.unavailable) return null;
+    return [sent, credited];
+  }
+
+  bool _addressRead(String address) => _listsOf(address) != null;
+
+  /// The lowest height a list's entries reach.
+  static int _lowestOf(_ListRead read) => read.entries.values.fold(1 << 30, (low, at) => min(low, at.$1));
+
+  /// The height above which `address`'s history is whole: 0 once both its
+  /// lists are read to their start. A list read only in part may hold
+  /// anything from its lowest entry down, so the other list's entries below
+  /// that can't be put in order yet.
+  int _historyFloor(String address) {
+    var floor = 0;
+    for (final read in _listsOf(address) ?? const <_ListRead>[]) {
+      if (!read.complete) floor = max(floor, _lowestOf(read));
+    }
+    return floor;
+  }
+
+  /// Whether `address` has older history than what is read: its lists are
+  /// read from their newest end, a page at a time.
+  bool historyHasEarlier(String address) => _listsOf(address)?.any((read) => !read.complete) ?? false;
+
+  /// Reads further back in `address`'s history: the page before, of the
+  /// list that holds the rest back. With a node that keeps no index, older
+  /// blocks instead.
+  void readEarlierHistory(String address) {
+    final lists = _listsOf(address);
+    if (lists == null) return requestOlder();
+    final open = lists.where((read) => !read.complete).toList();
+    if (open.isEmpty || open.any((read) => read.behind)) return;
+    final next = open.reduce((a, b) => _lowestOf(a) >= _lowestOf(b) ? a : b);
+    next.wanted = next.have + next.page;
+    _wake();
+    notifyListeners();
+  }
 
   /// Whether every reply and flag of thread `root` (the txid of its first
   /// message) is here, proven against the thread's entry in the state.
@@ -1054,7 +1138,8 @@ class MurmurClient extends ChangeNotifier {
   /// Whether `address`'s history is still being looked for: some block not
   /// fetched yet may hold one of its transactions.
   bool historyPending(String address) {
-    if (_addressRead(address)) return false;
+    final lists = _listsOf(address);
+    if (lists != null) return lists.any((read) => read.behind);
     final item = fromHex(address);
     for (var h = height; h >= 1; h--) {
       if (_blocks[h - 1] != null) continue;
@@ -1139,8 +1224,18 @@ class MurmurClient extends ChangeNotifier {
   /// hold that they don't (flags against its messages, and anything mined
   /// since they were read). Worked out once per change: lists read it often.
   List<(String, int)> _historyOf(String address) {
+    // Its lists as they are read, and the messages known: nothing else
+    // changes an address's history.
+    final key = [
+      _messagesKey,
+      for (final list in AddressList.values) ...[
+        _addressReads['$address:${list.index}']?.entries.length,
+        _addressReads['$address:${list.index}']?.complete,
+        _flagReads['$address:${list.index}']?.entries.length,
+      ],
+    ].join(' ');
     final cached = _histories[address];
-    if (cached != null && cached.$1 == _dataVersion) return cached.$2;
+    if (cached != null && cached.$1 == key) return cached.$2;
     final at = <String, (int, int)>{
       ...?_addressReads['$address:0']?.entries,
       ...?_addressReads['$address:1']?.entries,
@@ -1157,17 +1252,20 @@ class MurmurClient extends ChangeNotifier {
       if (at.containsKey(id)) continue;
       if (_involves(_blocks[where.$1 - 1]!.transactions[where.$2], address)) at[id] = where;
     }
+    // Only as far down as both lists are read.
+    final floor = _historyFloor(address);
+    if (floor > 0) at.removeWhere((_, where) => where.$1 <= floor);
     final newestFirst = at.entries.toList()
       ..sort((a, b) {
         final byHeight = b.value.$1.compareTo(a.value.$1);
         return byHeight != 0 ? byHeight : b.value.$2.compareTo(a.value.$2);
       });
     final history = [for (final e in newestFirst) (e.key, e.value.$1)];
-    _histories[address] = (_dataVersion, history);
+    _histories[address] = (key, history);
     return history;
   }
 
-  final Map<String, (int, List<(String, int)>)> _histories = {};
+  final Map<String, (Object, List<(String, int)>)> _histories = {};
 
   /// What `tx` does to `address`'s balance: the sender pays amount and fee,
   /// and whoever it credits gets the amount (both, for a payment to oneself
@@ -1215,8 +1313,7 @@ class MurmurClient extends ChangeNotifier {
 
   // ---- threads, replies and flags ----------------------------------------------
 
-  int _dataVersion = 0;
-  int _indexVersion = -1;
+  Object? _indexKey;
   MessageIndex? _index;
   (int, int, int, int, int, int, int)? _snapshotKey;
   int _snapshotFloor = -1;
@@ -1230,17 +1327,27 @@ class MurmurClient extends ChangeNotifier {
   MessageIndex? _snapshotIndex;
   int _reorgs = 0;
 
-  @override
-  void notifyListeners() {
-    _dataVersion++;
-    super.notifyListeners();
-  }
+  /// What the messages known are made of: it changes when one arrives, is
+  /// mined, is dropped, gets its text or loses it, and not with a new
+  /// header, a proof or a step of the sync, which are most of what happens.
+  Object get _messagesKey => (
+        _txIndex.length,
+        _loose.length,
+        _reorgs,
+        _contents.length,
+        _withdrawnContent.length,
+        _pending.version,
+        _statuses.version,
+      );
 
-  /// Everything known, pending included. Rebuilt at most once per change.
+  /// Everything known, pending included. Rebuilt only when the messages
+  /// themselves have changed (`_messagesKey`): every view reads it, on
+  /// every notification.
   MessageIndex get _messages {
-    if (_index == null || _indexVersion != _dataVersion) {
+    final key = _messagesKey;
+    if (_index == null || _indexKey != key) {
       _index = MessageIndex.build(_messagesKnown());
-      _indexVersion = _dataVersion;
+      _indexKey = key;
     }
     return _index!;
   }
@@ -1262,10 +1369,9 @@ class MurmurClient extends ChangeNotifier {
   ///   still missing, whose threads and replies could change the order.
   List<ThreadSummary> threads({int? upTo}) {
     if (upTo == null) return _messages.threads;
-    var fetchedBelow = 0;
-    for (var h = min(upTo, height); h >= 1; h--) {
-      if (_blocks[h - 1] != null) fetchedBelow++;
-    }
+    // Counted over the fetched blocks, not over every height.
+    final limit = min(upTo, height);
+    final fetchedBelow = _blocks.indexes.where((index) => index < limit).length;
     // Own messages count too: sent (pending), and mined since.
     final ownPending = _pending.values.where((p) => p.mine && _inPlay(p)).length;
     final ownMined = _sentHere.where((id) => _txIndex.containsKey(id) || _loose.containsKey(id)).length;
@@ -2851,6 +2957,19 @@ class MurmurClient extends ChangeNotifier {
   /// address's history on screen. Returns whether it asked the node.
   Future<bool> _readLists(int gen) async {
     if (height == 0) return false;
+    // An answer the node listed for an address is shown once the reply it
+    // answers is at hand. That reply is one the address sent: if it is
+    // older than the ones read, read further back for it.
+    for (final answers in _flagReads.values) {
+      if (answers.list != AddressList.answers || answers.entries.isEmpty) continue;
+      final sent = _addressReads['${answers.address}:${AddressList.sent.index}'];
+      if (sent == null || sent.total == null || sent.complete || sent.behind || sent.unavailable) continue;
+      final open = answers.entries.keys.any((id) {
+        final tx = lookupTx(id)?.tx;
+        return tx != null && !answersTo(tx, answers.address);
+      });
+      if (open) sent.wanted = sent.have + sent.page;
+    }
     for (final read in [..._threadReads.values, ..._addressReads.values]) {
       if (read.unavailable) continue;
       // Its newest page first, and again once the state shows the list has
