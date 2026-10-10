@@ -12,6 +12,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:murmur_client/crypto/wallet.dart';
 import 'package:murmur_client/protocol/alias.dart';
 import 'package:murmur_client/protocol/bytes.dart';
+import 'package:murmur_client/services/activity.dart';
 import 'package:murmur_client/protocol/invite.dart';
 import 'package:murmur_client/protocol/models.dart';
 import 'package:murmur_client/protocol/network.dart';
@@ -404,7 +405,7 @@ void main() {
       // Asked for before connecting, so they come before the headers back
       // to genesis are checked: each needs a header below the checkpoint.
       reader.requestTx(thread.id);
-      reader.watchAddress(miner.addressHex, flags: true);
+      reader.watchAddress(miner.addressHex, mentions: true);
       addTearDown(reader.dispose);
       await reader.connect('127.0.0.1', node.port);
       await until(reader, what: 'the thread by id', () => mined(reader, thread));
@@ -434,6 +435,47 @@ void main() {
       expect(more.referenceId, thread.id, reason: 'answering a reply is answering in its thread');
       await until(reader, what: 'the new reply', () => reader.repliesOf(root).length == 2);
       await until(reader, what: 'the thread whole again', () => reader.threadComplete(thread.id));
+    }, timeout: const Timeout(Duration(minutes: 4)));
+
+    test('an answer to a reply in someone else\'s thread reaches the answered address, from the node\'s list', () async {
+      final node = await short(mining: true);
+      final writer = await node.connect(MurmurClient());
+      final other = await MurmurWallet.generate();
+      // The miner's thread, with a reply by the other wallet.
+      final (thread, reply, _) = await conversation(writer, other);
+      // A third wallet answers that reply: it credits the thread's author,
+      // and is in no list of the answered wallet's.
+      final third = await MurmurWallet.generate();
+      final fund = await writer.submit(
+          wallet: miner, kind: TxKind.raw, to: third.address, amount: 10 * unitsPerToken, fee: minFee);
+      await until(writer, what: 'the third wallet funded',
+          () => mined(writer, fund) && (writer.availableTo(third.addressHex) ?? 0) > 0);
+      final answer = await writer.submit(
+          wallet: third, kind: TxKind.reply, amount: minFee, fee: minFee, message: utf('to you'), reference: reply.id);
+      expect(answer.bytes.first, Transaction.answerTag, reason: 'a reply to a reply is an Answer');
+      expect(answer.answersHex, reply.id.substring(0, 8));
+      expect(answer.referenceId, thread.id);
+      // A reply to the thread's first message is a plain Reply.
+      expect(reply.answers, isNull);
+      await until(writer, what: 'the answer mined', () => mined(writer, answer));
+      expect(writer.creditedBy(answer), miner.addressHex);
+      final last = writer.lookupTx(answer.id)!.height!;
+      await until(writer, what: 'blocks above the answer', () => writer.height >= last + 15,
+          timeout: const Duration(minutes: 2));
+
+      // The answered wallet, on another device, started above it all.
+      final me = other.addressHex;
+      final reader = MurmurClient(checkpoint: Checkpoint(writer.height, toHex(writer.hashAt(writer.height))));
+      reader.watchAddress(me, mentions: true);
+      await node.connect(reader);
+      await until(reader, what: 'the answer, in the answered wallet\'s history',
+          () => reader.activityOf(me).any((v) => v.tx.id == answer.id));
+      expect(reader.blockAt(last), isNull, reason: 'from the node\'s list, not from its block');
+      final view = reader.activityOf(me).firstWhere((v) => v.tx.id == answer.id);
+      expect(reader.answersTo(view.tx, me), isTrue);
+      expect(messageFiltersOf(view, me, reader), {MessageFilter.received});
+      expect(walletFiltersOf(view, me, reader), isEmpty, reason: 'no tokens moved for the answered wallet');
+      expect(reader.balanceChange(view.tx, me), 0);
     }, timeout: const Timeout(Duration(minutes: 4)));
 
     test('a long thread opens with its newest replies, and reads earlier ones a page at a time', () async {

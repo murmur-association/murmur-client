@@ -183,15 +183,19 @@ String firstLine(String text) => text.split('\n').map((s) => s.trim()).firstWher
 String? liveMessageText(BuildContext context, TxView view) =>
     messageText(context, AppScope.of(context).client.liveContent(view), reply: view.tx.kind == TxKind.reply);
 
-/// The replies a reply says it answers, each by the start of its txid
-/// (protocol/quote.dart); none while its text isn't at hand.
+/// The replies a reply says it answers, each by the start of its txid: the
+/// one its transaction names (an Answer, PROTOCOL.md Section 2.4), then any
+/// its text names (protocol/quote.dart: how replies said it before the chain
+/// had Answers, and still how one names several).
 List<String> quotesOf(MurmurClient client, TxView view) {
   if (view.tx.kind != TxKind.reply) return const [];
+  final named = view.tx.answersHex;
   final content = client.liveContent(view);
-  if (content == null) return const [];
-  final message = messageOf(content);
-  if (isNonText(message)) return const [];
-  return quotesIn(utf8.decode(message, allowMalformed: true)).quotes;
+  final message = content == null ? null : messageOf(content);
+  final written = message == null || isNonText(message)
+      ? const <String>[]
+      : quotesIn(utf8.decode(message, allowMalformed: true)).quotes;
+  return [if (named != null) named, for (final quote in written) if (quote != named) quote];
 }
 
 /// Text whose `**key words**` show in bold copper: how explanations mark

@@ -1,7 +1,7 @@
 // The node's test vectors for protocol 11: those PROTOCOL.md gives without a
-// chain (Sections 2.2, 3.1, 3.2, 3.6, 4 and 6), and `vectors/demo-10.txt`,
+// chain (Sections 2.2, 3.1, 3.2, 3.6, 4 and 6), and `vectors/demo-11.txt`,
 // a nine-block chain on the demo network that the node's own tests rebuild
-// byte for byte (copied here as test/vectors/demo-10.txt). The chain is
+// byte for byte (copied here as test/vectors/demo-11.txt). The chain is
 // rebuilt here from its transactions and nonces: every header's target,
 // commitments and hash, the state entries, a filter, and the node's answers
 // to GetThread and GetAddress with their proofs.
@@ -17,6 +17,7 @@ import 'package:murmur_client/protocol/commitments.dart';
 import 'package:murmur_client/protocol/consensus.dart';
 import 'package:murmur_client/protocol/models.dart';
 import 'package:murmur_client/protocol/network.dart';
+import 'package:murmur_client/protocol/quote.dart';
 import 'package:murmur_client/protocol/wire.dart';
 
 Uint8List _filled(int byte, [int n = 32]) => Uint8List(n)..fillRange(0, n, byte);
@@ -60,9 +61,9 @@ class _Vectors {
 void main() {
   test('genesis hashes match PROTOCOL.md Section 6', () {
     expect(NetworkInfo.whitepaper.genesisHeader().id,
-        '13a58fa301514d69a2ec8a2438c35f585ec27eb1ab7005200b7527a1974edd78');
-    expect(NetworkInfo.demo.genesisHeader().id, '1f517009399c04d116b5dcc73cbdcb50178e3c079d54133d9554b8d3165ac4ac');
-    expect(NetworkInfo.forGenesis(NetworkInfo.demo.genesisHeader().hash).id, 'murmur-demo-10');
+        'd2be719286b0fe77cc5fa620c9b5b30fbe33ff5fc3740eeac6ea7a6616200707');
+    expect(NetworkInfo.demo.genesisHeader().id, '99a82ee332ec8986decad1bdd499cfa222c94d8ec21c878da362882edee97f54');
+    expect(NetworkInfo.forGenesis(NetworkInfo.demo.genesisHeader().hash).id, 'murmur-demo-11');
     expect(NetworkInfo.forGenesis(Uint8List(32)).known, isFalse);
   });
 
@@ -120,21 +121,41 @@ void main() {
       await w.sign(
           networkTag: tag, kind: TxKind.flag, nonce: 4, fee: fee, reference: _filled(0xcc), thread: _filled(0xaa)),
       await w.sign(networkTag: tag, kind: TxKind.name, nonce: 5, fee: fee, messageHash: hash, contentSize: 21),
+      // An Answer: a reply that names the reply it answers by 4 bytes.
+      await w.sign(
+          networkTag: tag,
+          kind: TxKind.reply,
+          nonce: 6,
+          fee: fee,
+          amount: 750000,
+          messageHash: hash,
+          contentSize: 21,
+          reference: _filled(0xaa),
+          answers: fromHex('3fa9c21e')),
     ];
-    expect([for (final tx in txs) tx.bytes.length], [134, 169, 137, 134, 166, 134]);
+    expect([for (final tx in txs) tx.bytes.length], [134, 169, 137, 134, 166, 134, 173]);
     expect([for (final tx in txs) tx.id], [
-      '53692a94638cf19bb66aadb8e30dbdbc53c8e410d4f226af2c917f12b7eefe08',
-      '5ac5fc27cb0a27b8d67d780bff259d61c55142de13a1d7adbc2fa15597969c16',
-      '2570b334ec0e0ef2f84d505209c60a766e8c83d2448ce44aec9a06896f04405f',
-      'ea406f121e124edc506d4b4520f9d723338b4cbdd98e9e7ea724e7e4a45ba5ff',
-      'b24d68e3935f6193680d4edbc37d19e7cfa4609b118c36fe65218462962cd9bf',
-      '91e5d59de6c07a3086d3bed26691502276e1fabbe5eb0b3fda5a2a12b1cb236d',
+      '41e83c098d059a1b3f4640827b04157a16147b0ba1821106a373781452a1bae5',
+      'f67af28ced52aadf6718e751a9b085af8621c005f0dd4b6c5ff0a09e560ce432',
+      'f3193f77b527d8abe35a8d7f2ba3b0aef69827035869dbd51e74ce4b14e16528',
+      'a57864c97553f76ac6b032056e41e7ad7550c479e42677313198b29a04725bda',
+      '9d8456f68037996d639c23b8cc1482d119472534404883a4cd3dc3b7a94713db',
+      '141f6d97c53cc20bbcc8b79451ffa1be2f01e499383cb9fe80ed4a9dbd68f9fd',
+      '77296e70e9ab68044198a716cd21a8588c34fc5311c653db25fd3e7c9fc9be9d',
     ]);
     expect(
         toHex(txs[0].bytes),
         '00ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c00a0c21e06c343731700ca16797f96e987'
-        '180093e28b4c653e08efccb4f5fbb91313f56c15e7ac671f1d4340e80043b0ea0a468c2a902114b2737ee35f0afa2e11bffe'
-        '2fd5ddac45358cdc3aee075f96e15ec8e46e9c5d1f2318b3a2d79428f64d2c7b500a');
+        '180093e28b4c653e08efccb4f5fbb91313f56c15a690728a067c25b8731eedb91603d33dc89821d1fe1d208fd7e0881211a4'
+        'c37fb2169ef54c2bcd80837803820597f141584b3e5d626e9cdda101a7fdcd0acf02');
+    // An Answer is a Reply on every count but its tag and its last 4 bytes.
+    expect(txs[6].bytes.first, 5);
+    expect(txs[6].kind, TxKind.reply);
+    expect(txs[6].answersHex, '3fa9c21e');
+    expect(txs[1].answers, isNull);
+    expect(txs[6].weight, txs[1].weight + 4);
+    expect(txs[6].weight, lessThanOrEqualTo(txWeight(21)));
+    expect(txs[6].threadId, txs[1].threadId);
     // What isn't written follows from the rest.
     expect(txs[0].from, w.address);
     expect(txs[0].amount, 5000000, reason: 'a thread burns ten times its fee');
@@ -142,6 +163,7 @@ void main() {
     expect(txs[3].amount, 0);
     expect([for (final tx in txs) tx.threadId], [
       txs[0].id, toHex(_filled(0xaa)), null, toHex(_filled(0xaa)), toHex(_filled(0xaa)), txs[5].id, //
+      toHex(_filled(0xaa)),
     ]);
     // Each survives the wire, and is the only reading of its bytes.
     for (final tx in txs) {
@@ -157,8 +179,23 @@ void main() {
     expect(demo.body, txs[0].body);
     expect(demo.signature, isNot(txs[0].signature));
     // An unknown kind, and a flag marker that is neither 0 nor 1.
-    expect(() => Transaction.read(ByteReader(Uint8List.fromList([5, ...txs[0].bytes.sublist(1)]))),
+    expect(() => Transaction.read(ByteReader(Uint8List.fromList([6, ...txs[0].bytes.sublist(1)]))),
         throwsFormatException);
+    // Only a reply answers, and with 4 bytes.
+    expect(
+        () => Transaction.bodyFor(
+            kind: TxKind.orphan, pubkey: w.publicKey, nonce: 0, fee: fee, messageHash: hash, answers: Uint8List(4)),
+        throwsArgumentError);
+    expect(
+        () => Transaction.bodyFor(
+            kind: TxKind.reply,
+            pubkey: w.publicKey,
+            nonce: 0,
+            fee: fee,
+            messageHash: hash,
+            reference: _filled(0xaa),
+            answers: Uint8List(3)),
+        throwsArgumentError);
     const marker = 1 + 32 + 1 + 3 + 32;
     expect(txs[3].bytes[marker], 0);
     expect(() => Transaction.read(ByteReader(Uint8List.fromList(txs[3].bytes)..[marker] = 2)), throwsFormatException);
@@ -285,8 +322,8 @@ void main() {
     expect(bagged.data.length, 112);
   });
 
-  group('the demo chain of vectors/demo-10.txt', () {
-    final v = _Vectors(File('test/vectors/demo-10.txt').readAsStringSync());
+  group('the demo chain of vectors/demo-11.txt', () {
+    final v = _Vectors(File('test/vectors/demo-11.txt').readAsStringSync());
     const net = NetworkInfo.demo;
     final alice = fromHex(v.one(0, 'alice')), bob = fromHex(v.one(0, 'bob'));
 
@@ -312,7 +349,7 @@ void main() {
     final chain = <BlockHeader>[net.genesisHeader()];
     final blocks = <Block>[Block(chain.first, const [])];
     final history = HistoryPeaks();
-    for (var n = 1; n <= 9; n++) {
+    for (var n = 1; n <= 11; n++) {
       history.pushHeader(chain.last);
       final txs = txsOf(n);
       final time = 1000000 + 2 * n;
@@ -338,19 +375,19 @@ void main() {
       expect((await MurmurWallet.fromSeed(_filled(2))).address, bob);
       expect(toHex(net.genesisHeader().hash), v.one(0, 'genesis'));
       var seen = 0;
-      for (var n = 1; n <= 9; n++) {
+      for (var n = 1; n <= 11; n++) {
         for (final (name, value) in v.blocks[n]!) {
           if (!name.endsWith('.txid')) continue;
           expect(tx(v.one(n, name.substring(0, name.length - 5))).id, value, reason: name);
           seen++;
         }
       }
-      expect(seen, 11);
+      expect(seen, 16);
     });
 
     test('every block: target, merkle root, filter hash, history root, proof of work and hash', () {
       final peaks = HistoryPeaks();
-      for (var n = 1; n <= 9; n++) {
+      for (var n = 1; n <= 11; n++) {
         final h = chain[n];
         expect(toHex(h.target), v.one(n, 'target'), reason: 'target of block $n');
         expect(toHex(h.merkleRoot), v.one(n, 'merkle_root'), reason: 'merkle root of block $n');
@@ -452,14 +489,16 @@ void main() {
       expect(msg.root, thread.hash);
       final page = msg.page;
       expect(page.available, isTrue);
-      expect(page.at, chain[9].hash);
+      expect(page.at, chain[11].hash);
       expect(page.total, int.parse(v.one(-1, 'thread.total')));
       expect(page.start, int.parse(v.one(-1, 'thread.start')));
       expect(toHex(page.startDigest), v.one(-1, 'thread.start_digest'));
-      expect([for (final e in page.entries) e.tx.kind], [TxKind.reply, TxKind.flag]);
+      // Its last two events are Answers: events like any reply.
+      expect([for (final e in page.entries) e.tx.answers != null], [true, true]);
+      expect([for (final e in page.entries) e.tx.kind], everyElement(TxKind.reply));
       expectOnChain(page);
       final entry = ThreadEntry.parse(fromHex(
-          v.blocks[6]!.firstWhere((l) => l.$1.startsWith('state[thread]')).$2))!;
+          v.blocks[11]!.firstWhere((l) => l.$1.startsWith('state[thread]')).$2))!;
       expect(page.total, entry.events);
       expect(chainDigest(page.startDigest, [for (final e in page.entries) e.tx.hash]), entry.digest);
       // An entry left out, or another put in its place, doesn't chain to it.
@@ -468,12 +507,12 @@ void main() {
 
     test('a node\'s answers to GetAddress: sent and credited proven, flags against as the node knows them', () {
       final account = AccountEntry.parse(fromHex(
-          v.blocks[8]!.firstWhere((l) => l.$1.startsWith('state[account alice]')).$2))!;
-      Address answer(String name) {
+          v.blocks[11]!.firstWhere((l) => l.$1.startsWith('state[account alice]')).$2))!;
+      Address answer(String name, [Uint8List? of]) {
         final bytes = fromHex(v.one(-1, '$name.answer'));
         final msg = decodeMessage(bytes) as Address;
         expect(encodePayload(msg), bytes);
-        expect(msg.address, alice);
+        expect(msg.address, of ?? alice);
         expect(msg.page.total, int.parse(v.one(-1, '$name.total')));
         expect(msg.page.start, 0);
         expect(msg.page.startDigest, Uint8List(32));
@@ -481,16 +520,13 @@ void main() {
         return msg;
       }
 
-      // Block 9 adds alice's answer in bob's thread to what she sent; it
-      // credits bob, so her credits stand as after block 5.
+      // What she sent is her nonce's worth, Answers among them.
       final sent = answer('alice.sent');
       expect(sent.list, AddressList.sent);
-      expect([for (final e in sent.page.entries) e.tx.kind],
-          [TxKind.orphan, TxKind.reply, TxKind.name, TxKind.name, TxKind.reply]);
       expect(sent.page.entries.every((e) => bytesEqual(e.tx.from, alice)), isTrue);
-      expect(chainDigest(account.sentDigest, [sent.page.entries.last.tx.hash]),
-          chainDigest(Uint8List(32), [for (final e in sent.page.entries) e.tx.hash]));
-      expect(account.nonce + 1, sent.page.total);
+      expect(sent.page.entries.where((e) => e.tx.answers != null).length, 2);
+      expect(chainDigest(Uint8List(32), [for (final e in sent.page.entries) e.tx.hash]), account.sentDigest);
+      expect(account.nonce, sent.page.total);
 
       final credited = answer('alice.credited');
       expect(credited.list, AddressList.credited);
@@ -501,6 +537,44 @@ void main() {
       expect(flags.list, AddressList.flagsAgainst);
       expect([for (final e in flags.page.entries) e.tx.kind], everyElement(TxKind.flag));
     });
+
+    test('the answers to an address (GetAddress, list 3), and which reply each answers (Section 2.4)', () {
+      final thread = blocks[3].transactions.single;
+      // The thread's replies, oldest first, as the chain has them.
+      final replies = [
+        for (final b in blocks)
+          for (final t in b.transactions)
+            if (t.kind == TxKind.reply && t.threadId == thread.id) t,
+      ];
+      String? answered(Transaction answer) =>
+          quotedReply([for (final r in replies.takeWhile((r) => r.id != answer.id)) r.id], answer.answersHex!);
+      final [answer1, answer2, answer3] = blocks[11].transactions;
+      final alike1 = tx(v.one(10, 'alike1')), alike2 = tx(v.one(10, 'alike2'));
+      expect(alike1.id.substring(0, 8), alike2.id.substring(0, 8));
+      // Alice answers bob's first reply; bob answers nothing that exists;
+      // alice answers the bytes two replies share, and so the older, bob's.
+      expect(answered(answer1), blocks[4].transactions.single.id);
+      expect(answered(answer2), isNull);
+      expect(answered(answer3), alike1.id);
+      expect(bytesEqual(alike1.from, bob), isTrue);
+
+      // So bob was answered twice, and the node lists exactly those.
+      final bytes = fromHex(v.one(-1, 'bob.answers.answer'));
+      final msg = decodeMessage(bytes) as Address;
+      expect(encodePayload(msg), bytes);
+      expect(msg.address, bob);
+      expect(msg.list, AddressList.answers);
+      expect(msg.page.total, 2);
+      expect(msg.page.startDigest, Uint8List(32));
+      expectOnChain(msg.page);
+      expect([for (final e in msg.page.entries) e.tx.id], [answer1.id, answer3.id]);
+      // Each proves itself: it names a reply of bob's, in a thread of his reply.
+      for (final e in msg.page.entries) {
+        final reply = replies.firstWhere((r) => r.id == answered(e.tx));
+        expect(reply.from, bob);
+        expect(reply.threadId, e.tx.threadId);
+      }
+    });
   });
 
   test('the new messages have the node layout, with their limits', () {
@@ -508,11 +582,15 @@ void main() {
     expect(toHex(encodePayload(GetThread(root, 0, 2))), '1c${toHex(root)}000000000000000000000002');
     expect(toHex(encodePayload(GetAddress(Uint8List(32), AddressList.credited, 7, 500)).sublist(33)),
         '01000000000000000700' '0001f4');
-    for (final Message m in [GetThread(root, 12, 500), GetAddress(root, AddressList.flagsAgainst, 0, 0)]) {
+    for (final Message m in [
+      GetThread(root, 12, 500),
+      GetAddress(root, AddressList.flagsAgainst, 0, 0),
+      GetAddress(root, AddressList.answers, 0, 500),
+    ]) {
       expect(encodePayload(decodeMessage(encodePayload(m))), encodePayload(m));
     }
     expect(() => decodeMessage(encodePayload(GetThread(root, 0, 501))), throwsFormatException);
-    final bad = encodePayload(GetAddress(root, AddressList.sent, 0, 1))..[33] = 3;
+    final bad = encodePayload(GetAddress(root, AddressList.sent, 0, 1))..[33] = 4;
     expect(() => decodeMessage(bad), throwsFormatException);
     // A state value may be 96 bytes, no more.
     State state(int n) => State(root, true, [(root, StateProof(const [], ValueTerminal(Uint8List(n))))]);

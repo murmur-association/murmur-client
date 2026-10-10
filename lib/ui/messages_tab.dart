@@ -22,8 +22,9 @@ class MessagesTab extends StatelessWidget {
         return EmptyState(icon: Glyph.wallet, text: l.messagesNeedWallet);
       }
       final me = wallet.addressHex;
-      // What it sent, what credited it, and the flags against its messages.
-      client.watchAddress(me, flags: true);
+      // What it sent, what credited it, the flags against its messages and
+      // the answers to its replies.
+      client.watchAddress(me, mentions: true);
       return ListenableBuilder(
         listenable: prefs,
         builder: (context, _) {

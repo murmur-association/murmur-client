@@ -93,7 +93,7 @@ class NetworkInfo {
   int get difficultyEase => 10 * targetBlockSecs;
 
   static const whitepaper = NetworkInfo(
-    id: 'murmur-testnet-10',
+    id: 'murmur-testnet-11',
     genesisTimestamp: 1790208000, // 2026-09-24T00:00:00Z
     genesisTargetShift: 8,
     targetBlockSecs: 30,
@@ -107,7 +107,7 @@ class NetworkInfo {
   );
 
   static const demo = NetworkInfo(
-    id: 'murmur-demo-10',
+    id: 'murmur-demo-11',
     genesisTimestamp: 0,
     genesisTargetShift: 4,
     targetBlockSecs: 2,

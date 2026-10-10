@@ -5,7 +5,6 @@ import '../crypto/wallet.dart' show WalletId;
 import '../protocol/alias.dart';
 import '../protocol/bytes.dart';
 import '../protocol/models.dart';
-import '../protocol/quote.dart';
 import '../services/node_client.dart';
 import 'brand.dart';
 import 'common.dart';
@@ -119,14 +118,7 @@ class _ComposePageState extends State<ComposePage> {
   Uint8List? _messageBytes() {
     if (_kind == TxKind.flag || _kind == TxKind.raw) return null;
     if (widget.alias != null) return aliasMessage(widget.alias!);
-    return MurmurClient.encodeText(_quote + _message.text);
-  }
-
-  /// What a reply to a reply starts with: the line that says which reply it
-  /// answers (protocol/quote.dart). The chain only knows its thread.
-  String get _quote {
-    final answered = widget.replyTo;
-    return answered != null && answered.tx.kind == TxKind.reply ? quoteLine(answered.tx.id) : '';
+    return MurmurClient.encodeText(_message.text);
   }
 
   /// What the message says, for the summary.
@@ -249,7 +241,7 @@ class _ComposePageState extends State<ComposePage> {
           !_isFlag || client.provenFlagged(wallet.addressHex, widget.flagTarget!.tx.id) != null;
       final ready = available != null && flagChecked;
       final canSend = _canSend(client, wallet);
-      final msgBytes = MurmurClient.encodeText(_quote + _message.text).length;
+      final msgBytes = MurmurClient.encodeText(_message.text).length;
       final fee = _parseAmount(_fee.text);
       final apple = {TargetPlatform.iOS, TargetPlatform.macOS}.contains(Theme.of(context).platform);
 

@@ -42,7 +42,7 @@ Uint8List messageOf(Uint8List content) =>
 
 /// The most a transaction's own bytes can be (PROTOCOL.md Section 2.3): what
 /// a fee is worked out against before the transaction exists.
-const txMaxOwnBytes = 196;
+const txMaxOwnBytes = 200;
 
 /// An Orphan's or a Name's amount is exactly this times its fee, and is
 /// burned: starting a thread costs 11 x the fee.
@@ -57,6 +57,12 @@ int txWeight(int contentSize) => txMaxOwnBytes + contentSize;
 
 /// The index is the on-chain tag: Orphan = 0, Reply = 1, Raw = 2, Flag = 3,
 /// Name = 4.
+///
+/// The chain has a sixth, Answer (5): a Reply that also carries the first 4
+/// bytes of the txid of the reply it answers, and is a Reply in every other
+/// respect (PROTOCOL.md Section 2.1). Here it is a [reply] whose
+/// [Transaction.answers] is set, so that nothing that handles replies has
+/// to know of two kinds; only the encoding tells them apart.
 enum TxKind {
   orphan,
   reply,
@@ -87,8 +93,12 @@ class Transaction {
     this.contentSize = 0,
     this.reference,
     this.thread,
+    this.answers,
     required this.signature,
   }) : amount = kind.startsThread ? orphanBurn(fee) : (kind == TxKind.flag ? 0 : amount);
+
+  /// The tag of an Answer on the chain: a Reply with [answers].
+  static const answerTag = 5;
 
   final TxKind kind;
 
@@ -117,6 +127,12 @@ class Transaction {
   /// A Flag's thread, when its target isn't the thread's first message.
   final Uint8List? thread;
 
+  /// Of a Reply that answers another reply (an Answer on the chain): the
+  /// first 4 bytes of that reply's txid. The chain carries them and never
+  /// reads them; which reply they mean is Section 2.4's rule (the oldest
+  /// earlier reply of the thread that starts so; `quotedReply`).
+  final Uint8List? answers;
+
   final Uint8List signature;
 
   /// Everything but the signature (PROTOCOL.md Section 2.2): what is signed,
@@ -132,9 +148,13 @@ class Transaction {
     int contentSize = 0,
     Uint8List? reference,
     Uint8List? thread,
+    Uint8List? answers,
   }) {
+    if (answers != null && (kind != TxKind.reply || answers.length != 4)) {
+      throw ArgumentError('only a reply answers, with 4 bytes');
+    }
     final w = ByteWriter()
-      ..u8(kind.index)
+      ..u8(answers == null ? kind.index : answerTag)
       ..bytes(pubkey)
       ..varint(nonce)
       ..varint(fee);
@@ -149,6 +169,7 @@ class Transaction {
           ..bytes(messageHash!)
           ..varint(contentSize)
           ..bytes(reference!);
+        if (answers != null) w.bytes(answers);
       case TxKind.raw:
         w
           ..bytes(to!)
@@ -170,13 +191,13 @@ class Transaction {
   /// that isn't the one encoding of a transaction is refused.
   static Transaction read(ByteReader r) {
     final tag = r.u8();
-    if (tag >= TxKind.values.length) throw FormatException('unknown tx kind tag $tag');
-    final kind = TxKind.values[tag];
+    if (tag > answerTag) throw FormatException('unknown tx kind tag $tag');
+    final kind = tag == answerTag ? TxKind.reply : TxKind.values[tag];
     final pubkey = r.take(32);
     final nonce = r.varint();
     final fee = r.varint();
     var amount = 0, contentSize = 0;
-    Uint8List? to, messageHash, reference, thread;
+    Uint8List? to, messageHash, reference, thread, answers;
     switch (kind) {
       case TxKind.orphan || TxKind.name:
         messageHash = r.hash32();
@@ -186,6 +207,7 @@ class Transaction {
         messageHash = r.hash32();
         contentSize = r.varint();
         reference = r.hash32();
+        if (tag == answerTag) answers = r.take(4);
       case TxKind.raw:
         to = r.hash32();
         amount = r.varint();
@@ -207,6 +229,7 @@ class Transaction {
       contentSize: contentSize,
       reference: reference,
       thread: thread,
+      answers: answers,
       signature: r.take(64),
     );
   }
@@ -222,6 +245,7 @@ class Transaction {
     contentSize: contentSize,
     reference: reference,
     thread: thread,
+    answers: answers,
   );
 
   /// The transaction as it is sent, and as its id hashes it.
@@ -236,6 +260,9 @@ class Transaction {
   late final String fromAddress = toHex(from);
   late final String? toAddress = to == null ? null : toHex(to!);
   late final String? referenceId = reference == null ? null : toHex(reference!);
+
+  /// [answers] as the start of a txid in hex (8 characters), or null.
+  late final String? answersHex = answers == null ? null : toHex(answers!);
 
   /// The thread this transaction is in, as the txid of its first message: a
   /// Reply's reference, a Flag's thread (its target when it names none), an

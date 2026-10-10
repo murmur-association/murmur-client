@@ -244,10 +244,16 @@ class _ListRead {
   bool get behind => total != null && !complete && (wanted == null || have < wanted!);
 }
 
-/// The flags against an address's messages, read from the node's index
-/// (GetAddress, list 2). No state entry holds this list, so each flag is
-/// proven to be on the chain, but not that the node gave them all.
+/// What others did about an address's messages, read from the node's index:
+/// the flags against them (GetAddress, list 2) or the answers to its replies
+/// (list 3). No state entry holds these lists, so each entry is proven to be
+/// on the chain, but not that the node gave them all.
 class _FlagRead {
+  _FlagRead(this.address, this.list);
+
+  final String address;
+  final AddressList list;
+
   /// The list's length as the node last said; null until first read.
   int? total;
 
@@ -263,7 +269,7 @@ class _FlagRead {
   /// The node keeps no index.
   bool unavailable = false;
 
-  /// The flags read, by txid: where each is (height, index in its block).
+  /// The entries read, by txid: where each is (height, index in its block).
   final Map<String, (int, int)> entries = {};
 }
 
@@ -901,7 +907,20 @@ class MurmurClient extends ChangeNotifier {
   bool _involves(Transaction t, String address) =>
       t.fromAddress == address ||
       creditedBy(t) == address ||
-      (t.kind == TxKind.flag && t.referenceId != null && authorOf(t.referenceId!) == address);
+      (t.kind == TxKind.flag && t.referenceId != null && authorOf(t.referenceId!) == address) ||
+      answersTo(t, address);
+
+  /// Whether `tx` answers a reply of `address` (an Answer, PROTOCOL.md
+  /// Section 2.4): it names the thread of one of the address's replies, and
+  /// the start of that reply's txid. Checked against the address's own
+  /// messages, which is all a wallet needs at hand to be told it was
+  /// answered in someone else's thread.
+  bool answersTo(Transaction tx, String address) {
+    final start = tx.answersHex;
+    if (start == null) return false;
+    return messagesBy(address)
+        .any((m) => m.tx.kind == TxKind.reply && m.tx.threadId == tx.threadId && m.tx.id.startsWith(start));
+  }
 
   // ---- filters ------------------------------------------------------------------
 
@@ -910,15 +929,19 @@ class MurmurClient extends ChangeNotifier {
   /// complete at once, at any chain age. With a node that keeps no index,
   /// every block touching it is found by its filter and fetched instead.
   ///
-  /// With `flags`, the flags against its messages are read from the index
-  /// too. No state entry holds those: each is proven to be on the chain, but
-  /// not that the node gave them all, and a node without an index gives none.
-  void watchAddress(String address, {bool flags = false}) {
-    if (flags) {
-      _flagReads.putIfAbsent(address, () {
-        _wake();
-        return _FlagRead();
-      });
+  /// With `mentions`, what others did about its messages is read from the
+  /// index too: the flags against them, and the answers to its replies in
+  /// other people's threads. No state entry holds those: each is proven to
+  /// be on the chain, but not that the node gave them all, and a node
+  /// without an index gives none.
+  void watchAddress(String address, {bool mentions = false}) {
+    if (mentions) {
+      for (final list in [AddressList.flagsAgainst, AddressList.answers]) {
+        _flagReads.putIfAbsent('$address:${list.index}', () {
+          _wake();
+          return _FlagRead(address, list);
+        });
+      }
     }
     final item = fromHex(address);
     final key = accountKey(item);
@@ -941,11 +964,11 @@ class MurmurClient extends ChangeNotifier {
   final Map<String, _ListRead> _threadReads = {};
   final Map<String, _ListRead> _addressReads = {};
 
-  /// The flags against addresses' messages being read, by address.
+  /// The flags against addresses' messages and the answers to their
+  /// replies being read, by `address:list`.
   final Map<String, _FlagRead> _flagReads = {};
 
-  /// How many blocks pass before the newest flags against an address are
-  /// asked for again.
+  /// How many blocks pass before the newest of those are asked for again.
   static const _flagsEvery = 10;
 
   /// Whether `address`'s two lists are read whole, so its history needs no
@@ -1122,11 +1145,14 @@ class MurmurClient extends ChangeNotifier {
       ...?_addressReads['$address:0']?.entries,
       ...?_addressReads['$address:1']?.entries,
     };
-    // Flags the node listed against it: those of a message it wrote.
-    _flagReads[address]?.entries.forEach((id, where) {
-      final flag = lookupTx(id)?.tx;
-      if (flag != null && _involves(flag, address)) at[id] = where;
-    });
+    // What the node listed about its messages: the flags of a message it
+    // wrote, and the answers to a reply of its own.
+    for (final list in [AddressList.flagsAgainst, AddressList.answers]) {
+      _flagReads['$address:${list.index}']?.entries.forEach((id, where) {
+        final tx = lookupTx(id)?.tx;
+        if (tx != null && _involves(tx, address)) at[id] = where;
+      });
+    }
     for (final MapEntry(key: id, value: where) in _txIndex.entries) {
       if (at.containsKey(id)) continue;
       if (_involves(_blocks[where.$1 - 1]!.transactions[where.$2], address)) at[id] = where;
@@ -2841,21 +2867,21 @@ class MurmurClient extends ChangeNotifier {
       await _readPage(read, gen, back: back);
       return true;
     }
-    for (final MapEntry(key: address, value: read) in _flagReads.entries) {
+    for (final read in _flagReads.values) {
       if (read.unavailable) continue;
       final more = read.total != null && read.low > 0;
       if (!more && read.total != null && read.reorgs == _reorgs && height < read.checkedAt + _flagsEvery) continue;
-      await _readFlags(address, read, gen);
+      await _readFlags(read, gen);
       return true;
     }
     return false;
   }
 
-  /// Reads one page of the flags against `address`'s messages: the next
-  /// page back, or the newest.
-  Future<void> _readFlags(String address, _FlagRead read, int gen) async {
+  /// Reads one page of the flags against an address's messages, or of the
+  /// answers to its replies: the next page back, or the newest.
+  Future<void> _readFlags(_FlagRead read, int gen) async {
     final back = read.total != null && read.low > 0 && read.reorgs == _reorgs;
-    final msg = GetAddress(fromHex(address), AddressList.flagsAgainst, back ? read.low : 0, maxPageEntries);
+    final msg = GetAddress(fromHex(read.address), read.list, back ? read.low : 0, maxPageEntries);
     final page = (await _request(_addressWaiter = Completer<Address>(), msg)).page;
     if (gen != _generation) throw _Aborted();
     if (!page.available) {
@@ -2868,8 +2894,9 @@ class MurmurClient extends ChangeNotifier {
       read.total = null;
       return;
     }
-    if (page.entries.any((e) => e.tx.kind != TxKind.flag)) {
-      throw const FormatException('the node listed something that is not a flag');
+    final flags = read.list == AddressList.flagsAgainst;
+    if (page.entries.any((e) => flags ? e.tx.kind != TxKind.flag : e.tx.answers == null)) {
+      throw FormatException('the node listed something that is not ${flags ? 'a flag' : 'an answer'}');
     }
     await _takeEntries(page.entries, read.entries, gen);
     if (back) {
@@ -3248,6 +3275,9 @@ class MurmurClient extends ChangeNotifier {
         _ => null,
       },
       thread: kind == TxKind.flag && thread != reference ? fromHex(thread!) : null,
+      // A reply to a reply says which (an Answer): the start of its txid.
+      // A reply to the thread's first message says nothing more.
+      answers: kind == TxKind.reply && target!.kind == TxKind.reply ? Uint8List.sublistView(target.hash, 0, 4) : null,
     );
     if (state != LinkState.live) throw const TxProblem(TxProblemKind.connectionLost);
     if (_txIndex.containsKey(tx.id) || _pending.containsKey(tx.id)) {

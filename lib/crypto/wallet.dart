@@ -66,6 +66,7 @@ class MurmurWallet {
     int contentSize = 0,
     Uint8List? reference,
     Uint8List? thread,
+    Uint8List? answers,
   }) async {
     final body = Transaction.bodyFor(
       kind: kind,
@@ -78,6 +79,7 @@ class MurmurWallet {
       contentSize: contentSize,
       reference: reference,
       thread: thread,
+      answers: answers,
     );
     final sig = await _ed25519.sign([...networkTag, ...body], keyPair: _keyPair);
     return Transaction(
@@ -91,6 +93,7 @@ class MurmurWallet {
       contentSize: contentSize,
       reference: reference,
       thread: thread,
+      answers: answers,
       signature: Uint8List.fromList(sig.bytes),
     );
   }

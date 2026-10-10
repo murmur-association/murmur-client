@@ -53,7 +53,9 @@ Set<MessageFilter> messageFiltersOf(TxView v, String me, MurmurClient client) {
     TxKind.orphan => {if (mine) MessageFilter.threads},
     TxKind.reply => {
         if (mine) MessageFilter.sent,
-        if (client.creditedBy(tx) == me) MessageFilter.received,
+        // In one of the wallet's threads, or an answer to one of its
+        // replies in someone else's.
+        if (client.creditedBy(tx) == me || (!mine && client.answersTo(tx, me))) MessageFilter.received,
       },
     TxKind.flag => {
         if (mine) MessageFilter.flagsSent,

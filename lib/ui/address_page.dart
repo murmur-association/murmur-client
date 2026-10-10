@@ -21,7 +21,7 @@ class AddressPage extends StatelessWidget {
       final prefs = AppScope.of(context).prefs;
       final pending = client.pendingDebitOf(address);
       // Its whole history is found through block filters.
-      client.watchAddress(address, flags: true);
+      client.watchAddress(address, mentions: true);
       return Scaffold(
         appBar: AppBar(title: Text(isMine ? l.yourAddress : l.address)),
         body: PagedList<TxView>(

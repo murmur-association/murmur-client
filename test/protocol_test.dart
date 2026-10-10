@@ -136,7 +136,7 @@ void main() {
     ));
     // tag(1) version(4) genesis(32) nonce(8) port(2) height(8) work(32)
     expect(hello.length, 87);
-    expect(hello.sublist(0, 5), [0, 0, 0, 0, 11]);
+    expect(hello.sublist(0, 5), [0, 0, 0, 0, 12]);
 
     final w = await MurmurWallet.generate();
     final flag = await w.sign(

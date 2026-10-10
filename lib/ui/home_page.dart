@@ -99,8 +99,10 @@ class _HomePageState extends State<HomePage> with RouteAware {
       final t = activityTime(v);
       if (v.confirmed && t <= seen) break; // newest first: the rest were seen
       final tx = v.tx;
-      // Replies in the wallet's threads: those are what credit it.
-      if (tx.kind != TxKind.reply || client.creditedBy(tx) != me || tx.fromAddress == me) continue;
+      // Replies in the wallet's threads (those credit it), and answers to
+      // its replies in other people's.
+      if (tx.kind != TxKind.reply || tx.fromAddress == me) continue;
+      if (client.creditedBy(tx) != me && !client.answersTo(tx, me)) continue;
       if (prefs.muted.contains(tx.fromAddress)) continue;
       newest = max(newest ?? 0, t);
       if (t > seen && ++count == 99) break;
@@ -116,6 +118,8 @@ class _HomePageState extends State<HomePage> with RouteAware {
       final me = wallets.wallet?.addressHex;
       var newReplies = 0;
       if (me != null) {
+        // The badge counts answers too, wherever the Messages tab is.
+        client.watchAddress(me, mentions: true);
         final int? newest;
         (newReplies, newest) = _newReplies(client, prefs, me);
         // A wallet starts from now, not its whole history. On the Messages
