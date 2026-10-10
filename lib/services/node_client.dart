@@ -291,6 +291,8 @@ class _BlockStore {
 
   void grow(int by) => length += by;
 
+  void remove(int i) => _at.remove(i);
+
   /// Drops everything from index `start` on.
   void truncate(int start) {
     _at.removeWhere((i, _) => i >= start);
@@ -1481,6 +1483,8 @@ class MurmurClient extends ChangeNotifier {
 
   /// A list read newest first needs more: fetch the next older batch.
   void requestOlder() {
+    // Someone is reading back: nothing old is let go meanwhile.
+    _olderAskedAt = DateTime.now();
     if (!canLoadOlder || _wantOlder) return;
     _wantOlder = true;
     _wake();
@@ -2520,6 +2524,7 @@ class MurmurClient extends ChangeNotifier {
         _wantContent(tx, h);
       }
     }
+    _trimBlocks();
   }
 
   /// Notes that `tx` (at height `h`) has content to fetch.
@@ -2586,6 +2591,74 @@ class MurmurClient extends ChangeNotifier {
     _unsavedContents.remove(key);
     _missingContent.remove(key);
     _unsavedRemovals.add(key);
+  }
+
+  /// How many fetched blocks, and transactions in them, a session holds
+  /// before it lets the oldest go: a week of blocks, or what a few hundred
+  /// megabytes of a browser's memory take. A page left open follows every
+  /// new block; without this it would hold them all. (Tests hold fewer.)
+  int maxBlocksHeld = 20000;
+  int maxTxsHeld = 100000;
+
+  /// The newest blocks are never let go, whatever the caps.
+  static const _keptAtTip = 200;
+
+  /// When a view last asked for older blocks, and for how long after that
+  /// nothing is let go: someone reading back needs the old ones.
+  DateTime? _olderAskedAt;
+  Duration readingBackFor = const Duration(minutes: 10);
+
+  /// Lets the oldest fetched blocks go once more are held than the caps
+  /// allow, down to nine tenths of them (so not at every block). They are
+  /// fetched again if a view reads back that far.
+  void _trimBlocks() {
+    if (_fetched <= maxBlocksHeld && _txIndex.length <= maxTxsHeld) return;
+    // With a node that keeps no index, a history or a thread is the blocks
+    // its filters found: those are kept.
+    if (_watchedItems.isNotEmpty) return;
+    final asked = _olderAskedAt;
+    if (asked != null && DateTime.now().difference(asked) < readingBackFor) return;
+    final oldestFirst = _blocks.indexes.toList()..sort();
+    for (final index in oldestFirst) {
+      if (_fetched <= maxBlocksHeld * 9 ~/ 10 && _txIndex.length <= maxTxsHeld * 9 ~/ 10) break;
+      if (index + 1 > height - _keptAtTip) break;
+      _dropBlock(index);
+    }
+  }
+
+  /// Whether a list being read holds `txid`, or it starts a thread being
+  /// followed: such a transaction is kept when its block is let go.
+  bool _listed(String txid) =>
+      _threadReads.containsKey(txid) ||
+      _threadReads.values.any((read) => read.entries.containsKey(txid)) ||
+      _addressReads.values.any((read) => read.entries.containsKey(txid)) ||
+      _flagReads.values.any((read) => read.entries.containsKey(txid));
+
+  /// Lets a fetched block go. What a followed thread or address holds of
+  /// it, and what this device sent, stays as transactions on their own;
+  /// the rest goes with the text of its messages.
+  void _dropBlock(int index) {
+    final b = _blocks[index];
+    if (b == null) return;
+    final h = index + 1;
+    for (var i = 0; i < b.transactions.length; i++) {
+      final tx = b.transactions[i];
+      _txIndex.remove(tx.id);
+      if (_sentHere.contains(tx.id) || _starred.contains(tx.id) || _listed(tx.id)) {
+        _loose[tx.id] = _LooseTx(tx, h, i);
+        continue;
+      }
+      final hash = tx.messageHash;
+      if (hash == null) continue;
+      final key = toHex(hash);
+      _contents.remove(key);
+      _contentOwner.remove(key);
+      _missingContent.remove(key);
+    }
+    _blocks.remove(index);
+    _fetched--;
+    // The newest stretch now ends above it.
+    if (h >= _top) _top = h + 1;
   }
 
   /// Grows the newest stretch down over blocks already fetched.

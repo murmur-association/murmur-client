@@ -2,8 +2,13 @@
 
 Newest first. Each release is a `vX.Y.Z` tag matching `version` in `pubspec.yaml`; see [README](README.md#releases-and-deployment). Entries marked **Breaking** need action from users.
 
-## Unreleased
+## v0.6.0: murmur-testnet-11, answers, newest replies first, lighter on memory (2026-10-10)
 
+**Breaking: a new network and protocol.** The app speaks protocol 12 and joins `murmur-testnet-11`; it no longer reaches `murmur-testnet-10`. Nothing carries over: wallets keep their keys, and start with nothing on the new chain. The desktop apps ship node release v0.12.0. No checkpoint while the network is under a day old.
+
+- **Added: you are told when someone answers your reply**, in anyone's thread. Such answers show in Messages with the replies you received, and the badge counts them. A reply to a reply now says which one on the chain (4 bytes of it), where it used to say so in a line of its text; the chain still pays the thread's author. The node could leave some out: like flags received, that list can't be proven complete.
+- **Changed: a long history loads as you scroll.** The Wallet and Messages tabs and an address's page read the newest 500 entries, and further back as you reach the end.
+- **Changed: the app stays light when left open.** It lets go of the oldest blocks it loaded once it holds a week of them, keeping your own messages and the threads and addresses you follow, and it no longer rebuilds its message lists at every new block.
 - **Changed: the app's memory no longer grows with the chain.** It used to keep every block header since the chain began once it had checked them. It now checks them and lets them go, keeps the ones from the release's checkpoint on, and fetches an older one, proven, when a page needs it. The local copy shrinks the same way, and a later start resumes the check where it stopped.
 - **Changed: a thread shows its newest replies first**, under its first message, and says so. A long thread opens at once with its latest replies; "Earlier replies" at the foot loads the ones before.
 - **Changed: tapping a quote goes to the quoted reply** and marks it, where it used to open it in a dialog. If that reply is older than the ones loaded, the tap loads back to it.

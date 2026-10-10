@@ -1,6 +1,6 @@
 # Murmur client
 
-A Flutter light client for the Murmur chain, speaking **protocol 11** (networks `murmur-testnet-10` and `murmur-demo-10`). The node, the whitepaper and the protocol specification live in the [murmur repository](https://gitlab.com/murmur-association/murmur); section numbers below refer to its [PROTOCOL.md](https://gitlab.com/murmur-association/murmur/-/blob/main/PROTOCOL.md). With the client you can:
+A Flutter light client for the Murmur chain, speaking **protocol 12** (networks `murmur-testnet-11` and `murmur-demo-11`). The node, the whitepaper and the protocol specification live in the [murmur repository](https://gitlab.com/murmur-association/murmur); section numbers below refer to its [PROTOCOL.md](https://gitlab.com/murmur-association/murmur/-/blob/main/PROTOCOL.md). With the client you can:
 
 - read threads, newest activity first, each with its replies from the newest down, and see which reply an answer is for;
 - browse blocks, transactions and addresses, and search by height, txid, block hash or address;
@@ -69,7 +69,8 @@ The client rolls back on reorgs, follows the blocks and transactions the node re
 - **Message content:** blocks travel without content. The client takes it from relayed transactions and sync replies, and asks for the rest with `GetContent`. It keeps content only if its hash and length match the transaction. Any node may delete content, so an old message can show as "content not available".
 - **Salted messages:** content is a 16-byte salt followed by the message (at most 1024 bytes), and the transaction's hash covers both, so once content is deleted its hash can't be matched against guesses of the text. The client draws a fresh salt from the platform's secure random source for every message, and never shows it.
 - **Threads are flat:** a Reply names its thread (the thread's first message, by transaction ID) and pays the thread's author, whichever message it answers. A Flag names the message it reports and that message's thread, and counts once per address (proven with the state tree before flagging). PROTOCOL.md Section 2.4.
-- **Quotes:** which reply an answer is for isn't on the chain. An answer to a reply starts with a line of its own, `>` and the first eight hex characters of that reply's transaction ID, and the app shows the answered reply above the answer, from the thread itself. Nothing is copied onto the chain, and other clients show the line as written. This is a convention of this app (`lib/protocol/quote.dart`), not part of the protocol.
+- **Answers:** a reply to another reply is an Answer: a Reply that also carries the first 4 bytes of the answered reply's transaction ID (PROTOCOL.md Section 2.4). The chain treats it as any reply; the app shows the answered reply above the answer, and a tap goes to it. A node's index lists the answers to an address's replies, so being answered in someone else's thread reaches your Messages tab; like flags received, each one is proven, their completeness isn't. Replies written before Answers said the same in a first line of text (`>3fa9c21e`), which the app still reads.
+- **Long threads and histories** are read from their newest end, a page of 500 at a time: a thread shows its newest replies first and loads earlier ones on request, and a history loads further back as you scroll.
 - **Amounts** are counted on the chain in units, a million to the token; the app shows and reads tokens, with up to six decimals. The least fee is half a token, by consensus.
 - **Thread cost:** a thread (Orphan) burns 10× its fee, so starting one costs 11× the fee. Burned tokens go to a burn pool that pays each block's miner `ceil(pool / K)`.
 - **Fees** are per byte, and a transaction weighs 264 bytes plus its content, so the send form suggests a fee for the message you're writing.
@@ -109,7 +110,7 @@ Platform notes:
   The bridge binds to localhost only, always dials the one configured node, and accepts only pages served from localhost.
 - **Paths with an apostrophe** (such as `C:\Users\o'brien`) break `flutter test` and web builds, because Flutter pastes the path into generated Dart code. Work around it by mapping a drive letter: `subst M: "C:\Users\o'brien"`, then work from `M:\murmur-client` with `TEMP`/`TMP` set to `M:\AppData\Local\Temp`.
 
-**Which node a fresh install uses:** `127.0.0.1:7878` natively and `127.0.0.1:7880` (the bridge) on the web, until the user picks another. Builds for the public testnet (`murmur-testnet-10`) set their own default:
+**Which node a fresh install uses:** `127.0.0.1:7878` natively and `127.0.0.1:7880` (the bridge) on the web, until the user picks another. Builds for the public testnet (`murmur-testnet-11`) set their own default:
 
 ```
 # Web: the TLS proxy in front of node 1's WebSocket listener

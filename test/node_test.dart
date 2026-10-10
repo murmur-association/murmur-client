@@ -553,6 +553,37 @@ void main() {
       expect(steps, greaterThan(2));
     }, timeout: const Timeout(Duration(minutes: 4)));
 
+    test('a session left open lets its oldest blocks go, and keeps what it follows and what it sent', () async {
+      final node = await short(mining: true);
+      final c = await node.connect(MurmurClient()
+        ..maxBlocksHeld = 250
+        ..readingBackFor = Duration.zero);
+      final me = miner.addressHex;
+      await until(c, () => c.availableTo(me) != null);
+      final thread = await c.submit(wallet: miner, kind: TxKind.orphan, fee: minFee, message: utf('kept by its author'));
+      await until(c, what: 'the thread mined', () => mined(c, thread));
+      final at = c.lookupTx(thread.id)!.height!;
+      expect(c.blockAt(at), isNotNull);
+      final held = c.fetchedBlocks;
+      // New blocks keep coming; the oldest held are let go for them, and
+      // the newest are never among those.
+      await until(c, what: 'a few hundred more blocks', () => c.height >= at + 260,
+          timeout: const Duration(minutes: 3));
+      expect(c.fetchedBlocks, lessThanOrEqualTo(251));
+      expect(c.fetchedBlocks, lessThan(held + 200));
+      expect(c.blockAt(at), isNull, reason: 'let go');
+      expect(c.blockAt(c.height - 1), isNotNull);
+      // What this device sent is still here, with its text, and in its list.
+      final view = c.lookupTx(thread.id)!;
+      expect(view.height, at);
+      expect(c.liveContent(view), isNotNull);
+      expect(c.threads().any((t) => t.root.tx.id == thread.id), isTrue);
+      // Reading back that far fetches the block again.
+      c.requestBlock(at);
+      await until(c, what: 'the block again', () => c.blockAt(at) != null);
+      expect(c.lookupTx(thread.id)!.height, at);
+    }, timeout: const Timeout(Duration(minutes: 5)));
+
     test('a node without the index: the same thread and history, through filters', () async {
       final node = await short(mining: true, extra: ['--no-index']);
       final writer = await node.connect(MurmurClient());
