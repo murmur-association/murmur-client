@@ -1125,9 +1125,11 @@ class MurmurClient extends ChangeNotifier {
       ..sort((a, b) => b.seenAt.compareTo(a.seenAt));
     out.addAll([for (final p in pending) TxView(p.tx, content: p.content, pending: p)]);
     final limit = min(upTo ?? height, height);
-    for (var h = height; h >= 1; h--) {
-      final b = _blocks[h - 1];
-      if (b == null) continue;
+    // The fetched blocks only, not every height: the chain may be long.
+    final fetched = _blocks.indexes.toList()..sort((a, b) => b.compareTo(a));
+    for (final index in fetched) {
+      final h = index + 1;
+      final b = _blocks[index]!;
       for (var i = b.transactions.length - 1; i >= 0; i--) {
         final tx = b.transactions[i];
         if (tx.kind == TxKind.raw) continue;
