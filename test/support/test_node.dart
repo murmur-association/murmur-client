@@ -131,7 +131,9 @@ class TestNode {
     addTearDown(client.dispose);
     await client.connect('127.0.0.1', port);
     await until(client, () => client.state == LinkState.live && client.height >= height);
-    expect(toHex(client.hashAt(height)), hashAt(height));
+    // (A session from a checkpoint above that block doesn't hold its header.)
+    final known = client.headerAt(height);
+    if (known != null) expect(known.id, hashAt(height));
     return client;
   }
 }

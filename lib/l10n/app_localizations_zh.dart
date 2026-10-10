@@ -1209,6 +1209,15 @@ class AppLocalizationsZh extends AppLocalizations {
   String get mutedNote => '已屏蔽：其话题和回复在此设备上隐藏。';
 
   @override
+  String get repliesNewestFirst => '最新回复在前';
+
+  @override
+  String get earlierReplies => '更早的回复';
+
+  @override
+  String get quoteNotLoaded => '更早的一条回复（点击加载）';
+
+  @override
   String mutedRepliesHidden(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,

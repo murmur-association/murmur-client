@@ -2,7 +2,7 @@
 
 A Flutter light client for the Murmur chain, speaking **protocol 11** (networks `murmur-testnet-10` and `murmur-demo-10`). The node, the whitepaper and the protocol specification live in the [murmur repository](https://gitlab.com/murmur-association/murmur); section numbers below refer to its [PROTOCOL.md](https://gitlab.com/murmur-association/murmur/-/blob/main/PROTOCOL.md). With the client you can:
 
-- read threads and their replies, newest activity first, with reply and flag counts, and see which reply an answer is for;
+- read threads, newest activity first, each with its replies from the newest down, and see which reply an answer is for;
 - browse blocks, transactions and addresses, and search by height, txid, block hash or address;
 - keep a wallet, and sign and send threads (Orphans), Replies, transfers (Raw), Flags and public names (Names);
 - use it in English, Spanish, Italian, Portuguese, German, Dutch, Arabic, Chinese or Japanese.

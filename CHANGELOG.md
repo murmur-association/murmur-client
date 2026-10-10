@@ -5,6 +5,9 @@ Newest first. Each release is a `vX.Y.Z` tag matching `version` in `pubspec.yaml
 ## Unreleased
 
 - **Changed: the app's memory no longer grows with the chain.** It used to keep every block header since the chain began once it had checked them. It now checks them and lets them go, keeps the ones from the release's checkpoint on, and fetches an older one, proven, when a page needs it. The local copy shrinks the same way, and a later start resumes the check where it stopped.
+- **Changed: a thread shows its newest replies first**, under its first message, and says so. A long thread opens at once with its latest replies; "Earlier replies" at the foot loads the ones before.
+- **Changed: tapping a quote goes to the quoted reply** and marks it, where it used to open it in a dialog. If that reply is older than the ones loaded, the tap loads back to it.
+- **Fixed: replies mined in blocks with the same time** could show in the wrong order when they were read from the node's index.
 - **Changed: scrolling back past the checkpoint** in Threads loads older blocks a batch at a time, without waiting for the check from genesis to finish.
 
 ## v0.5.0: murmur-testnet-10, flat threads with quotes, old threads at once (2026-10-08)

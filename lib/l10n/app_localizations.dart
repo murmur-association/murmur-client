@@ -1834,6 +1834,24 @@ abstract class AppLocalizations {
   /// **'Muted: its threads and replies are hidden on this device.'**
   String get mutedNote;
 
+  /// Above a thread's replies: they are listed from the newest down
+  ///
+  /// In en, this message translates to:
+  /// **'Newest replies first'**
+  String get repliesNewestFirst;
+
+  /// Button under a thread's replies that loads the ones before them
+  ///
+  /// In en, this message translates to:
+  /// **'Earlier replies'**
+  String get earlierReplies;
+
+  /// In place of a quoted reply that is older than the replies loaded so far
+  ///
+  /// In en, this message translates to:
+  /// **'An earlier reply (tap to load it)'**
+  String get quoteNotLoaded;
+
   /// No description provided for @mutedRepliesHidden.
   ///
   /// In en, this message translates to:

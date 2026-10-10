@@ -54,7 +54,7 @@ void main() {
     expect(quotedReply(<String>[], 'aaaaaaaa'), isNull);
   });
 
-  testWidgets('a thread shows the reply an answer quotes, and all of it on a tap', (tester) async {
+  testWidgets('a thread shows the reply an answer quotes, and a tap goes to that reply', (tester) async {
     final thread = txAt(TxKind.orphan, 1, text: 'A thread');
     final first = replyTo(thread, 2, text: 'The first reply\nwith a second line');
     final answer = replyTo(thread, 3, from: carol, text: '${quoteLine(first.tx.id)}An answer to it');
@@ -79,10 +79,79 @@ void main() {
     expect(find.textContaining('>'), findsNothing);
     // The quoted reply, in one line above the answer; its own card below.
     expect(find.text('The first reply with a second line'), findsOneWidget);
+    // Its card is marked once the quote is tapped, and nothing opens over
+    // the thread.
+    Color? cardOf(String text) =>
+        tester.widget<Card>(find.ancestor(of: find.text(text), matching: find.byType(Card)).first).color;
+    expect(cardOf('The first reply\nwith a second line'), isNull);
     await tester.tap(find.text('The first reply with a second line'));
     await tester.pumpAndSettle();
-    expect(find.byType(AlertDialog), findsOneWidget);
-    expect(find.text('The first reply\nwith a second line'), findsNWidgets(2));
+    expect(find.byType(AlertDialog), findsNothing);
+    expect(cardOf('The first reply\nwith a second line'), isNotNull);
+    expect(cardOf('An answer to it'), isNull);
+  });
+
+  testWidgets('replies run from the newest down, and the page says so', (tester) async {
+    final thread = txAt(TxKind.orphan, 1, text: 'A thread');
+    final chain = FakeChain([
+      thread,
+      for (var i = 1; i <= 3; i++) replyTo(thread, 1 + i, text: 'Reply $i'),
+    ]);
+    await tester.pumpWidget(AppScope(
+      client: chain,
+      wallets: WalletController(),
+      prefs: Preferences(),
+      child: MaterialApp(
+        theme: lightTheme,
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: ThreadPage(rootTxid: thread.tx.id),
+      ),
+    ));
+    await tester.pumpAndSettle();
+    double top(String text) => tester.getTopLeft(find.text(text)).dy;
+    expect(top('A thread'), lessThan(top('Newest replies first')));
+    expect(top('Newest replies first'), lessThan(top('Reply 3')));
+    expect(top('Reply 3'), lessThan(top('Reply 2')));
+    expect(top('Reply 2'), lessThan(top('Reply 1')));
+    expect(find.text('Earlier replies'), findsNothing, reason: 'the thread is all here');
+  });
+
+  testWidgets('a long thread: earlier replies come when asked for, and so does a quoted one', (tester) async {
+    final thread = txAt(TxKind.orphan, 1, text: 'A thread');
+    final old = replyTo(thread, 2, text: 'An old reply');
+    final answer = replyTo(thread, 9, from: carol, text: '${quoteLine(old.tx.id)}An answer to it');
+    // Only the newest reply is loaded so far.
+    final chain = FakeChain([thread, answer])..partly.add(thread.tx.id);
+    await tester.pumpWidget(AppScope(
+      client: chain,
+      wallets: WalletController(),
+      prefs: Preferences(),
+      child: MaterialApp(
+        theme: lightTheme,
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: ThreadPage(rootTxid: thread.tx.id),
+      ),
+    ));
+    await tester.pumpAndSettle();
+    expect(find.text('Newest replies first'), findsOneWidget);
+    expect(find.textContaining('1 reply'), findsNothing, reason: 'not counted while there are more');
+    await tester.tap(find.text('Earlier replies'));
+    expect(chain.earlierAsked, 1);
+
+    // The quote stands for a reply not loaded yet: a tap loads back to it.
+    await tester.tap(find.text('An earlier reply (tap to load it)'));
+    await tester.pump();
+    expect(chain.earlierAsked, greaterThan(1));
+    chain
+      ..partly.clear()
+      ..add([old]);
+    await tester.pumpAndSettle();
+    expect(find.text('An earlier reply (tap to load it)'), findsNothing);
+    expect(find.text('An old reply'), findsNWidgets(2), reason: 'quoted, and its own card below');
+    final card = tester.widget<Card>(find.ancestor(of: find.text('An old reply').last, matching: find.byType(Card)).first);
+    expect(card.color, isNotNull, reason: 'gone to, and marked');
   });
 
   testWidgets('a muted author is not shown quoted either', (tester) async {

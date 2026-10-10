@@ -1271,6 +1271,15 @@ class AppLocalizationsAr extends AppLocalizations {
   String get mutedNote => 'مكتوم: مواضيعه وردوده مخفية على هذا الجهاز.';
 
   @override
+  String get repliesNewestFirst => 'أحدث الردود أولاً';
+
+  @override
+  String get earlierReplies => 'ردود أقدم';
+
+  @override
+  String get quoteNotLoaded => 'رد أقدم (اضغط لتحميله)';
+
+  @override
   String mutedRepliesHidden(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,

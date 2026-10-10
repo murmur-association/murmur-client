@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 
 import '../protocol/models.dart';
@@ -8,9 +10,12 @@ import 'compose_page.dart';
 import 'emoji.dart';
 import 'glyphs.dart';
 
-/// A thread: its first message and its replies, oldest first. Threads are
-/// flat; a reply that answers another reply shows it quoted.
-class ThreadPage extends StatelessWidget {
+/// A thread: its first message, then its replies **from the newest down**,
+/// which is the end the node can prove first. However long the thread, it
+/// opens with its newest page; "Earlier replies" reads the one before.
+/// Threads are flat; a reply that answers another reply shows it quoted, and
+/// a tap on the quote goes to that reply.
+class ThreadPage extends StatefulWidget {
   const ThreadPage({super.key, required this.rootTxid, this.focusTxid});
 
   final String rootTxid;
@@ -19,8 +24,52 @@ class ThreadPage extends StatelessWidget {
   final String? focusTxid;
 
   @override
+  State<ThreadPage> createState() => _ThreadPageState();
+}
+
+class _ThreadPageState extends State<ThreadPage> {
+  final _scroll = ScrollController();
+
+  /// Each message's card, to find where it is on the page.
+  final _cards = <String, GlobalKey>{};
+
+  /// The message highlighted: the one the page was opened for, then the
+  /// last one a quote led to.
+  late String? _focus = widget.focusTxid;
+
+  /// A quote of a reply older than the ones loaded, which the user asked
+  /// for: earlier pages are read until it is there.
+  String? _seeking;
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  /// Highlights the message `txid` and brings it into view. It is at or
+  /// below what is on screen (a quoted reply is older than its answer, so
+  /// further down): the page moves down until its card is built.
+  Future<void> _goTo(String txid) async {
+    setState(() => _focus = txid);
+    for (var step = 0; step < 400 && mounted; step++) {
+      final card = _cards[txid]?.currentContext;
+      if (card != null && card.mounted) {
+        await Scrollable.ensureVisible(card, duration: const Duration(milliseconds: 250), alignment: 0.1);
+        return;
+      }
+      if (!_scroll.hasClients) return;
+      final at = _scroll.position;
+      if (at.pixels >= at.maxScrollExtent) return;
+      _scroll.jumpTo(min(at.maxScrollExtent, at.pixels + at.viewportDimension * 0.8));
+      await WidgetsBinding.instance.endOfFrame;
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final l = context.l10n;
+    final rootTxid = widget.rootTxid;
     return AppBuilder(builder: (context, client, wallets) {
       final root = client.lookupTx(rootTxid);
       if (root == null) {
@@ -36,80 +85,133 @@ class ThreadPage extends StatelessWidget {
         );
       }
 
-      // The thread's first message, then its replies, oldest first: threads
-      // are flat. Replies from muted addresses are left out.
+      final theme = Theme.of(context);
       final muted = AppScope.of(context).prefs.muted;
+      // Oldest first, as the chain has them: what a reply may quote is
+      // before it. Replies from muted addresses are left out of the page.
       final replies = client.repliesOf(root);
-      // Each with its place among the replies: what it may quote is before it.
-      final entries = <(TxView, int)>[(root, 0)];
+      final ids = [for (final r in replies) r.tx.id];
+      final shown = <(TxView, int)>[];
       var mutedReplies = 0;
-      for (var i = 0; i < replies.length; i++) {
+      for (var i = replies.length - 1; i >= 0; i--) {
         if (muted.contains(replies[i].tx.fromAddress)) {
           mutedReplies++;
         } else {
-          entries.add((replies[i], i + 1));
+          shown.add((replies[i], i));
         }
       }
-      // The replies a reply answers, as far as they're shown here.
-      List<TxView> quoted(TxView reply, int place) {
-        final earlier = [for (final r in replies.take(place - 1)) r.tx.id];
-        return [
-          for (final quote in quotesOf(client, reply))
-            if (quotedReply(earlier, quote) case final id?)
-              if (!muted.contains(replies[earlier.indexOf(id)].tx.fromAddress)) replies[earlier.indexOf(id)],
-        ];
+      client.watchThread(root, [root, for (final (v, _) in shown) v]);
+      // Only the newest replies are here: the rest come when asked for.
+      final earlier = client.threadHasEarlier(rootTxid);
+
+      // The replies a reply answers: those shown here, and how many are
+      // older than the replies loaded.
+      (List<TxView>, List<String>) quotes(TxView reply, int place) {
+        final found = <TxView>[];
+        final notLoaded = <String>[];
+        for (final quote in quotesOf(client, reply)) {
+          final id = quotedReply(ids.take(place), quote);
+          if (id == null) {
+            if (earlier) notLoaded.add(quote);
+          } else if (!muted.contains(replies[ids.indexOf(id)].tx.fromAddress)) {
+            found.add(replies[ids.indexOf(id)]);
+          }
+        }
+        return (found, notLoaded);
       }
 
-      // Every block referencing the thread or its replies is found by its
-      // filter and fetched, so the thread is complete wherever its replies are.
-      client.watchThread(root, [for (final (v, _) in entries) v]);
+      // A quote the user asked to see, older than what was loaded: there
+      // now, or a page further back.
+      final seeking = _seeking;
+      if (seeking != null) {
+        final id = quotedReply(ids, seeking);
+        if (id != null || !earlier) {
+          _seeking = null;
+          if (id != null) WidgetsBinding.instance.addPostFrameCallback((_) => _goTo(id));
+        } else {
+          client.readEarlier(rootTxid);
+        }
+      }
+
       // Withdrawn by its author: said first, and the thread shown faded.
       final withdrawn = client.selfFlagged(root);
       final mine = root.tx.fromAddress == wallets.wallet?.addressHex;
-      final lead = withdrawn ? 1 : 0;
 
-      return Scaffold(
-        appBar: AppBar(
-          title: Text('${l.kindThread} · ${l.replyCount(entries.length - 1)}'),
-          actions: [StarButton(rootTxid), ShareButton(threadLink(rootTxid), subject: 'Murmur', size: 24)],
-        ),
-        body: ListView.builder(
-          padding: const EdgeInsets.fromLTRB(12, 12, 12, 32),
-          itemCount: lead + entries.length + (mutedReplies > 0 ? 1 : 0),
-          itemBuilder: (context, i) {
-            if (withdrawn && i == 0) {
-              return Card(
-                color: Theme.of(context).colorScheme.tertiaryContainer,
+      Widget card(TxView view, int? place) {
+        final (quoted, notLoaded) = place == null ? (const <TxView>[], const <String>[]) : quotes(view, place);
+        final card = Padding(
+          key: _cards.putIfAbsent(view.tx.id, GlobalKey.new),
+          padding: EdgeInsetsDirectional.only(start: place == null ? 0 : 20),
+          child: _MessageCard(
+            view: view,
+            client: client,
+            quoted: quoted,
+            notLoaded: notLoaded,
+            onQuote: _goTo,
+            onNotLoaded: (quote) => setState(() => _seeking = quote),
+            isRoot: place == null,
+            highlighted: view.tx.id == _focus,
+            canAct: wallets.wallet != null,
+            flagged: wallets.wallet != null && client.hasFlagged(wallets.wallet!.addressHex, view.tx.id),
+          ),
+        );
+        return withdrawn ? Opacity(opacity: 0.55, child: card) : card;
+      }
+
+      final items = <Widget Function()>[
+        if (withdrawn)
+          () => Card(
+                color: theme.colorScheme.tertiaryContainer,
                 margin: const EdgeInsets.only(bottom: 12),
                 child: ListTile(
                   leading: const MurmurIcon(Glyph.flag),
                   title: Text(mine ? l.threadWithdrawnMineNote : l.threadWithdrawnNote),
                 ),
-              );
-            }
-            i -= lead;
-            if (i == entries.length) {
-              return Padding(
+              ),
+        () => card(root, null),
+        // Said outright: a forum's replies usually run the other way.
+        if (shown.length > 1 || earlier)
+          () => Padding(
+                padding: const EdgeInsetsDirectional.fromSTEB(20, 4, 0, 12),
+                child: Row(children: [
+                  const Expanded(child: Divider()),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: Text(l.repliesNewestFirst, style: theme.textTheme.bodySmall),
+                  ),
+                  const Expanded(child: Divider()),
+                ]),
+              ),
+        for (final (view, place) in shown) () => card(view, place),
+        if (mutedReplies > 0)
+          () => Padding(
                 padding: const EdgeInsets.all(12),
                 child: Text(l.mutedRepliesHidden(mutedReplies),
-                    textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodySmall),
-              );
-            }
-            final (view, place) = entries[i];
-            final card = Padding(
-              padding: EdgeInsetsDirectional.only(start: place == 0 ? 0 : 20),
-              child: _MessageCard(
-                view: view,
-                client: client,
-                quoted: place == 0 ? const [] : quoted(view, place),
-                isRoot: place == 0,
-                highlighted: view.tx.id == focusTxid,
-                canAct: wallets.wallet != null,
-                flagged: wallets.wallet != null && client.hasFlagged(wallets.wallet!.addressHex, view.tx.id),
+                    textAlign: TextAlign.center, style: theme.textTheme.bodySmall),
               ),
-            );
-            return withdrawn ? Opacity(opacity: 0.55, child: card) : card;
-          },
+        if (earlier)
+          () => Padding(
+                padding: const EdgeInsetsDirectional.fromSTEB(20, 4, 0, 0),
+                child: client.threadReading(rootTxid)
+                    ? const Center(child: Padding(padding: EdgeInsets.all(8), child: CircularProgressIndicator()))
+                    : OutlinedButton(
+                        onPressed: () => client.readEarlier(rootTxid),
+                        child: Text(l.earlierReplies),
+                      ),
+              ),
+      ];
+
+      return Scaffold(
+        appBar: AppBar(
+          // The count is of the replies at hand: not said while there are more.
+          title: Text(earlier ? l.kindThread : '${l.kindThread} · ${l.replyCount(shown.length)}'),
+          actions: [StarButton(rootTxid), ShareButton(threadLink(rootTxid), subject: 'Murmur', size: 24)],
+        ),
+        body: ListView.builder(
+          controller: _scroll,
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 32),
+          itemCount: items.length,
+          itemBuilder: (context, i) => items[i](),
         ),
       );
     });
@@ -121,6 +223,9 @@ class _MessageCard extends StatelessWidget {
     required this.view,
     required this.client,
     required this.quoted,
+    required this.notLoaded,
+    required this.onQuote,
+    required this.onNotLoaded,
     required this.isRoot,
     required this.highlighted,
     required this.canAct,
@@ -130,8 +235,14 @@ class _MessageCard extends StatelessWidget {
   final TxView view;
   final MurmurClient client;
 
-  /// The replies this one answers.
+  /// The replies this one answers: those at hand, and the quotes of ones
+  /// older than the replies loaded.
   final List<TxView> quoted;
+  final List<String> notLoaded;
+
+  /// A tap on a quote: go to that reply (by txid), or load back to it.
+  final void Function(String txid) onQuote;
+  final void Function(String quote) onNotLoaded;
   final bool isRoot;
   final bool highlighted;
   final bool canAct;
@@ -172,7 +283,8 @@ class _MessageCard extends StatelessWidget {
             CountBadges(replies: client.replyCountOf(view), flags: client.flagCountOf(view)),
           ]),
           const SizedBox(height: 8),
-          for (final q in quoted) _Quote(q),
+          for (final q in quoted) _Quote(q, onTap: () => onQuote(q.tx.id)),
+          for (final q in notLoaded) _Quote(null, onTap: () => onNotLoaded(q)),
           MessageText(
             text ?? messageOrUnavailable(context, view),
             selectable: true,
@@ -210,47 +322,42 @@ class _MessageCard extends StatelessWidget {
 }
 
 /// A reply another one answers, above the answer: who wrote it and how it
-/// starts. A tap shows all of it.
+/// starts. A tap goes to it. Without a `view` it is older than the replies
+/// loaded, and a tap loads back to it.
 class _Quote extends StatelessWidget {
-  const _Quote(this.view);
+  const _Quote(this.view, {required this.onTap});
 
-  final TxView view;
+  final TxView? view;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final copper = theme.colorScheme.primary;
-    final author = Row(mainAxisSize: MainAxisSize.min, children: [
-      AddressAvatar(view.tx.fromAddress, size: 16),
-      const SizedBox(width: 6),
-      Flexible(
-        child: Text(nameOf(context, view.tx.fromAddress),
-            overflow: TextOverflow.ellipsis, style: theme.textTheme.bodySmall?.copyWith(color: copper)),
-      ),
-    ]);
-    final text = messageOrUnavailable(context, view);
+    final view = this.view;
+    final faint = theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant);
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: InkWell(
-        onTap: () => showAppDialog<void>(
-          context: context,
-          builder: (context) => AlertDialog(
-            scrollable: true,
-            title: author,
-            content: MessageText(text, selectable: true),
-            actions: [FilledButton(onPressed: () => Navigator.of(context).pop(), child: Text(context.l10n.done))],
-          ),
-        ),
+        onTap: onTap,
         child: Container(
           width: double.infinity,
           padding: const EdgeInsetsDirectional.only(start: 10, top: 2, bottom: 2),
           decoration: BoxDecoration(border: BorderDirectional(start: BorderSide(color: copper, width: 3))),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            author,
-            const SizedBox(height: 2),
-            MessageText(text.replaceAll('\n', ' '),
-                maxLines: 2, style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-          ]),
+          child: view == null
+              ? Text(context.l10n.quoteNotLoaded, style: faint)
+              : Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Row(mainAxisSize: MainAxisSize.min, children: [
+                    AddressAvatar(view.tx.fromAddress, size: 16),
+                    const SizedBox(width: 6),
+                    Flexible(
+                      child: Text(nameOf(context, view.tx.fromAddress),
+                          overflow: TextOverflow.ellipsis, style: theme.textTheme.bodySmall?.copyWith(color: copper)),
+                    ),
+                  ]),
+                  const SizedBox(height: 2),
+                  MessageText(messageOrUnavailable(context, view).replaceAll('\n', ' '), maxLines: 2, style: faint),
+                ]),
         ),
       ),
     );

@@ -1245,6 +1245,15 @@ class AppLocalizationsNl extends AppLocalizations {
       'Gedempt: de draadjes en antwoorden ervan zijn op dit apparaat verborgen.';
 
   @override
+  String get repliesNewestFirst => 'Nieuwste antwoorden eerst';
+
+  @override
+  String get earlierReplies => 'Eerdere antwoorden';
+
+  @override
+  String get quoteNotLoaded => 'Een eerder antwoord (tik om te laden)';
+
+  @override
   String mutedRepliesHidden(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,

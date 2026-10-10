@@ -102,6 +102,20 @@ class FakeChain extends MurmurClient {
   @override
   void watchThread(TxView root, Iterable<TxView> messages) => watchedThreads.add(root.tx.id);
 
+  /// Threads (txids) of which only the newest replies are at hand, and how
+  /// often a page before them was asked for.
+  final partly = <String>{};
+  var earlierAsked = 0;
+
+  @override
+  bool threadHasEarlier(String root) => partly.contains(root);
+
+  @override
+  bool threadReading(String root) => false;
+
+  @override
+  void readEarlier(String root) => earlierAsked++;
+
   @override
   List<TxView> repliesOf(TxView v) => _index.repliesOf(v);
 

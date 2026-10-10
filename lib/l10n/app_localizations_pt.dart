@@ -1244,6 +1244,15 @@ class AppLocalizationsPt extends AppLocalizations {
       'Silenciado: os seus tópicos e respostas ficam ocultos neste dispositivo.';
 
   @override
+  String get repliesNewestFirst => 'Respostas mais recentes primeiro';
+
+  @override
+  String get earlierReplies => 'Respostas anteriores';
+
+  @override
+  String get quoteNotLoaded => 'Uma resposta anterior (toque para carregar)';
+
+  @override
   String mutedRepliesHidden(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,

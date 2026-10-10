@@ -1248,6 +1248,15 @@ class AppLocalizationsEs extends AppLocalizations {
       'Silenciada: sus hilos y respuestas se ocultan en este dispositivo.';
 
   @override
+  String get repliesNewestFirst => 'Las respuestas más recientes primero';
+
+  @override
+  String get earlierReplies => 'Respuestas anteriores';
+
+  @override
+  String get quoteNotLoaded => 'Una respuesta anterior (toca para cargarla)';
+
+  @override
   String mutedRepliesHidden(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,

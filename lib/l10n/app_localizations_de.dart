@@ -1251,6 +1251,15 @@ class AppLocalizationsDe extends AppLocalizations {
       'Stummgeschaltet: Ihre Threads und Antworten sind auf diesem Gerät ausgeblendet.';
 
   @override
+  String get repliesNewestFirst => 'Neueste Antworten zuerst';
+
+  @override
+  String get earlierReplies => 'Frühere Antworten';
+
+  @override
+  String get quoteNotLoaded => 'Eine frühere Antwort (zum Laden tippen)';
+
+  @override
   String mutedRepliesHidden(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,

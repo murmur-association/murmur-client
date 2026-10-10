@@ -1242,6 +1242,15 @@ class AppLocalizationsEn extends AppLocalizations {
       'Muted: its threads and replies are hidden on this device.';
 
   @override
+  String get repliesNewestFirst => 'Newest replies first';
+
+  @override
+  String get earlierReplies => 'Earlier replies';
+
+  @override
+  String get quoteNotLoaded => 'An earlier reply (tap to load it)';
+
+  @override
   String mutedRepliesHidden(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,

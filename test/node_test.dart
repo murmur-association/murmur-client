@@ -436,6 +436,55 @@ void main() {
       await until(reader, what: 'the thread whole again', () => reader.threadComplete(thread.id));
     }, timeout: const Timeout(Duration(minutes: 4)));
 
+    test('a long thread opens with its newest replies, and reads earlier ones a page at a time', () async {
+      final node = await short(mining: true);
+      final writer = await node.connect(MurmurClient());
+      final me = miner.addressHex;
+      await until(writer, () => writer.availableTo(me) != null);
+      final thread = await writer.submit(wallet: miner, kind: TxKind.orphan, fee: minFee, message: utf('a long thread'));
+      await until(writer, what: 'the thread mined', () => mined(writer, thread));
+      final replies = <Transaction>[];
+      for (var i = 1; i <= 5; i++) {
+        replies.add(await writer.submit(
+            wallet: miner, kind: TxKind.reply, amount: minFee, fee: minFee, message: utf('reply $i'), reference: thread.id));
+        // One block each, so their order is the chain's.
+        await until(writer, what: 'reply $i mined', () => mined(writer, replies.last));
+      }
+
+      // A session that starts above them all: it knows the thread only from
+      // the node's index, not from blocks it fetched.
+      final last = writer.lookupTx(replies.last.id)!.height!;
+      await until(writer, what: 'blocks above the replies', () => writer.height >= last + 15,
+          timeout: const Duration(minutes: 2));
+      final cp = Checkpoint(writer.height, toHex(writer.hashAt(writer.height)));
+      final reader = MurmurClient(checkpoint: cp)..threadPage = 2;
+      reader.requestTx(thread.id);
+      await node.connect(reader);
+      await until(reader, what: 'the thread by id', () => mined(reader, thread));
+      final root = reader.lookupTx(thread.id)!;
+      List<String> read() => [for (final r in reader.repliesOf(root)) r.tx.id];
+      reader.watchThread(root, const []);
+      await until(reader, what: 'the newest page', () => read().length == 2 && !reader.threadReading(thread.id));
+      expect(read(), [replies[3].id, replies[4].id]);
+      expect(reader.threadHasEarlier(thread.id), isTrue);
+      expect(reader.threadComplete(thread.id), isFalse);
+
+      // A reply mined meanwhile joins the ones at hand; nothing earlier is read for it.
+      final late = await writer.submit(
+          wallet: miner, kind: TxKind.reply, amount: minFee, fee: minFee, message: utf('a late one'), reference: thread.id);
+      await until(reader, what: 'the new reply', () => read().contains(late.id));
+      expect(read(), [replies[3].id, replies[4].id, late.id]);
+
+      reader.readEarlier(thread.id);
+      await until(reader, what: 'the page before', () => read().length == 5 && !reader.threadReading(thread.id));
+      expect(read(), [for (final r in replies.skip(1)) r.id] + [late.id]);
+      expect(reader.threadHasEarlier(thread.id), isTrue);
+      reader.readEarlier(thread.id);
+      await until(reader, what: 'the whole thread', () => reader.threadComplete(thread.id));
+      expect(read(), [for (final r in replies) r.id] + [late.id]);
+      expect(reader.threadHasEarlier(thread.id), isFalse);
+    }, timeout: const Timeout(Duration(minutes: 4)));
+
     test('a node without the index: the same thread and history, through filters', () async {
       final node = await short(mining: true, extra: ['--no-index']);
       final writer = await node.connect(MurmurClient());

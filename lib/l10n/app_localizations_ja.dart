@@ -1217,6 +1217,15 @@ class AppLocalizationsJa extends AppLocalizations {
   String get mutedNote => 'ミュート中：このアドレスのスレッドと返信はこの端末で非表示になります。';
 
   @override
+  String get repliesNewestFirst => '新しい返信が先';
+
+  @override
+  String get earlierReplies => '以前の返信';
+
+  @override
+  String get quoteNotLoaded => '以前の返信（タップして読み込む）';
+
+  @override
   String mutedRepliesHidden(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,

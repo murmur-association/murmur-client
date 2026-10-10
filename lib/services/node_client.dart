@@ -197,7 +197,14 @@ class _LooseTx {
 /// first; each page is proven against the count and digest the state holds
 /// for the list, or by chaining into the page after it.
 class _ListRead {
-  _ListRead(this.key, this.request, this.count, this.fallback);
+  _ListRead(this.key, this.request, this.count, this.fallback, {this.wanted, this.page = maxPageEntries});
+
+  /// How many entries a request asks for.
+  final int page;
+
+  /// How many entries to read, counted from the newest; null for all of
+  /// them. A thread is read a page at a time, as its page asks for more.
+  int? wanted;
 
   /// The state entry that commits to the list.
   final Uint8List key;
@@ -232,6 +239,9 @@ class _ListRead {
   final Map<String, (int, int)> entries = {};
 
   bool get complete => total != null && have >= total!;
+
+  /// Whether earlier entries are wanted and not read yet.
+  bool get behind => total != null && !complete && (wanted == null || have < wanted!);
 }
 
 /// The flags against an address's messages, read from the node's index
@@ -947,11 +957,39 @@ class MurmurClient extends ChangeNotifier {
   /// message) is here, proven against the thread's entry in the state.
   bool threadComplete(String root) => _threadReads[root]?.complete ?? false;
 
+  /// How many of a thread's replies and flags are read at a time: as many
+  /// as a node gives in one answer. (Tests read fewer.)
+  int threadPage = maxPageEntries;
+
+  /// Whether thread `root` has earlier replies than the ones read: it is
+  /// read from its newest end, a page at a time.
+  bool threadHasEarlier(String root) {
+    final read = _threadReads[root];
+    return read != null && !read.unavailable && read.total != null && !read.complete;
+  }
+
+  /// Whether a page of thread `root` is being read now.
+  bool threadReading(String root) {
+    final read = _threadReads[root];
+    return read != null && !read.unavailable && (read.total == null || read.behind);
+  }
+
+  /// Reads the page of replies before the ones at hand.
+  void readEarlier(String root) {
+    final read = _threadReads[root];
+    if (read == null || read.complete || read.behind) return;
+    read.wanted = read.have + read.page;
+    _wake();
+    notifyListeners();
+  }
+
   /// Follows a thread: blocks referencing its root (every reply does) or any
   /// of its replies (a flag of one does), from the root's height on.
   ///
   /// With a node that keeps an index, the thread's events are read from it
-  /// instead, a page at a time, and proven against the thread's entry.
+  /// instead and proven against the thread's entry: the newest page, and an
+  /// earlier one each time [readEarlier] asks. However long the thread, it
+  /// opens with one request.
   void watchThread(TxView root, Iterable<TxView> messages) {
     if (!root.confirmed) return;
     final key = threadKey(root.tx.hash);
@@ -960,7 +998,7 @@ class MurmurClient extends ChangeNotifier {
       return _ListRead(key, (end, count) => GetThread(root.tx.hash, end, count), (value) {
         final entry = value == null ? null : ThreadEntry.parse(value);
         return entry == null ? null : (entry.events, entry.digest);
-      }, () => _watchItem(root.tx.hash, root.height ?? height));
+      }, () => _watchItem(root.tx.hash, root.height ?? height), wanted: threadPage, page: threadPage);
     });
     _watchKey(key);
     if (!read.unavailable) return;
@@ -1125,22 +1163,27 @@ class MurmurClient extends ChangeNotifier {
       ..sort((a, b) => b.seenAt.compareTo(a.seenAt));
     out.addAll([for (final p in pending) TxView(p.tx, content: p.content, pending: p)]);
     final limit = min(upTo ?? height, height);
-    // The fetched blocks only, not every height: the chain may be long.
-    final fetched = _blocks.indexes.toList()..sort((a, b) => b.compareTo(a));
-    for (final index in fetched) {
+    // Where each is on the chain (height, place in its block): those of
+    // the fetched blocks (only those, not every height: the chain may be
+    // long) and those that came on their own, in one order. Two blocks may
+    // carry the same time, so the order of replies can't be left to that.
+    final onChain = <(int, int, TxView)>[];
+    for (final index in _blocks.indexes) {
       final h = index + 1;
       final b = _blocks[index]!;
-      for (var i = b.transactions.length - 1; i >= 0; i--) {
+      for (var i = 0; i < b.transactions.length; i++) {
         final tx = b.transactions[i];
         if (tx.kind == TxKind.raw) continue;
-        if (h <= limit || _sentHere.contains(tx.id)) out.add(_viewAt(h, i));
+        if (h <= limit || _sentHere.contains(tx.id)) onChain.add((h, i, _viewAt(h, i)));
       }
     }
     for (final MapEntry(key: id, value: loose) in _loose.entries) {
       if ((loose.height <= limit || _sentHere.contains(id)) && !_txIndex.containsKey(id) && loose.tx.kind != TxKind.raw) {
-        out.add(lookupTx(id)!);
+        onChain.add((loose.height, loose.index, lookupTx(id)!));
       }
     }
+    onChain.sort((a, b) => a.$1 != b.$1 ? b.$1.compareTo(a.$1) : b.$2.compareTo(a.$2));
+    out.addAll([for (final (_, _, view) in onChain) view]);
     return out;
   }
 
@@ -2784,14 +2827,18 @@ class MurmurClient extends ChangeNotifier {
     if (height == 0) return false;
     for (final read in [..._threadReads.values, ..._addressReads.values]) {
       if (read.unavailable) continue;
-      // Read whole: more only once the state shows the list has grown (or
-      // changed, after a reorganization).
-      if (read.complete) {
+      // Its newest page first, and again once the state shows the list has
+      // grown (or changed, after a reorganization); otherwise the page
+      // before the ones read, while more are wanted.
+      var back = false;
+      if (read.total != null) {
         final proven = _proven[toHex(read.key)];
         final now = proven == null ? null : read.count(proven.value);
-        if (now == null || (now.$1 == read.total && bytesEqual(now.$2, read.digest!))) continue;
+        final same = now == null || (now.$1 == read.total && bytesEqual(now.$2, read.digest!));
+        if (same && !read.behind) continue;
+        back = same;
       }
-      await _readPage(read, gen);
+      await _readPage(read, gen, back: back);
       return true;
     }
     for (final MapEntry(key: address, value: read) in _flagReads.entries) {
@@ -2861,11 +2908,10 @@ class MurmurClient extends ChangeNotifier {
     return (await _request(_addressWaiter = Completer<Address>(), msg)).page;
   }
 
-  Future<void> _readPage(_ListRead read, int gen) async {
-    // The next page back, or (first, and when the list has grown) the newest.
-    final back = read.total != null && !read.complete;
+  /// Reads the page before the ones read (`back`), or the newest.
+  Future<void> _readPage(_ListRead read, int gen, {required bool back}) async {
     final end = back ? read.total! - read.have : 0;
-    final page = await _askPage(read, end, maxPageEntries);
+    final page = await _askPage(read, end, read.page);
     if (gen != _generation) throw _Aborted();
     if (page == null || !page.available) {
       // No index on this node: block filters find the same, more slowly.
@@ -2917,10 +2963,11 @@ class MurmurClient extends ChangeNotifier {
       if (page.total != total || page.start + page.entries.length != total || !bytesEqual(after, digest)) {
         throw const FormatException('the node sent a list that does not match the state');
       }
-      // Whether what was read before is still the list's start: its digest
-      // at the old length must come up while chaining this page.
+      // Whether what was read before is still part of the list: its digest
+      // at the old length must come up while chaining this page. Then the
+      // new entries join the ones at hand, read whole or not.
       final old = read.total, oldDigest = read.digest;
-      var continues = old != null && read.complete && old >= page.start && old <= total;
+      var continues = old != null && old >= page.start && old <= total;
       if (continues) {
         final upToOld = chainDigest(page.startDigest, txids.take(old - page.start));
         continues = bytesEqual(upToOld, oldDigest!);
