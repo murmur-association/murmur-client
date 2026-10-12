@@ -2,6 +2,12 @@
 
 Newest first. Each release is a `vX.Y.Z` tag matching `version` in `pubspec.yaml`; see [README](README.md#releases-and-deployment). Entries marked **Breaking** need action from users.
 
+## v0.6.1: checkpoint refresh (2026-10-12)
+
+No protocol or network change.
+
+- **Changed: the testnet checkpoint** is now block 1,800, refreshed from the live network by the scheduled release.
+
 ## v0.6.0: murmur-testnet-11, answers, newest replies first, lighter on memory (2026-10-10)
 
 **Breaking: a new network and protocol.** The app speaks protocol 12 and joins `murmur-testnet-11`; it no longer reaches `murmur-testnet-10`. Nothing carries over: wallets keep their keys, and start with nothing on the new chain. The desktop apps ship node release v0.12.0. No checkpoint while the network is under a day old.
