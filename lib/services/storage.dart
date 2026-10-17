@@ -175,6 +175,61 @@ class Preferences extends ChangeNotifier {
   /// seen in the Messages tab: what the new-reply badge counts from.
   Map<String, int> messagesSeen = {};
 
+  /// What came before this (Unix seconds) counts as read: set the first
+  /// time the app runs with unread marks, so a wallet's whole past isn't
+  /// marked. Null until then, and in a fresh session's tests.
+  int? unreadFrom;
+
+  /// Per row of the Messages and Starred tabs (a message's txid, or a
+  /// starred person's address), the time of the newest activity it had
+  /// when last opened: what is newer stays marked as unread until opened.
+  Map<String, int> opened = {};
+
+  /// How many rows `opened` keeps: the ones opened longest ago go first.
+  static const maxOpened = 2000;
+
+  /// Per thread (its first message's txid), where its reader left off: the
+  /// last reply seen, and its place among the thread's events when the
+  /// node's index gave it. The next visit opens there, and marks what is
+  /// newer.
+  Map<String, ({String txid, int? place})> threadsRead = {};
+
+  /// How many threads `threadsRead` keeps.
+  static const maxThreadsRead = 1000;
+
+  /// Whether a row with activity at `time` (Unix seconds) is unread: newer
+  /// than when it was last opened, and than [unreadFrom].
+  bool isUnread(String key, int time) {
+    final from = unreadFrom;
+    if (from == null || time <= from) return false;
+    return time > (opened[key] ?? 0);
+  }
+
+  /// Marks a row read, up to its activity at `time`.
+  Future<void> markOpened(String key, int time) async {
+    if ((opened[key] ?? -1) >= time) return;
+    final kept = {...opened}..remove(key);
+    while (kept.length >= maxOpened) {
+      kept.remove(kept.keys.first); // the first kept is the oldest opened
+    }
+    opened = kept..[key] = time;
+    notifyListeners();
+    await (await SharedPreferences.getInstance()).setString('opened', jsonEncode(opened));
+  }
+
+  /// Where the reader of thread `root` left off.
+  Future<void> setThreadRead(String root, String txid, int? place) async {
+    final now = threadsRead[root];
+    if (now != null && now.txid == txid && now.place == place) return;
+    final kept = {...threadsRead}..remove(root);
+    while (kept.length >= maxThreadsRead) {
+      kept.remove(kept.keys.first);
+    }
+    threadsRead = kept..[root] = (txid: txid, place: place);
+    await (await SharedPreferences.getInstance()).setString('threads_read',
+        jsonEncode({for (final MapEntry(:key, :value) in threadsRead.entries) key: [value.txid, value.place]}));
+  }
+
   Future<void> _loadOwnView(SharedPreferences prefs) async {
     threadLanguages = prefs.getStringList('thread_languages')?.toSet();
     hideFlagged = prefs.getBool('hide_flagged') ?? true;
@@ -189,6 +244,20 @@ class Preferences extends ChangeNotifier {
     localNodeCpu = prefs.getInt('local_node_cpu') ?? defaultLocalNodeCpu;
     localNodeGpu = prefs.getBool('local_node_gpu') ?? false;
     messagesSeen = _jsonMap(prefs.getString('messages_seen')).map((k, v) => MapEntry(k, v is int ? v : 0));
+    unreadFrom = prefs.getInt('unread_from');
+    if (unreadFrom == null) {
+      unreadFrom = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+      await prefs.setInt('unread_from', unreadFrom!);
+    }
+    opened = {
+      for (final MapEntry(:key, :value) in _jsonMap(prefs.getString('opened')).entries)
+        if (value is int) key: value,
+    };
+    threadsRead = {
+      for (final MapEntry(:key, :value) in _jsonMap(prefs.getString('threads_read')).entries)
+        if (value is List && value.length == 2 && value[0] is String && (value[1] == null || value[1] is int))
+          key: (txid: value[0] as String, place: value[1] as int?),
+    };
   }
 
   static Map<String, Object?> _jsonMap(String? json) {

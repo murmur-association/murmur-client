@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart' show PointerDeviceKind;
 import 'package:flutter/material.dart';
 
 import '../services/language.dart';
@@ -11,8 +12,8 @@ import 'glyphs.dart';
 /// Every thread, most recently active first (a new reply anywhere in a
 /// thread moves it to the top), as of one block. The order stays put while
 /// new blocks arrive, so the list can be read. A new snapshot is taken at the
-/// tip with Refresh, and whenever the tab comes into view (`refreshToken`
-/// changes). What this device sent shows at once, pending or not.
+/// tip when the list is pulled down at its top, and whenever the tab comes
+/// into view (`refreshToken` changes). What this device sent shows at once, pending or not.
 class ThreadsTab extends StatefulWidget {
   const ThreadsTab({super.key, this.refreshToken = 0});
 
@@ -89,7 +90,7 @@ class _ThreadsTabState extends State<ThreadsTab> {
       final newBlocks = (client.height - height).clamp(0, 1 << 30); // negative after a reorg
       final theme = Theme.of(context);
       final small = theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant);
-      return PagedList<ThreadSummary>(
+      final list = PagedList<ThreadSummary>(
         resetKey: (
           _generation,
           query,
@@ -118,11 +119,6 @@ class _ThreadsTabState extends State<ThreadsTab> {
                       style: small,
                     ),
                   ),
-                ),
-                TextButton.icon(
-                  icon: const MurmurIcon(Glyph.refresh, size: 18),
-                  label: Text(l.refresh),
-                  onPressed: () => setState(() => _snapshot(client)),
                 ),
               ]),
             ),
@@ -156,6 +152,15 @@ class _ThreadsTabState extends State<ThreadsTab> {
               ),
             ),
         ],
+      );
+      // Pulled down at its top, the list is taken again at the tip: with a
+      // finger, a mouse or a touchpad alike.
+      return ScrollConfiguration(
+        behavior: ScrollConfiguration.of(context).copyWith(dragDevices: PointerDeviceKind.values.toSet()),
+        child: RefreshIndicator(
+          onRefresh: () async => setState(() => _snapshot(client)),
+          child: list,
+        ),
       );
     });
   }
@@ -321,7 +326,7 @@ class _ThreadTile extends StatelessWidget {
     final withdrawn = AppScope.of(context).client.selfFlagged(root);
     final tile = ListTile(
       // The author's picture: threads read as people talking.
-      leading: Opacity(opacity: root.confirmed ? 1 : 0.5, child: AddressAvatar(root.tx.fromAddress)),
+      leading: AvatarLink(root.tx.fromAddress, faded: !root.confirmed),
       title: MessageText(text, maxLines: 1),
       // Who started it, in copper, then when.
       subtitle: withdrawn

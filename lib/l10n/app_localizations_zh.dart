@@ -357,9 +357,6 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get refresh => '刷新';
-
-  @override
   String threadStarted(String time) {
     return '$time发起';
   }
@@ -848,6 +845,16 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String feeBelowSuggested(String fee) {
+    return '低于建议手续费（$fee）：可能要过一段时间才能进入区块。';
+  }
+
+  @override
+  String feeAboveSuggested(String fee) {
+    return '高于建议手续费（$fee）：你给矿工的比所需的多。';
+  }
+
+  @override
   String atLeastMin(String min) {
     return '至少 $min';
   }
@@ -921,9 +928,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get use => '使用';
-
-  @override
-  String get checkAgain => '重新查询';
 
   @override
   String balanceBeforeAfter(String before, String after) {
@@ -1207,9 +1211,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get mutedNote => '已屏蔽：其话题和回复在此设备上隐藏。';
-
-  @override
-  String get repliesNewestFirst => '最新回复在前';
 
   @override
   String get earlierReplies => '更早的回复';

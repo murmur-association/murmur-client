@@ -182,7 +182,7 @@ void main() {
     expect(chosen!(records.first), '');
   });
 
-  testWidgets('a copper name in a row opens its address', (tester) async {
+  testWidgets("a row's picture opens its address; its copper name, too easily tapped, does not", (tester) async {
     final address = 'ab' * 32;
     await tester.pumpWidget(AppScope(
       client: MurmurClient(),
@@ -191,10 +191,21 @@ void main() {
       child: MaterialApp(
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
-        home: Scaffold(body: Center(child: PersonLine(address, '5 min ago'))),
+        home: Scaffold(
+          body: Center(
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              AvatarLink(address),
+              const SizedBox(width: 16),
+              PersonLine(address, '5 min ago'),
+            ]),
+          ),
+        ),
       ),
     ));
     await tester.tapOnText(find.textRange.ofSubstring(shortHex(address)));
+    await tester.pumpAndSettle();
+    expect(find.byType(AddressPage), findsNothing);
+    await tester.tap(find.byType(AddressAvatar));
     await tester.pumpAndSettle();
     expect(find.byType(AddressPage), findsOneWidget);
   });

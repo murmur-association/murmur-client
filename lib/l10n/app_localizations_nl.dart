@@ -366,9 +366,6 @@ class AppLocalizationsNl extends AppLocalizations {
   }
 
   @override
-  String get refresh => 'Vernieuwen';
-
-  @override
   String threadStarted(String time) {
     return 'gestart $time';
   }
@@ -871,6 +868,16 @@ class AppLocalizationsNl extends AppLocalizations {
   }
 
   @override
+  String feeBelowSuggested(String fee) {
+    return 'Onder de voorgestelde vergoeding ($fee): het kan even duren voor ze in een blok komt.';
+  }
+
+  @override
+  String feeAboveSuggested(String fee) {
+    return 'Boven de voorgestelde vergoeding ($fee): je biedt de miner meer dan nodig.';
+  }
+
+  @override
   String atLeastMin(String min) {
     return 'Minstens $min';
   }
@@ -945,9 +952,6 @@ class AppLocalizationsNl extends AppLocalizations {
 
   @override
   String get use => 'Gebruiken';
-
-  @override
-  String get checkAgain => 'Opnieuw opvragen';
 
   @override
   String balanceBeforeAfter(String before, String after) {
@@ -1243,9 +1247,6 @@ class AppLocalizationsNl extends AppLocalizations {
   @override
   String get mutedNote =>
       'Gedempt: de draadjes en antwoorden ervan zijn op dit apparaat verborgen.';
-
-  @override
-  String get repliesNewestFirst => 'Nieuwste antwoorden eerst';
 
   @override
   String get earlierReplies => 'Eerdere antwoorden';

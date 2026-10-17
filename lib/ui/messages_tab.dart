@@ -36,7 +36,14 @@ class MessagesTab extends StatelessWidget {
             // Another wallet or other filters start the list over.
             resetKey: (me, filters.fold(0, (mask, f) => mask | (1 << f.index))),
             fetch: (n) => client.activityOf(me).where(shown).take(n).toList(),
-            itemBuilder: (context, v) => TxTile(v, showCounts: true),
+            // What others wrote to it is marked until opened.
+            itemBuilder: (context, v) {
+              final unread = v.confirmed && v.tx.fromAddress != me && prefs.isUnread(v.tx.id, activityTime(v));
+              return TxTile(v,
+                  showCounts: true,
+                  unread: unread,
+                  onOpen: unread ? () => prefs.markOpened(v.tx.id, activityTime(v)) : null);
+            },
             empty: EmptyState(icon: Glyph.outbox, text: l.noMessages),
             loadingMore: client.historyPending(me) || client.historyHasEarlier(me),
             onNeedMore: () => client.readEarlierHistory(me),

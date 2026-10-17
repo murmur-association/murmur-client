@@ -13,7 +13,7 @@ import 'bytes.dart';
 import 'commitments.dart';
 import 'models.dart';
 
-const protocolVersion = 12;
+const protocolVersion = 13;
 
 /// Payloads over this are a protocol violation.
 const maxPayloadBytes = 16 * 1024 * 1024;
@@ -37,6 +37,12 @@ const maxCompactTxs = 16000;
 
 /// Entries in one page of a thread's events or of an address's lists.
 const maxPageEntries = 500;
+
+/// A page's range proof (PROTOCOL.md Section 3.6): a list's peaks, one per
+/// set bit of its length, and the siblings its entries need, two per level
+/// of the 64 a peak can have.
+const maxListPeaks = 64;
+const maxListSiblings = 128;
 
 sealed class Message {
   const Message();
@@ -287,8 +293,9 @@ class ListPage {
     required this.at,
     required this.total,
     required this.start,
-    required this.startDigest,
     required this.entries,
+    this.peaks = const [],
+    this.siblings = const [],
   });
 
   /// False when the node has no such thread, or keeps no index.
@@ -302,10 +309,14 @@ class ListPage {
   final int total;
   final int start;
 
-  /// The list's digest after entry `start` (`0^32` when `start` is 0, and
-  /// always for the flags against an address, which no state entry holds).
-  final Uint8List startDigest;
   final List<TxOnChain> entries;
+
+  /// The range proof of the entries in the list as of `at` (Section 3.6):
+  /// its peaks, largest first, and the siblings the entries need. Empty for
+  /// the lists no state entry holds (the flags against an address, the
+  /// answers to it).
+  final List<Uint8List> peaks;
+  final List<Uint8List> siblings;
 }
 
 /// Asks for the `count` events of thread `root` that end at event number
@@ -643,7 +654,6 @@ ListPage _decodePage(ByteReader r) {
   final at = r.hash32();
   final total = r.u64();
   final start = r.u64();
-  final startDigest = r.hash32();
   final n = r.u32();
   if (n > maxPageEntries) throw FormatException('$n page entries exceeds limit');
   final entries = <TxOnChain>[];
@@ -653,8 +663,10 @@ ListPage _decodePage(ByteReader r) {
     if (lookup is! TxOnChain) throw const FormatException('a page entry that is not on the chain');
     entries.add(lookup);
   }
+  final peaks = _decodeHashes(r, maxListPeaks);
+  final siblings = _decodeHashes(r, maxListSiblings);
   return ListPage(
-      available: available, at: at, total: total, start: start, startDigest: startDigest, entries: entries);
+      available: available, at: at, total: total, start: start, entries: entries, peaks: peaks, siblings: siblings);
 }
 
 void _encodePage(ByteWriter w, ListPage p) {
@@ -663,11 +675,12 @@ void _encodePage(ByteWriter w, ListPage p) {
     ..bytes(p.at)
     ..u64(p.total)
     ..u64(p.start)
-    ..bytes(p.startDigest)
     ..u32(p.entries.length);
   for (final entry in p.entries) {
     _encodeLookup(w, entry);
   }
+  _encodeHashes(w, p.peaks);
+  _encodeHashes(w, p.siblings);
 }
 
 AddressList _decodeAddressList(ByteReader r) {

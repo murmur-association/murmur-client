@@ -83,6 +83,7 @@ class AppDriver {
   AppLocalizations get l => _home.l10n;
   MurmurClient get client => AppScope.of(_home).client;
   WalletController get wallets => AppScope.of(_home).wallets;
+  Preferences get prefs => AppScope.of(_home).prefs;
   LocalNode get ownNode => AppScope.of(_home).localNode!;
 
   /// Lets the app run until `done`, for at most `timeout`: frames are drawn
@@ -182,6 +183,22 @@ class AppDriver {
     await waitFor(field, what: 'the "$label" field');
     await tester.enterText(field.last, text);
     await tester.pump();
+  }
+
+  /// What the field labelled `label` holds.
+  String fieldText(String label) {
+    final field = find.ancestor(of: find.text(label), matching: find.byType(TextField));
+    return tester.widget<TextField>(field.last).controller!.text;
+  }
+
+  /// Pulls the list in view down from its top, as a finger does, to have it
+  /// taken again.
+  Future<void> pullDown(Finder list) async {
+    await waitFor(list, what: 'the list to pull');
+    await tester.fling(list.first, const Offset(0, 500), 1500);
+    for (var i = 0; i < 15; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
   }
 
   /// A tab of the home page.

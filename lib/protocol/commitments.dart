@@ -42,29 +42,121 @@ Uint8List threadKey(Uint8List root) => sha256Bytes([0x04, ...root]);
 /// Key of an address's name: the `message_hash` of its latest Name.
 Uint8List nameKey(Uint8List address) => sha256Bytes([0x05, ...address]);
 
-/// A list's digest after `txids` are added to one that stood at `start`:
-/// each entry makes it `H(digest ‖ txid)` (PROTOCOL.md Section 3.6). A list
-/// starts at `0^32`.
-Uint8List chainDigest(Uint8List start, Iterable<Uint8List> txids) {
-  var digest = start;
-  for (final txid in txids) {
-    digest = sha256Bytes([...digest, ...txid]);
+// ---- lists (Section 3.6) -----------------------------------------------------
+//
+// A thread's events, and what an address sent and what credited it, are
+// committed by the root of a Merkle mountain range over their txids, oldest
+// first. So any page of them is proven on its own against the state entry,
+// whatever its place and the list's length. Mirrors murmur core's list.rs.
+
+/// `H(0x10 ‖ txid)`: a list's leaf. Hashed, so that no leaf can pass for an
+/// inner node.
+Uint8List listLeaf(Uint8List txid) => sha256Bytes([0x10, ...txid]);
+
+/// `H(0x11 ‖ left ‖ right)`: an inner node of a list's peak.
+Uint8List listJoin(Uint8List left, Uint8List right) => _tagged(0x11, left, right);
+
+/// The root of a list with these peaks, largest first: `0^32` for none,
+/// otherwise bagged from the right with `H(0x12 ‖ peak ‖ acc)`.
+Uint8List bagListPeaks(List<Uint8List> peaks) {
+  if (peaks.isEmpty) return Uint8List(32);
+  var acc = peaks.last;
+  for (var i = peaks.length - 2; i >= 0; i--) {
+    acc = _tagged(0x12, peaks[i], acc);
   }
-  return digest;
+  return acc;
 }
 
-/// An account's entry: its balance and nonce, and the count and digest of
+/// The peaks of a list of `n` entries, largest first: for each, the number
+/// of its first leaf (from 0) and its height (it holds `2^height` leaves).
+/// One per set bit of `n`, found by division: `n` may pass 2^32.
+List<(int, int)> listLayout(int n) {
+  final peaks = <(int, int)>[];
+  var first = 0;
+  for (var height = 52; height >= 0; height--) {
+    final size = _pow2(height);
+    if ((n ~/ size) % 2 == 1) {
+      peaks.add((first, height));
+      first += size;
+    }
+  }
+  return peaks;
+}
+
+/// The hash of the perfect subtree of `2^height` leaves that starts at
+/// `txids[from]`.
+Uint8List _listSubtree(List<Uint8List> txids, int from, int height) {
+  if (height == 0) return listLeaf(txids[from]);
+  final half = _pow2(height - 1);
+  return listJoin(_listSubtree(txids, from, height - 1), _listSubtree(txids, from + half, height - 1));
+}
+
+/// The root of a whole list, from all its txids.
+Uint8List listRoot(List<Uint8List> txids) =>
+    bagListPeaks([for (final (first, height) in listLayout(txids.length)) _listSubtree(txids, first, height)]);
+
+/// Whether `txids`, as entries `start` onwards (from 0) of a list of `total`
+/// entries, are proven by `peaks` and `siblings` against `root`
+/// (PROTOCOL.md Section 3.6): every peak the entries meet is rebuilt from
+/// them and the siblings, in the node's walk order, every sibling is used
+/// once, and the peaks bag to the root. For no entries, the peaks alone
+/// prove the count and the root.
+bool verifyListRange({
+  required int total,
+  required int start,
+  required List<Uint8List> txids,
+  required List<Uint8List> peaks,
+  required List<Uint8List> siblings,
+  required Uint8List root,
+}) {
+  final layout = listLayout(total);
+  final count = txids.length;
+  if (start < 0 || peaks.length != layout.length || start + count > total) return false;
+  if (!bytesEqual(bagListPeaks(peaks), root)) return false;
+  if (count == 0) return siblings.isEmpty;
+  final a = start, b = start + count - 1;
+  var next = 0;
+
+  // The subtree at leaf `first` of `2^height` leaves: built from the
+  // entries where it lies inside the range, the next sibling where it lies
+  // outside, and from its two halves where it crosses an edge.
+  Uint8List? build(int first, int height) {
+    final last = first + _pow2(height) - 1;
+    if (last < a || first > b) {
+      if (next >= siblings.length) return null;
+      return siblings[next++];
+    }
+    if (first >= a && last <= b) return _listSubtree(txids, first - a, height);
+    final half = _pow2(height - 1);
+    final left = build(first, height - 1);
+    if (left == null) return null;
+    final right = build(first + half, height - 1);
+    if (right == null) return null;
+    return listJoin(left, right);
+  }
+
+  for (var i = 0; i < layout.length; i++) {
+    final (first, height) = layout[i];
+    final last = first + _pow2(height) - 1;
+    if (last < a || first > b) continue;
+    final built = build(first, height);
+    if (built == null || !bytesEqual(built, peaks[i])) return false;
+  }
+  return next == siblings.length;
+}
+
+/// An account's entry: its balance and nonce, and the count and root of
 /// the two lists the state commits to for it. What it sent has `nonce`
 /// entries; what credited it (a transfer to it, a reply in a thread it
 /// started) has `credits`. A block's reward is in neither.
 class AccountEntry {
-  const AccountEntry(this.balance, this.nonce, this.sentDigest, this.credits, this.creditDigest);
+  const AccountEntry(this.balance, this.nonce, this.sentRoot, this.credits, this.creditRoot);
 
   /// An address the chain has never seen: no entry.
   static final empty = AccountEntry(0, 0, Uint8List(32), 0, Uint8List(32));
 
-  /// `balance:u64le ‖ nonce:u64le ‖ sent_digest:32 ‖ credits:u64le ‖
-  /// credit_digest:32`, or null if `value` isn't that.
+  /// `balance:u64le ‖ nonce:u64le ‖ sent_root:32 ‖ credits:u64le ‖
+  /// credit_root:32`, or null if `value` isn't that.
   static AccountEntry? parse(Uint8List value) {
     if (value.length != 88) return null;
     return AccountEntry(
@@ -77,15 +169,15 @@ class AccountEntry {
   }
 
   final int balance, nonce, credits;
-  final Uint8List sentDigest, creditDigest;
+  final Uint8List sentRoot, creditRoot;
 }
 
-/// A thread's entry: who started it, and the count and digest of its events
+/// A thread's entry: who started it, and the count and root of its events
 /// (its Replies and the Flags that name it, in chain order).
 class ThreadEntry {
-  const ThreadEntry(this.author, this.events, this.digest);
+  const ThreadEntry(this.author, this.events, this.eventsRoot);
 
-  /// `author:32 ‖ events:u64le ‖ digest:32`, or null if `value` isn't that.
+  /// `author:32 ‖ events:u64le ‖ events_root:32`, or null if `value` isn't that.
   static ThreadEntry? parse(Uint8List value) {
     if (value.length != 72) return null;
     return ThreadEntry(value.sublist(0, 32), readU64le(value, 32), value.sublist(40, 72));
@@ -93,7 +185,7 @@ class ThreadEntry {
 
   final Uint8List author;
   final int events;
-  final Uint8List digest;
+  final Uint8List eventsRoot;
 }
 
 /// `flag_key = H(from ‖ reference)` (PROTOCOL.md Section 2.3).

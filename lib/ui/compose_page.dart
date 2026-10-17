@@ -49,12 +49,27 @@ class _ComposePageState extends State<ComposePage> {
               ? TxKind.name
               : (widget.kind == TxKind.raw ? TxKind.raw : TxKind.orphan);
   late final _to = TextEditingController(text: widget.to ?? '');
-  final _amount = TextEditingController(text: '1');
+  // A reply's reward starts as the suggested fee, filled in once it's known.
+  late final _amount = TextEditingController(text: _kind == TxKind.reply ? '' : '1');
   final _fee = TextEditingController(text: '1');
   final _message = TextEditingController();
   bool _sending = false;
+
+  /// The node's fee figures as last asked, at each new block.
   FeeInfo? _feeInfo;
   bool _feeLoading = false;
+
+  /// The tip the figures were last asked at.
+  int? _feeAt;
+
+  /// The figures the fee field follows: the first ones, then those the
+  /// user took with "Use". Newer ones never overwrite the fee by
+  /// themselves; a change is pointed out (`_feeMovedAt`) instead.
+  FeeInfo? _taken;
+  DateTime? _feeMovedAt;
+
+  /// How long "Use" and the fee field flash for.
+  static const _flashFor = Duration(seconds: 3);
 
   /// Once the user types a fee or amount, suggestions stop overwriting it.
   bool _feeEdited = false;
@@ -73,37 +88,55 @@ class _ComposePageState extends State<ComposePage> {
   @override
   void initState() {
     super.initState();
-    // Fees are per byte, so the suggestion follows the message's length.
-    _message.addListener(() => setState(() {
-          if (_feeInfo != null) _applyFee(_feeInfo!.suggested(_weight));
-        }));
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _loadFee();
-    });
+    // Fees are per byte, so the suggestion taken follows the message's length.
+    _message.addListener(() => setState(_follow));
   }
 
+  /// Asks for the fee figures again: at each new block, so the suggestion
+  /// on screen is the current one.
   Future<void> _loadFee() async {
+    if (_feeLoading) return;
     setState(() => _feeLoading = true);
     final info = await AppScope.of(context).client.feeInfo();
     if (!mounted) return;
     setState(() {
-      _feeInfo = info;
       _feeLoading = false;
-      _applyFee(info.suggested(_weight));
+      final before = _feeInfo?.suggested(_weight);
+      _feeInfo = info;
+      if (_taken == null) {
+        _taken = info;
+        _follow();
+        return;
+      }
+      // Moved, and no longer what the fee says: pointed out, not applied.
+      final now = info.suggested(_weight);
+      if (before != now && now != _parseAmount(_fee.text)) _feeMovedAt = DateTime.now();
     });
   }
 
-  /// Puts `fee` in the fee field (unless the user typed their own), and
-  /// keeps an untouched amount at the `amount >= fee` floor that replies
-  /// and transfers must meet.
-  void _applyFee(int fee, {bool force = false}) {
-    if (force || !_feeEdited) {
-      _fee.text = amountText(context, fee);
-      if (force) _feeEdited = false;
+  /// Takes the newest figures: the fee becomes the suggestion again.
+  void _useSuggested() {
+    _taken = _feeInfo;
+    _feeEdited = false;
+    _feeMovedAt = null;
+    _follow();
+  }
+
+  /// Puts the suggestion taken in the fee field (unless the user typed
+  /// their own), and keeps an untouched amount where it belongs: a reply's
+  /// reward at that suggestion, and anything paid at the `amount >= fee`
+  /// floor that replies and transfers must meet.
+  void _follow() {
+    final taken = _taken?.suggested(_weight);
+    if (taken == null) return;
+    if (!_feeEdited) _fee.text = amountText(context, taken);
+    if (_amountEdited) return;
+    final fee = _parseAmount(_fee.text) ?? taken;
+    if (_kind == TxKind.reply) {
+      _amount.text = amountText(context, fee > taken ? fee : taken);
+    } else if ((_parseAmount(_amount.text) ?? 0) < fee) {
+      _amount.text = amountText(context, fee);
     }
-    final amount = _parseAmount(_amount.text) ?? 0;
-    final current = _parseAmount(_fee.text) ?? fee;
-    if (!_amountEdited && amount < current) _amount.text = amountText(context, current);
   }
 
   @override
@@ -187,6 +220,7 @@ class _ComposePageState extends State<ComposePage> {
         fee: fee,
         burn: _kind.startsThread ? orphanBurn(fee) : null,
         paid: _hasRecipient ? amount : null,
+        suggested: _feeInfo?.suggested(_weight),
         check: check,
       ),
     );
@@ -244,6 +278,14 @@ class _ComposePageState extends State<ComposePage> {
       final msgBytes = MurmurClient.encodeText(_message.text).length;
       final fee = _parseAmount(_fee.text);
       final apple = {TargetPlatform.iOS, TargetPlatform.macOS}.contains(Theme.of(context).platform);
+      // The fee figures follow the chain: asked again at each new block.
+      if (_feeAt != client.height) {
+        _feeAt = client.height;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _loadFee();
+        });
+      }
+      final moved = _feeMovedAt;
 
       return CallbackShortcuts(
         bindings: {
@@ -328,9 +370,8 @@ class _ComposePageState extends State<ComposePage> {
             _FeeCard(
               info: _feeInfo,
               weight: _weight,
-              loading: _feeLoading,
-              onRefresh: _loadFee,
-              onUse: (fee) => setState(() => _applyFee(fee, force: true)),
+              movedAt: moved,
+              onUse: () => setState(_useSuggested),
             ),
             const SizedBox(height: 16),
             Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -356,20 +397,32 @@ class _ComposePageState extends State<ComposePage> {
                 const SizedBox(width: 12),
               ],
               Expanded(
-                child: TextFormField(
-                  controller: _fee,
-                  autovalidateMode: AutovalidateMode.onUserInteraction,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  decoration: InputDecoration(
-                    labelText: l.feeToMiner,
-                    border: const OutlineInputBorder(),
-                    helperText: _feeInfo == null ? null : l.suggestedFee(formatAmount(context, _feeInfo!.suggested(_weight))),
+                // Flashes with "Use" when the suggestion moves away from it.
+                child: FadingHighlight(
+                  since: moved,
+                  duration: _flashFor,
+                  pulses: 3,
+                  builder: (context, strength) => TextFormField(
+                    controller: _fee,
+                    autovalidateMode: AutovalidateMode.onUserInteraction,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    decoration: InputDecoration(
+                      labelText: l.feeToMiner,
+                      border: const OutlineInputBorder(),
+                      filled: strength > 0,
+                      fillColor: highlightTint(context, strength * 2),
+                      helperText:
+                          _feeInfo == null ? null : l.suggestedFee(formatAmount(context, _feeInfo!.suggested(_weight))),
+                    ),
+                    onChanged: (_) => setState(() {
+                      _feeEdited = true;
+                      _follow();
+                    }),
+                    validator: (v) {
+                      final f = _parseAmount(v ?? '');
+                      return (f == null || f < minFee) ? l.atLeastMin(formatAmount(context, minFee)) : null;
+                    },
                   ),
-                  onChanged: (_) => setState(() => _feeEdited = true),
-                  validator: (v) {
-                    final f = _parseAmount(v ?? '');
-                    return (f == null || f < minFee) ? l.atLeastMin(formatAmount(context, minFee)) : null;
-                  },
                 ),
               ),
             ]),
@@ -377,6 +430,9 @@ class _ComposePageState extends State<ComposePage> {
             if (_kind != TxKind.raw && !_isFlag && widget.alias == null) ...[
               TextFormField(
                 controller: _message,
+                // A capital at the start and after a full stop, as the
+                // phone's keyboard does it.
+                textCapitalization: TextCapitalization.sentences,
                 // Checked as the user types: an error (too long, say) clears as soon as
                 // it's fixed, not only at the next send.
                 autovalidateMode: AutovalidateMode.onUserInteraction,
@@ -445,6 +501,7 @@ class _SendSummary extends StatelessWidget {
     required this.fee,
     required this.burn,
     required this.paid,
+    required this.suggested,
     required this.check,
   });
 
@@ -464,6 +521,10 @@ class _SendSummary extends StatelessWidget {
   final int fee;
   final int? burn;
   final int? paid;
+
+  /// The suggested fee for it when it was checked, if known: a fee that
+  /// differs is pointed out, lightly.
+  final int? suggested;
 
   /// What stops it being sent now, if anything: asked again whenever the
   /// client changes (a new block, a transaction), with the balance.
@@ -553,6 +614,17 @@ class _SendSummary extends StatelessWidget {
                 row(l.weight, Text(l.weightValue(weight, formatAmount(context, fee ~/ weight)))),
                 const Divider(height: 20),
                 amount(Glyph.fee, l.costFee, fee),
+                // The user's choice either way: said, not stopped.
+                if (suggested != null && fee != suggested)
+                  Padding(
+                    padding: const EdgeInsetsDirectional.only(start: 26, bottom: 4),
+                    child: Text(
+                      fee < suggested!
+                          ? l.feeBelowSuggested(formatAmount(context, suggested!))
+                          : l.feeAboveSuggested(formatAmount(context, suggested!)),
+                      style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                    ),
+                  ),
                 if (burn != null) amount(Glyph.burn, l.costBurn(orphanBurnMultiple), burn!),
                 if (paid != null) amount(Glyph.transfer, l.costPaid, paid!),
                 amount(Glyph.receipt, l.costTotal, total, strong: true),
@@ -668,16 +740,17 @@ class _CostSummary extends StatelessWidget {
 
 /// The suggested fee for this transaction's weight, at a glance: the number,
 /// whether blocks have room, and the three bars it's drawn from. Why fees
-/// work this way is folded away beneath.
+/// work this way is folded away beneath. The figures follow the chain; when
+/// the suggestion moves, "Use" flashes, and nothing changes until it's used.
 class _FeeCard extends StatelessWidget {
-  const _FeeCard(
-      {required this.info, required this.weight, required this.loading, required this.onRefresh, required this.onUse});
+  const _FeeCard({required this.info, required this.weight, required this.movedAt, required this.onUse});
 
   final FeeInfo? info;
   final int weight;
-  final bool loading;
-  final VoidCallback onRefresh;
-  final ValueChanged<int> onUse;
+
+  /// When the suggestion last moved away from the fee given, if it did.
+  final DateTime? movedAt;
+  final VoidCallback onUse;
 
   @override
   Widget build(BuildContext context) {
@@ -686,13 +759,6 @@ class _FeeCard extends StatelessWidget {
     final scheme = theme.colorScheme;
     final muted = theme.textTheme.labelMedium?.copyWith(color: scheme.onSurfaceVariant);
     final info = this.info;
-    final refresh = IconButton(
-      tooltip: l.checkAgain,
-      onPressed: loading ? null : onRefresh,
-      icon: loading
-          ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-          : const MurmurIcon(Glyph.refresh),
-    );
     if (info == null) {
       return Card(
         child: Padding(
@@ -701,7 +767,10 @@ class _FeeCard extends StatelessWidget {
             MurmurIcon(Glyph.fee, size: 20, color: scheme.primary),
             const SizedBox(width: 10),
             Expanded(child: Text(l.checkingFees, style: theme.textTheme.bodyMedium)),
-            refresh,
+            const Padding(
+              padding: EdgeInsets.all(12),
+              child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
+            ),
           ]),
         ),
       );
@@ -741,8 +810,16 @@ class _FeeCard extends StatelessWidget {
                 ]),
               ]),
             ),
-            TextButton(onPressed: () => onUse(suggested), child: Text(l.use)),
-            refresh,
+            FadingHighlight(
+              since: movedAt,
+              duration: _ComposePageState._flashFor,
+              pulses: 3,
+              builder: (context, strength) => TextButton(
+                style: TextButton.styleFrom(backgroundColor: highlightTint(context, strength * 2)),
+                onPressed: onUse,
+                child: Text(l.use),
+              ),
+            ),
           ]),
         ),
         Padding(

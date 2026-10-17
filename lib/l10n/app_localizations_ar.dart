@@ -370,9 +370,6 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
-  String get refresh => 'تحديث';
-
-  @override
   String threadStarted(String time) {
     return 'بدأ $time';
   }
@@ -892,6 +889,16 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
+  String feeBelowSuggested(String fee) {
+    return 'أقل من الرسوم المقترحة ($fee): قد يستغرق دخولها في كتلة بعض الوقت.';
+  }
+
+  @override
+  String feeAboveSuggested(String fee) {
+    return 'أعلى من الرسوم المقترحة ($fee): تعرض على المُعدِّن أكثر من اللازم.';
+  }
+
+  @override
   String atLeastMin(String min) {
     return '$min على الأقل';
   }
@@ -966,9 +973,6 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get use => 'استخدام';
-
-  @override
-  String get checkAgain => 'التحقق مجددًا';
 
   @override
   String balanceBeforeAfter(String before, String after) {
@@ -1269,9 +1273,6 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get mutedNote => 'مكتوم: مواضيعه وردوده مخفية على هذا الجهاز.';
-
-  @override
-  String get repliesNewestFirst => 'أحدث الردود أولاً';
 
   @override
   String get earlierReplies => 'ردود أقدم';

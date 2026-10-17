@@ -369,9 +369,6 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
-  String get refresh => 'Aktualisieren';
-
-  @override
   String threadStarted(String time) {
     return 'gestartet $time';
   }
@@ -875,6 +872,16 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
+  String feeBelowSuggested(String fee) {
+    return 'Unter der vorgeschlagenen Gebühr ($fee): Es kann eine Weile dauern, bis sie in einen Block kommt.';
+  }
+
+  @override
+  String feeAboveSuggested(String fee) {
+    return 'Über der vorgeschlagenen Gebühr ($fee): Du bietest dem Miner mehr als nötig.';
+  }
+
+  @override
   String atLeastMin(String min) {
     return 'Mindestens $min';
   }
@@ -950,9 +957,6 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get use => 'Übernehmen';
-
-  @override
-  String get checkAgain => 'Erneut abfragen';
 
   @override
   String balanceBeforeAfter(String before, String after) {
@@ -1249,9 +1253,6 @@ class AppLocalizationsDe extends AppLocalizations {
   @override
   String get mutedNote =>
       'Stummgeschaltet: Ihre Threads und Antworten sind auf diesem Gerät ausgeblendet.';
-
-  @override
-  String get repliesNewestFirst => 'Neueste Antworten zuerst';
 
   @override
   String get earlierReplies => 'Frühere Antworten';

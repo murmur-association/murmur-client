@@ -586,12 +586,6 @@ abstract class AppLocalizations {
   /// **'{d} d {h} h ago'**
   String agoDays(int d, int h);
 
-  /// No description provided for @refresh.
-  ///
-  /// In en, this message translates to:
-  /// **'Refresh'**
-  String get refresh;
-
   /// No description provided for @threadStarted.
   ///
   /// In en, this message translates to:
@@ -1324,6 +1318,18 @@ abstract class AppLocalizations {
   /// **'Suggested: {fee}'**
   String suggestedFee(String fee);
 
+  /// In the summary before signing, when the fee given is below the suggested one: a light remark, not an error
+  ///
+  /// In en, this message translates to:
+  /// **'Below the suggested fee ({fee}): it may take a while to get into a block.'**
+  String feeBelowSuggested(String fee);
+
+  /// In the summary before signing, when the fee given is above the suggested one
+  ///
+  /// In en, this message translates to:
+  /// **'Above the suggested fee ({fee}): you offer the miner more than needed.'**
+  String feeAboveSuggested(String fee);
+
   /// No description provided for @atLeastMin.
   ///
   /// In en, this message translates to:
@@ -1419,12 +1425,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Use'**
   String get use;
-
-  /// No description provided for @checkAgain.
-  ///
-  /// In en, this message translates to:
-  /// **'Check again'**
-  String get checkAgain;
 
   /// An address's balance before and after a transaction
   ///
@@ -1834,13 +1834,7 @@ abstract class AppLocalizations {
   /// **'Muted: its threads and replies are hidden on this device.'**
   String get mutedNote;
 
-  /// Above a thread's replies: they are listed from the newest down
-  ///
-  /// In en, this message translates to:
-  /// **'Newest replies first'**
-  String get repliesNewestFirst;
-
-  /// Button under a thread's replies that loads the ones before them
+  /// Button above a thread's replies, under its first message, that loads the replies before them
   ///
   /// In en, this message translates to:
   /// **'Earlier replies'**

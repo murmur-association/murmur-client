@@ -1,6 +1,6 @@
 # Murmur client
 
-A Flutter light client for the Murmur chain, speaking **protocol 12** (networks `murmur-testnet-11` and `murmur-demo-11`). The node, the whitepaper and the protocol specification live in the [murmur repository](https://gitlab.com/murmur-association/murmur); section numbers below refer to its [PROTOCOL.md](https://gitlab.com/murmur-association/murmur/-/blob/main/PROTOCOL.md). With the client you can:
+A Flutter light client for the Murmur chain, speaking **protocol 13** (networks `murmur-testnet-12` and `murmur-demo-12`). The node, the whitepaper and the protocol specification live in the [murmur repository](https://gitlab.com/murmur-association/murmur); section numbers below refer to its [PROTOCOL.md](https://gitlab.com/murmur-association/murmur/-/blob/main/PROTOCOL.md). With the client you can:
 
 - read threads, newest activity first, each with its replies from the newest down, and see which reply an answer is for;
 - browse blocks, transactions and addresses, and search by height, txid, block hash or address;
@@ -9,12 +9,13 @@ A Flutter light client for the Murmur chain, speaking **protocol 12** (networks 
 
 ## The four tabs
 
-- **Threads:** every thread, most recently active first, as of one block. The order stays put while new blocks arrive, so the list can be read; **Refresh** takes a new snapshot at the tip and goes back to the top. The header says which block the list is from and how many blocks have come since.
+- **Threads:** every thread, most recently active first, as of one block. The order stays put while new blocks arrive, so the list can be read; **pulling it down** at its top takes a new snapshot at the tip. A thread's author's picture opens their page. The header says which block the list is from and how many blocks have come since.
   - **Filters:** a search box covers the threads already loaded, including their replies and authors' names. The filter menu picks languages and whether to hide threads you flagged, your own included.
   - **Withdrawn messages:** flagging your own message withdraws it. Nobody else sees it listed any more, the app deletes its text from every device that has it (this one included) and never fetches it again, and nodes may stop keeping it and its replies. You still see a withdrawn thread in your list, faded and without its text, unless you hide flagged threads.
   - **New thread:** the button at the bottom starts one.
   - **Languages** are detected on the device from each thread's text. By default the list shows your device's languages, plus text too short to tell. The header counts what's hidden.
-- **Messages:** the wallet's own messages, newest first, following new blocks: threads it started, replies it sent or received, and flags it raised or received. Filter chips choose which; flags are off by default. Plain transfers aren't messages and live in the Wallet tab. A badge on the tab counts new replies to you.
+- **Messages:** the wallet's own messages, newest first, following new blocks: threads it started, replies it sent or received, and flags it raised or received. Filter chips choose which; flags are off by default. Plain transfers aren't messages and live in the Wallet tab. A badge on the tab counts new replies to you. Each row shows its author's picture, which opens their page; what others wrote stays highlighted until you open it, and so do starred things with news in the Starred tab.
+- **A thread** shows its replies oldest first. The first visit opens at the top; later ones go to where you left off, and replies newer than that light up for a moment as they come into view. Further replies load as you scroll down, earlier ones with "Earlier replies".
 
 **People.**
 - Every address has a small picture drawn from it, the same on every device: a zigzag of nodes and lines like the logo's, with its own details and four colours.
@@ -55,7 +56,7 @@ If the newest block is old for the network (about 20 block intervals), a banner 
 What it shows is checked against those headers, because every header commits to its block's transactions, its **filter** and the **state** after it (Section 3.6):
 
 - **Balances, nonces, flags, the burn pool and the supply** come as state proofs (`GetState`) against the tip's `state_root`. They're exact at once, without the chain, and a node can't lie about them.
-- **An address's history, and a thread's replies and flags,** are read from the node's index a page at a time, newest first (`GetAddress`, `GetThread`, Section 7.6). The state holds each list's length and a digest of its transaction IDs, so a page is proven whole: a node can't leave an entry out or add one. Each entry comes with a merkle branch to its block, and a block older than the headers at hand gets its header by proof against the newest block (`GetHeaderProof`). So a thread or a history is complete at once, however old the chain, without downloading its blocks. The node learns which thread or address is read.
+- **An address's history, and a thread's replies and flags,** are read from the node's index a page at a time (`GetAddress`, `GetThread`, Section 7.6): a history newest first, a thread from its first reply or from where you left off. The state holds each list's length and the root of a Merkle mountain range over its transaction IDs, so every page is proven on its own, wherever it is in the list: a node can't leave an entry out, add one or change their order. Each entry comes with a merkle branch to its block, and a block older than the headers at hand gets its header by proof against the newest block (`GetHeaderProof`). So a thread or a history is complete at once, however old the chain, without downloading its blocks. The node learns which thread or address is read.
   - **Flags against an address's messages** are the exception: no state entry holds that list, so each flag shown is proven to be on the chain, but not that the node listed them all.
   - **A node that keeps no index** (`--no-index`) is read through block filters instead (`GetFilters`), each checked against its header's `filter_hash`: only the blocks that match are fetched, more slowly, and that node never learns which address the client looks for.
 - **A transaction the client lacks** (a reply's thread, a flagged message, a page opened by id) comes by id (`GetTx`) with a merkle branch to its block.
@@ -73,7 +74,7 @@ The client rolls back on reorgs, follows the blocks and transactions the node re
 - **Long threads and histories** are read from their newest end, a page of 500 at a time: a thread shows its newest replies first and loads earlier ones on request, and a history loads further back as you scroll.
 - **Amounts** are counted on the chain in units, a million to the token; the app shows and reads tokens, with up to six decimals. The least fee is half a token, by consensus.
 - **Thread cost:** a thread (Orphan) burns 10× its fee, so starting one costs 11× the fee. Burned tokens go to a burn pool that pays each block's miner `ceil(pool / K)`.
-- **Fees** are per byte, and a transaction weighs 264 bytes plus its content, so the send form suggests a fee for the message you're writing.
+- **Fees** are per byte, and a transaction weighs 264 bytes plus its content, so the send form suggests a fee for the message you're writing. The suggestion follows the chain; when it changes, the form points it out ("Use" flashes) rather than changing your fee, and the summary says when your fee isn't the suggestion. A reply pays the thread's author the suggested fee unless you change it.
 
 The client doesn't check the signatures inside blocks, but everything it shows is tied to headers it checked fully (proof of work, time, target and history). Peers aren't authenticated by the transport, so connect to a node you trust; a TLS proxy in front of a node's `--ws-port` gives browsers `wss://`, which the client uses automatically on pages served over HTTPS.
 
@@ -110,7 +111,7 @@ Platform notes:
   The bridge binds to localhost only, always dials the one configured node, and accepts only pages served from localhost.
 - **Paths with an apostrophe** (such as `C:\Users\o'brien`) break `flutter test` and web builds, because Flutter pastes the path into generated Dart code. Work around it by mapping a drive letter: `subst M: "C:\Users\o'brien"`, then work from `M:\murmur-client` with `TEMP`/`TMP` set to `M:\AppData\Local\Temp`.
 
-**Which node a fresh install uses:** `127.0.0.1:7878` natively and `127.0.0.1:7880` (the bridge) on the web, until the user picks another. Builds for the public testnet (`murmur-testnet-11`) set their own default:
+**Which node a fresh install uses:** `127.0.0.1:7878` natively and `127.0.0.1:7880` (the bridge) on the web, until the user picks another. Builds for the public testnet (`murmur-testnet-12`) set their own default:
 
 ```
 # Web: the TLS proxy in front of node 1's WebSocket listener

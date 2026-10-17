@@ -11,23 +11,19 @@ import 'thread_page.dart';
 /// Everything the user starred, newest star first: people, then whole
 /// threads (starred by their root) and single messages. A tap opens the
 /// person's page, or the message in its thread. What has activity the user
-/// hasn't seen is marked: a reply under a starred thread or message, a
-/// message written by a starred person.
+/// hasn't opened is marked until opened: a reply under a starred thread or
+/// message, a message written by a starred person.
 ///
 /// The list is the one at the time the tab came into view, so unstarring a
 /// row leaves it in place with an empty star, ready to be starred again.
 class StarredTab extends StatefulWidget {
-  const StarredTab({super.key, this.refreshToken = 0, this.activity = const StarredActivity(), this.since});
+  const StarredTab({super.key, this.refreshToken = 0, this.activity = const StarredActivity()});
 
   /// Changes each time the tab comes into view: the list is taken again.
   final int refreshToken;
 
   /// The newest activity on each starred thing (`starredActivity`).
   final StarredActivity activity;
-
-  /// What had been seen when the tab came into view: activity after it is
-  /// marked as new for as long as the tab stays open. Null marks nothing.
-  final int? since;
 
   @override
   State<StarredTab> createState() => _StarredTabState();
@@ -61,19 +57,29 @@ class _StarredTabState extends State<StarredTab> {
     final l = context.l10n;
     final txids = _txids!;
     if (txids.isEmpty && _people.isEmpty) return EmptyState(icon: Glyph.star, text: l.noStarred);
-    final since = widget.since;
-    final fresh = since == null ? const <String>{} : widget.activity.newSince(since);
+    final prefs = AppScope.of(context).prefs;
+    final activity = widget.activity;
     return AppBuilder(builder: (context, client, _) {
+      // Activity newer than when a row was last opened marks it until it is
+      // opened again: that activity's time, or null.
+      int? unread(String key) {
+        final time = activity.messages[key] ?? activity.people[key];
+        return time != null && prefs.isUnread(key, time) ? time : null;
+      }
+
       final rows = <Widget>[
         if (_people.isNotEmpty) _Heading(l.starredPeople),
-        for (final address in _people) _PersonTile(address: address, client: client, fresh: fresh.contains(address)),
+        for (final address in _people) _PersonTile(address: address, client: client, unread: unread(address)),
         if (txids.isNotEmpty) _Heading(l.starredThreads),
-        for (final txid in txids) _StarredTile(txid: txid, client: client, fresh: fresh.contains(txid)),
+        for (final txid in txids) _StarredTile(txid: txid, client: client, unread: unread(txid)),
       ];
-      return ListView.builder(
-        padding: const EdgeInsets.only(bottom: 24),
-        itemCount: rows.length,
-        itemBuilder: (context, i) => rows[i],
+      return ListenableBuilder(
+        listenable: prefs,
+        builder: (context, _) => ListView.builder(
+          padding: const EdgeInsets.only(bottom: 24),
+          itemCount: rows.length,
+          itemBuilder: (context, i) => rows[i],
+        ),
       );
     });
   }
@@ -94,16 +100,16 @@ class _Heading extends StatelessWidget {
   }
 }
 
-/// A row's picture, with a dot when the row has activity not seen yet.
+/// A row's picture, with a dot when the row has activity not opened yet.
 class _Marked extends StatelessWidget {
-  const _Marked({required this.fresh, required this.child});
+  const _Marked({required this.unread, required this.child});
 
-  final bool fresh;
+  final bool unread;
   final Widget child;
 
   @override
   Widget build(BuildContext context) {
-    if (!fresh) return child;
+    if (!unread) return child;
     return Tooltip(
       message: context.l10n.newActivity,
       child: Badge(smallSize: 10, child: child),
@@ -111,12 +117,19 @@ class _Marked extends StatelessWidget {
   }
 }
 
+/// Marks a row's activity, up to `time`, as read: it was opened.
+void _opened(BuildContext context, String key, int? time) {
+  if (time != null) AppScope.of(context).prefs.markOpened(key, time);
+}
+
 class _PersonTile extends StatelessWidget {
-  const _PersonTile({required this.address, required this.client, required this.fresh});
+  const _PersonTile({required this.address, required this.client, required this.unread});
 
   final String address;
   final MurmurClient client;
-  final bool fresh;
+
+  /// The time of activity not opened yet, if any: the row is marked.
+  final int? unread;
 
   @override
   Widget build(BuildContext context) {
@@ -125,9 +138,12 @@ class _PersonTile extends StatelessWidget {
         .messagesBy(address)
         .where((v) => v.confirmed && !client.selfFlagged(v) && !client.isNonText(v))
         .firstOrNull;
+    final marked = unread != null;
     return ListTile(
-      leading: _Marked(fresh: fresh, child: AddressAvatar(address)),
-      title: Text(nameOf(context, address), maxLines: 1, overflow: TextOverflow.ellipsis),
+      leading: _Marked(unread: marked, child: AddressAvatar(address)),
+      tileColor: marked ? highlightTint(context, 1) : null,
+      title: Text(nameOf(context, address),
+          maxLines: 1, overflow: TextOverflow.ellipsis, style: marked ? const TextStyle(fontWeight: FontWeight.w700) : null),
       // Until one of their messages is found, the name says it all.
       subtitle: latest == null
           ? null
@@ -136,17 +152,22 @@ class _PersonTile extends StatelessWidget {
               maxLines: 1,
             ),
       trailing: StarButton.person(address),
-      onTap: () => openAddress(context, address),
+      onTap: () {
+        _opened(context, address, unread);
+        openAddress(context, address);
+      },
     );
   }
 }
 
 class _StarredTile extends StatelessWidget {
-  const _StarredTile({required this.txid, required this.client, required this.fresh});
+  const _StarredTile({required this.txid, required this.client, required this.unread});
 
   final String txid;
   final MurmurClient client;
-  final bool fresh;
+
+  /// The time of activity not opened yet, if any: the row is marked.
+  final int? unread;
 
   @override
   Widget build(BuildContext context) {
@@ -170,21 +191,25 @@ class _StarredTile extends StatelessWidget {
     final text = firstLine(messageOrUnavailable(context, view));
     final kind = tx.kind == TxKind.orphan ? l.kindThread : l.kindReply;
     final isRoot = tx.kind == TxKind.orphan;
+    final marked = unread != null;
     return ListTile(
-      leading: _Marked(
-        fresh: fresh,
-        child: Opacity(opacity: view.confirmed ? 1 : 0.5, child: AddressAvatar(tx.fromAddress)),
-      ),
-      title: MessageText(text, maxLines: 1),
+      // The author's picture opens their page.
+      leading: _Marked(unread: marked, child: AvatarLink(tx.fromAddress, faded: !view.confirmed)),
+      tileColor: marked ? highlightTint(context, 1) : null,
+      title: MessageText(text, maxLines: 1, style: marked ? const TextStyle(fontWeight: FontWeight.w700) : null),
       subtitle: PersonLine(tx.fromAddress, '$kind · ${whenOf(context, view)}'),
       trailing: Row(mainAxisSize: MainAxisSize.min, children: [
         if (isRoot) CountBadges(replies: client.replyCountOf(view), flags: client.flagCountOf(view)),
         StarButton(txid),
       ]),
-      // A thread opens at its top; a message in its thread, highlighted.
-      onTap: () => isRoot
-          ? Navigator.of(context).push(MaterialPageRoute(builder: (_) => ThreadPage(rootTxid: txid)))
-          : openMessage(context, view),
+      // A thread opens where its reader left off; a message in its thread,
+      // highlighted.
+      onTap: () {
+        _opened(context, txid, unread);
+        isRoot
+            ? Navigator.of(context).push(MaterialPageRoute(builder: (_) => ThreadPage(rootTxid: txid)))
+            : openMessage(context, view);
+      },
     );
   }
 }

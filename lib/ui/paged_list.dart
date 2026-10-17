@@ -124,7 +124,8 @@ class _PagedListState<T> extends State<PagedList<T>> {
       });
 
       final indent = widget.dividerIndent;
-      return CustomScrollView(controller: _scroll, slivers: [
+      // Always scrollable, so a short list can be pulled down to refresh too.
+      return CustomScrollView(controller: _scroll, physics: const AlwaysScrollableScrollPhysics(), slivers: [
         ...widget.header,
         if (shown.isEmpty && !waiting && widget.empty != null)
           SliverFillRemaining(hasScrollBody: false, child: widget.empty)

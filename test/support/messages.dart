@@ -100,7 +100,14 @@ class FakeChain extends MurmurClient {
   void watchAddress(String address, {bool mentions = false}) => watchedAddresses.add(address);
 
   @override
-  void watchThread(TxView root, Iterable<TxView> messages) => watchedThreads.add(root.tx.id);
+  void watchThread(TxView root, Iterable<TxView> messages,
+      {int? from, bool fromEnd = false, bool move = false, bool followEnd = false}) {
+    watchedThreads.add(root.tx.id);
+    watchedFrom[root.tx.id] = from;
+  }
+
+  /// Where each thread watched was asked to open: the event number given.
+  final watchedFrom = <String, int?>{};
 
   /// Threads (txids) of which only the newest replies are at hand, and how
   /// often a page before them was asked for.
@@ -111,13 +118,33 @@ class FakeChain extends MurmurClient {
   bool threadHasEarlier(String root) => partly.contains(root);
 
   @override
-  bool threadReading(String root) => false;
+  bool threadReading(String root, {bool? earlier}) => false;
 
   @override
   void readEarlier(String root) => earlierAsked++;
 
+  /// Threads (txids) of which only the earlier replies are at hand, and how
+  /// often a page after them was asked for.
+  final early = <String>{};
+  var laterAsked = 0;
+
+  @override
+  bool threadHasLater(String root) => early.contains(root);
+
+  @override
+  void readLater(String root) => laterAsked++;
+
+  /// Each message's place in its thread, as the node's index numbers them.
+  final places = <String, int>{};
+
+  @override
+  int? threadPlace(String root, String txid) => places[txid];
+
   @override
   List<TxView> repliesOf(TxView v) => _index.repliesOf(v);
+
+  @override
+  List<TxView> threadReplies(TxView root) => _index.repliesOf(root);
 
   @override
   int replyCountOf(TxView v) => _index.replyCountOf(v);

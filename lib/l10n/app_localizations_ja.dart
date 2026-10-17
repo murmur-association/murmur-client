@@ -357,9 +357,6 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
-  String get refresh => '更新';
-
-  @override
   String threadStarted(String time) {
     return '$timeに開始';
   }
@@ -853,6 +850,16 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
+  String feeBelowSuggested(String fee) {
+    return '推奨手数料（$fee）より低い：ブロックに入るまで時間がかかることがあります。';
+  }
+
+  @override
+  String feeAboveSuggested(String fee) {
+    return '推奨手数料（$fee）より高い：マイナーに必要以上を支払います。';
+  }
+
+  @override
   String atLeastMin(String min) {
     return '$min 以上';
   }
@@ -926,9 +933,6 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get use => '使う';
-
-  @override
-  String get checkAgain => '再確認';
 
   @override
   String balanceBeforeAfter(String before, String after) {
@@ -1215,9 +1219,6 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get mutedNote => 'ミュート中：このアドレスのスレッドと返信はこの端末で非表示になります。';
-
-  @override
-  String get repliesNewestFirst => '新しい返信が先';
 
   @override
   String get earlierReplies => '以前の返信';

@@ -2,6 +2,20 @@
 
 Newest first. Each release is a `vX.Y.Z` tag matching `version` in `pubspec.yaml`; see [README](README.md#releases-and-deployment). Entries marked **Breaking** need action from users.
 
+## v0.7.0: murmur-testnet-12, threads from their first reply, unread marks, a fee that follows the chain (2026-10-17)
+
+**Breaking: a new network and protocol.** The app speaks protocol 13 and joins `murmur-testnet-12`; it no longer reaches `murmur-testnet-11`. Nothing carries over: wallets keep their keys, and start with nothing on the new chain. The desktop apps ship node release v0.13.0. No checkpoint while the network is under a day old.
+
+- **Changed: a thread shows its replies oldest first again**, under its first message, as a forum reads. Any page of a thread or of a history is now proven on its own, so a thread opens at its first reply however long it is, and further replies load as you scroll down; "Earlier replies" loads the ones before.
+- **Added: a thread remembers where you left off.** The first visit opens at the top; the next ones go to the last reply you saw, and replies newer than that light up for a moment as they come into view. A thread opened for one reply, such as one you just sent, goes to it.
+- **Added: unread messages are marked.** In Messages, what others wrote stays highlighted until you open it; in Starred, so does a thread or a person with news.
+- **Changed: a row's picture opens its author's page**, in the Threads, Messages and Starred lists, where the name under the text used to. Messages shows the author's picture in place of the message kind.
+- **Changed: pull the Threads list down to refresh it**, in place of its Refresh button.
+- **Changed: the suggested fee follows the chain.** It is checked again at each new block. When it changes, "Use" and the fee field flash, and your fee stays as it is until you use it; the summary before signing says when your fee is below the suggestion (it may take a while to get into a block) or above it.
+- **Fixed: a reply pays the thread's author the suggested fee by default**, not a fixed 1 token. You can still give more.
+- **Changed: a quoted reply's highlight fades** after a moment.
+- **Changed: on a phone, a message's sentences start with a capital** as you type, as the keyboard does elsewhere.
+
 ## v0.6.6: checkpoint refresh (2026-10-17)
 
 No protocol or network change.

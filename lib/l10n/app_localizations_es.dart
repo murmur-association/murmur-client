@@ -366,9 +366,6 @@ class AppLocalizationsEs extends AppLocalizations {
   }
 
   @override
-  String get refresh => 'Actualizar';
-
-  @override
   String threadStarted(String time) {
     return 'iniciado $time';
   }
@@ -873,6 +870,16 @@ class AppLocalizationsEs extends AppLocalizations {
   }
 
   @override
+  String feeBelowSuggested(String fee) {
+    return 'Por debajo de la comisión sugerida ($fee): puede tardar en entrar en un bloque.';
+  }
+
+  @override
+  String feeAboveSuggested(String fee) {
+    return 'Por encima de la comisión sugerida ($fee): ofreces al minero más de lo necesario.';
+  }
+
+  @override
   String atLeastMin(String min) {
     return 'Al menos $min';
   }
@@ -948,9 +955,6 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get use => 'Usar';
-
-  @override
-  String get checkAgain => 'Volver a consultar';
 
   @override
   String balanceBeforeAfter(String before, String after) {
@@ -1246,9 +1250,6 @@ class AppLocalizationsEs extends AppLocalizations {
   @override
   String get mutedNote =>
       'Silenciada: sus hilos y respuestas se ocultan en este dispositivo.';
-
-  @override
-  String get repliesNewestFirst => 'Las respuestas más recientes primero';
 
   @override
   String get earlierReplies => 'Respuestas anteriores';

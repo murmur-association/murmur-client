@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/gestures.dart' show TapGestureRecognizer;
@@ -293,8 +294,10 @@ TextStyle? _subtitleStyle(BuildContext context) {
   return theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant);
 }
 
-/// A row's subtitle: the person first, in copper and linking to their
-/// address, then the rest. For thread and message lists.
+/// A row's subtitle: the person first, in copper, then the rest. For thread
+/// and message lists, where the row's picture ([AvatarLink]) opens the
+/// person's page: a name in a line of small text was too easy to tap by
+/// mistake.
 class PersonLine extends StatelessWidget {
   const PersonLine(this.address, this.rest, {super.key});
 
@@ -303,13 +306,113 @@ class PersonLine extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Emphasized(
-        '${Emphasized.link(nameOf(context, address), 0)} · ${Emphasized.safe(rest)}',
-        links: [address],
+        '${Emphasized.mark(nameOf(context, address))} · ${Emphasized.safe(rest)}',
         style: _subtitleStyle(context),
         maxLines: 1,
         weight: FontWeight.w600,
       );
 }
+
+/// An address's picture that opens its page: what a list row leads with.
+class AvatarLink extends StatelessWidget {
+  const AvatarLink(this.address, {super.key, this.size = 40, this.faded = false});
+
+  final String address;
+  final double size;
+
+  /// Not mined yet: drawn faded.
+  final bool faded;
+
+  @override
+  Widget build(BuildContext context) => Tooltip(
+        message: nameOf(context, address),
+        child: InkResponse(
+          onTap: () => openAddress(context, address),
+          radius: size * 0.7,
+          child: Opacity(opacity: faded ? 0.5 : 1, child: AddressAvatar(address, size: size)),
+        ),
+      );
+}
+
+/// A highlight that draws the eye for a moment and fades: at full strength
+/// at `since`, gone `duration` later, `pulses` times brighter on the way
+/// (one: a plain fade). Whatever is built again meanwhile (a row scrolled
+/// away and back) takes up where the fade had got to, not from the start.
+class FadingHighlight extends StatefulWidget {
+  const FadingHighlight({
+    super.key,
+    required this.since,
+    required this.builder,
+    this.duration = const Duration(milliseconds: 2500),
+    this.pulses = 1,
+  });
+
+  /// When it started; null for none.
+  final DateTime? since;
+  final Duration duration;
+  final int pulses;
+
+  /// Builds the child with the highlight's strength, 1 down to 0.
+  final Widget Function(BuildContext context, double strength) builder;
+
+  @override
+  State<FadingHighlight> createState() => _FadingHighlightState();
+}
+
+class _FadingHighlightState extends State<FadingHighlight> with SingleTickerProviderStateMixin {
+  late final _fade = AnimationController(vsync: this, duration: widget.duration, value: 1);
+
+  void _start() {
+    final since = widget.since;
+    if (since == null) {
+      _fade.value = 1;
+      return;
+    }
+    final done = DateTime.now().difference(since).inMicroseconds / widget.duration.inMicroseconds;
+    if (done >= 1) {
+      _fade.value = 1;
+      return;
+    }
+    _fade
+      ..value = done.clamp(0, 1)
+      ..forward();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _start();
+  }
+
+  @override
+  void didUpdateWidget(FadingHighlight old) {
+    super.didUpdateWidget(old);
+    if (old.since != widget.since) _start();
+  }
+
+  @override
+  void dispose() {
+    _fade.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AnimatedBuilder(
+        animation: _fade,
+        builder: (context, _) {
+          final left = 1 - _fade.value;
+          // A few pulses, each fainter than the one before, or a plain fade.
+          final pulse = widget.pulses <= 1 ? 1.0 : (1 - cos(_fade.value * widget.pulses * 2 * pi)) / 2;
+          return widget.builder(context, Curves.easeIn.transform(left) * (widget.pulses <= 1 ? 1 : pulse));
+        },
+      );
+}
+
+/// The tint an unread or highlighted row or card takes, at `strength`
+/// (1 full, 0 none): copper, the one accent.
+Color? highlightTint(BuildContext context, double strength) => strength <= 0
+    ? null
+    : Theme.of(context).colorScheme.primary.withValues(alpha: 0.16 * strength.clamp(0, 1));
 
 /// One point of an explanation: an icon, and a short line with its key
 /// words emphasized. Several stacked replace a paragraph.
@@ -507,16 +610,23 @@ class CountBadges extends StatelessWidget {
 
 /// One transaction in a list.
 class TxTile extends StatelessWidget {
-  const TxTile(this.view, {super.key, this.perspective, this.showCounts = false});
+  const TxTile(this.view, {super.key, this.perspective, this.showCounts = false, this.unread = false, this.onOpen});
 
   final TxView view;
 
   /// If set, amounts are shown as incoming/outgoing for this address.
   final String? perspective;
 
-  /// Show reply/flag counts at the end instead of the amount, and open the
-  /// message's thread on tap.
+  /// A message list's row: led by its author's picture, which opens their
+  /// page, with reply/flag counts at the end instead of the amount; a tap
+  /// opens the message in its thread.
   final bool showCounts;
+
+  /// Not opened yet: tinted, its text in bold, until tapped.
+  final bool unread;
+
+  /// Called when the row is tapped, before what it opens.
+  final VoidCallback? onOpen;
 
   @override
   Widget build(BuildContext context) {
@@ -538,14 +648,14 @@ class TxTile extends StatelessWidget {
     final label = tx.kind == TxKind.reply && view.confirmed && !client.isThreadedReply(view)
         ? l.replyNotThreaded
         : kindLabel(context, tx.kind);
-    // Who: the names in copper.
-    // Who: the names in copper, each a link to its address.
+    // Who: the names in copper, each a link to its address, except in a
+    // message list, where the author's picture is the link.
     // A reply pays its thread's author, whoever it answers.
     final paid = client.creditedBy(tx);
-    final people = [tx.fromAddress, if (paid != null) paid];
-    final route = paid == null
-        ? l.routeFrom(Emphasized.link(nameOf(context, tx.fromAddress), 0))
-        : l.routeFromTo(Emphasized.link(nameOf(context, tx.fromAddress), 0), Emphasized.link(nameOf(context, paid), 1));
+    final people = showCounts ? const <String>[] : [tx.fromAddress, if (paid != null) paid];
+    String who(String address, int i) =>
+        showCounts ? Emphasized.mark(nameOf(context, address)) : Emphasized.link(nameOf(context, address), i);
+    final route = paid == null ? l.routeFrom(who(tx.fromAddress, 0)) : l.routeFromTo(who(tx.fromAddress, 0), who(paid, 1));
 
     Widget? trailing;
     if (showCounts) {
@@ -583,12 +693,19 @@ class TxTile extends StatelessWidget {
     }
 
     return ListTile(
-      leading: GlyphAvatar(kindIcon(tx.kind), active: view.confirmed),
-      title: MessageText(title, maxLines: 2),
+      leading: showCounts
+          ? AvatarLink(tx.fromAddress, faded: !view.confirmed)
+          : GlyphAvatar(kindIcon(tx.kind), active: view.confirmed),
+      tileColor: unread ? highlightTint(context, 1) : null,
+      title: MessageText(title,
+          maxLines: 2, style: unread ? const TextStyle(fontWeight: FontWeight.w700) : null),
       subtitle: Emphasized('${Emphasized.safe(label)} · $route · ${whenOf(context, view)}',
           links: people, style: _subtitleStyle(context), maxLines: 1, weight: FontWeight.w600),
       trailing: trailing,
-      onTap: () => showCounts ? openMessage(context, view) : openTx(context, tx.id),
+      onTap: () {
+        onOpen?.call();
+        showCounts ? openMessage(context, view) : openTx(context, tx.id);
+      },
     );
   }
 }

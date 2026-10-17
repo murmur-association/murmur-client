@@ -63,7 +63,7 @@ StarredActivity starredActivity(
     if (view.tx.kind != TxKind.orphan && view.tx.kind != TxKind.reply) continue;
     final under = client.repliesOf(view);
     final root = client.threadRootOf(view);
-    if (root != null && root.confirmed) client.watchThread(root, [view, ...under]);
+    if (root != null && root.confirmed) client.watchThread(root, [view, ...under], followEnd: true);
     for (final reply in under) {
       if (!counts(reply)) continue;
       messages[txid] = max(messages[txid] ?? 0, activityTime(reply));

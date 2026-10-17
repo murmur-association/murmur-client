@@ -39,18 +39,10 @@ class _HomePageState extends State<HomePage> with RouteAware {
   /// as they are then.
   int _starredShown = 0;
 
-  /// What had been seen of the starred things' activity when the Starred
-  /// tab came into view. Newer activity stays marked while the tab is open,
-  /// though the tab's badge clears at once.
-  int? _starredSince;
-
   void _selectTab(int i) {
     setState(() {
       if (i == _threads && _tab != _threads) _threadsShown++;
-      if (i == _starred && _tab != _starred) {
-        _starredShown++;
-        _starredSince = AppScope.of(context).prefs.starredSeen;
-      }
+      if (i == _starred && _tab != _starred) _starredShown++;
       _tab = i;
     });
   }
@@ -245,7 +237,7 @@ class _HomePageState extends State<HomePage> with RouteAware {
             child: IndexedStack(index: _tab, children: [
               ThreadsTab(refreshToken: _threadsShown),
               const MessagesTab(),
-              StarredTab(refreshToken: _starredShown, activity: activity, since: _starredSince),
+              StarredTab(refreshToken: _starredShown, activity: activity),
               const WalletTab(),
               const ChainTab(),
             ]),

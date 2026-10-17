@@ -194,18 +194,18 @@ class _LooseTx {
 }
 
 /// A list read from the node's index (PROTOCOL.md Section 7.6): a thread's
-/// events, or what an address sent or was credited with. Read newest page
-/// first; each page is proven against the count and digest the state holds
-/// for the list, or by chaining into the page after it.
+/// events, or what an address sent or was credited with. Each page is
+/// proven on its own against the count and root the state holds for the
+/// list at the block the node answered for, so a list is read from any
+/// place: a thread from its first reply, or from where its reader left off,
+/// an address's history from its newest end. What is read is one stretch of
+/// entries, `lo` to `hi`, which grows a page at a time either way.
 class _ListRead {
-  _ListRead(this.key, this.request, this.count, this.fallback, {this.wanted, this.page = maxPageEntries});
+  _ListRead(this.key, this.request, this.count, this.fallback, this.reorgs,
+      {required this.page, this.anchor, this.wantLo, this.wantHi});
 
   /// How many entries a request asks for.
   final int page;
-
-  /// How many entries to read, counted from the newest; null for all of
-  /// them. A thread is read a page at a time, as its page asks for more.
-  int? wanted;
 
   /// The state entry that commits to the list.
   final Uint8List key;
@@ -217,32 +217,76 @@ class _ListRead {
   /// The request for the `count` entries that end at entry `end`.
   final Message Function(int end, int count) request;
 
-  /// The list's count and digest in that entry's value, or null if the
-  /// value isn't such an entry.
+  /// The list's count and root in that entry's value, or null if the value
+  /// isn't such an entry.
   final (int, Uint8List)? Function(Uint8List? value) count;
 
-  /// The list's length and digest as last proven; null until first read.
+  /// The list's length and root as last proven, and the height they were
+  /// proven at; null until first read.
   int? total;
-  Uint8List? digest;
+  Uint8List? root;
+  int provenAt = 0;
 
-  /// How many entries are in, counted from the end: `total - have + 1` to
-  /// `total`.
-  int have = 0;
+  /// The entries read: numbers `lo` to `hi` (from 1, in chain order), none
+  /// while `hi < lo`.
+  int lo = 1, hi = 0;
 
-  /// The digest after entry `total - have`: what the next page back must
-  /// chain into.
-  Uint8List? lowDigest;
+  /// Where the first page starts: null for the newest page.
+  int? anchor;
+
+  /// The entries wanted: from `wantLo` (null: as far as the first page
+  /// reaches) up to `wantHi` (null: the list's end, followed as it grows).
+  int? wantLo;
+  int? wantHi;
+
+  /// The reorganizations seen when the stretch was read: after another,
+  /// it is read again.
+  int reorgs;
+
+  /// How many entries the node gives at most, once it gave fewer than asked
+  /// for: it then gives the newest of the range, and reading forward asks
+  /// for no more than that.
+  int? most;
 
   /// The node keeps no index (or has no such thread): filters take over.
   bool unavailable = false;
 
-  /// The entries read, by txid: where each is (height, index in its block).
+  /// The entries read, by txid: where each is (height, index in its block),
+  /// and its number in the list.
   final Map<String, (int, int)> entries = {};
+  final Map<String, int> numbers = {};
 
-  bool get complete => total != null && have >= total!;
+  bool get _empty => hi < lo;
 
-  /// Whether earlier entries are wanted and not read yet.
-  bool get behind => total != null && !complete && (wanted == null || have < wanted!);
+  /// A stretch of the list is read (or the list is empty).
+  bool get ready => total != null && (total == 0 || !_empty);
+
+  /// Every entry is in.
+  bool get complete => total != null && (total == 0 || (!_empty && lo <= 1 && hi >= total!));
+
+  /// Entries before the ones read.
+  bool get hasEarlier => total != null && !_empty && lo > 1;
+
+  /// Entries after the ones read.
+  bool get hasLater => total != null && !_empty && hi < total!;
+
+  /// Earlier entries are wanted and not read yet.
+  bool get behindLow => total != null && total! > 0 && !_empty && wantLo != null && lo > max(1, wantLo!);
+
+  /// Later entries are wanted and not read yet.
+  bool get behindHigh => total != null && !_empty && hi < min(total!, wantHi ?? total!);
+
+  /// Something wanted isn't read yet.
+  bool get behind => total == null || (total! > 0 && _empty) || behindLow || behindHigh;
+
+  /// Forgets the stretch read, to read it again from where it began.
+  void restart() {
+    if (!_empty && anchor != null) anchor = lo;
+    lo = 1;
+    hi = 0;
+    numbers.clear();
+    most = null;
+  }
 }
 
 /// What others did about an address's messages, read from the node's index:
@@ -993,8 +1037,8 @@ class MurmurClient extends ChangeNotifier {
         return _ListRead(key, (end, count) => GetAddress(item, list, end, count), (value) {
           final entry = value == null ? AccountEntry.empty : AccountEntry.parse(value);
           if (entry == null) return null;
-          return list == AddressList.sent ? (entry.nonce, entry.sentDigest) : (entry.credits, entry.creditDigest);
-        }, () => _watchItem(item, 1), wanted: historyPage, page: historyPage);
+          return list == AddressList.sent ? (entry.nonce, entry.sentRoot) : (entry.credits, entry.creditRoot);
+        }, () => _watchItem(item, 1), _reorgs, page: historyPage);
       });
     }
     // Kept proven at the tip: a change there says there is more to read.
@@ -1022,7 +1066,7 @@ class MurmurClient extends ChangeNotifier {
   /// no filter. Null until then, and with a node that keeps no index.
   List<_ListRead>? _listsOf(String address) {
     final sent = _addressReads['$address:0'], credited = _addressReads['$address:1'];
-    if (sent == null || credited == null || sent.total == null || credited.total == null) return null;
+    if (sent == null || credited == null || !sent.ready || !credited.ready) return null;
     if (sent.unavailable || credited.unavailable) return null;
     return [sent, credited];
   }
@@ -1039,14 +1083,14 @@ class MurmurClient extends ChangeNotifier {
   int _historyFloor(String address) {
     var floor = 0;
     for (final read in _listsOf(address) ?? const <_ListRead>[]) {
-      if (!read.complete) floor = max(floor, _lowestOf(read));
+      if (read.hasEarlier) floor = max(floor, _lowestOf(read));
     }
     return floor;
   }
 
   /// Whether `address` has older history than what is read: its lists are
   /// read from their newest end, a page at a time.
-  bool historyHasEarlier(String address) => _listsOf(address)?.any((read) => !read.complete) ?? false;
+  bool historyHasEarlier(String address) => _listsOf(address)?.any((read) => read.hasEarlier) ?? false;
 
   /// Reads further back in `address`'s history: the page before, of the
   /// list that holds the rest back. With a node that keeps no index, older
@@ -1054,10 +1098,10 @@ class MurmurClient extends ChangeNotifier {
   void readEarlierHistory(String address) {
     final lists = _listsOf(address);
     if (lists == null) return requestOlder();
-    final open = lists.where((read) => !read.complete).toList();
+    final open = lists.where((read) => read.hasEarlier).toList();
     if (open.isEmpty || open.any((read) => read.behind)) return;
     final next = open.reduce((a, b) => _lowestOf(a) >= _lowestOf(b) ? a : b);
-    next.wanted = next.have + next.page;
+    next.wantLo = max(1, next.lo - next.page);
     _wake();
     notifyListeners();
   }
@@ -1070,51 +1114,98 @@ class MurmurClient extends ChangeNotifier {
   /// as a node gives in one answer. (Tests read fewer.)
   int threadPage = maxPageEntries;
 
-  /// Whether thread `root` has earlier replies than the ones read: it is
-  /// read from its newest end, a page at a time.
-  bool threadHasEarlier(String root) {
+  _ListRead? _threadRead(String root) {
     final read = _threadReads[root];
-    return read != null && !read.unavailable && read.total != null && !read.complete;
+    return read == null || read.unavailable ? null : read;
   }
 
-  /// Whether a page of thread `root` is being read now.
-  bool threadReading(String root) {
-    final read = _threadReads[root];
-    return read != null && !read.unavailable && (read.total == null || read.behind);
+  /// Whether thread `root` has earlier replies than the ones read.
+  bool threadHasEarlier(String root) => _threadRead(root)?.hasEarlier ?? false;
+
+  /// Whether thread `root` has later replies than the ones read.
+  bool threadHasLater(String root) => _threadRead(root)?.hasLater ?? false;
+
+  /// Whether a page of thread `root` is being read now: any page, or the
+  /// one before the replies at hand (`earlier`), or the one after them.
+  bool threadReading(String root, {bool? earlier}) {
+    final read = _threadRead(root);
+    if (read == null || !read.behind) return false;
+    if (earlier == null || !read.ready) return true;
+    return earlier ? read.behindLow : !read.behindLow && read.behindHigh;
   }
 
   /// Reads the page of replies before the ones at hand.
   void readEarlier(String root) {
-    final read = _threadReads[root];
-    if (read == null || read.complete || read.behind) return;
-    read.wanted = read.have + read.page;
+    final read = _threadRead(root);
+    if (read == null || !read.hasEarlier || read.behind) return;
+    read.wantLo = max(1, read.lo - read.page);
     _wake();
     notifyListeners();
   }
+
+  /// Reads the page of replies after the ones at hand: the reader reached
+  /// the last of them.
+  void readLater(String root) {
+    final read = _threadRead(root);
+    if (read == null || !read.hasLater || read.behind) return;
+    read.wantHi = read.hi + read.page;
+    _wake();
+    notifyListeners();
+  }
+
+  /// Where message `txid` is in thread `root`'s events (from 1, in chain
+  /// order, flags counted), once read from the node's index; null otherwise.
+  int? threadPlace(String root, String txid) => _threadRead(root)?.numbers[txid];
 
   /// Follows a thread: blocks referencing its root (every reply does) or any
   /// of its replies (a flag of one does), from the root's height on.
   ///
   /// With a node that keeps an index, the thread's events are read from it
-  /// instead and proven against the thread's entry: the newest page, and an
-  /// earlier one each time [readEarlier] asks. However long the thread, it
-  /// opens with one request.
-  void watchThread(TxView root, Iterable<TxView> messages) {
+  /// instead, a page at a time, each proven against the thread's entry:
+  /// from its first event, from event `from` (where its reader left off,
+  /// [threadPlace]), or from its newest (`fromEnd`: a page opened for a
+  /// recent reply), and the page before or after as [readEarlier] and
+  /// [readLater] ask. However long the thread, it opens with one page.
+  ///
+  /// The stretch read is the thread's page's. That page asks to `move` it
+  /// when it opens, if what it opens at isn't in it. Following what's new
+  /// at the end (`followEnd`: a starred thread) reads the newest page apart
+  /// when the page's stretch doesn't reach there.
+  void watchThread(TxView root, Iterable<TxView> messages,
+      {int? from, bool fromEnd = false, bool move = false, bool followEnd = false}) {
     if (!root.confirmed) return;
     final key = threadKey(root.tx.hash);
-    final read = _threadReads.putIfAbsent(root.tx.id, () {
+    // A little of what came before, above the event it opens at.
+    final start = fromEnd || followEnd ? null : max(1, (from ?? 1) - threadPage ~/ 50);
+    _ListRead make(int? anchor) {
       _wake();
       return _ListRead(key, (end, count) => GetThread(root.tx.hash, end, count), (value) {
         final entry = value == null ? null : ThreadEntry.parse(value);
-        return entry == null ? null : (entry.events, entry.digest);
-      }, () => _watchItem(root.tx.hash, root.height ?? height), wanted: threadPage, page: threadPage);
-    });
+        return entry == null ? null : (entry.events, entry.eventsRoot);
+      }, () => _watchItem(root.tx.hash, root.height ?? height), _reorgs,
+          page: threadPage, anchor: anchor, wantLo: anchor, wantHi: anchor == null ? null : anchor + threadPage - 1);
+    }
+
+    final read = _threadReads.putIfAbsent(root.tx.id, () => make(start));
+    if (move && read.ready && read.total! > 0) {
+      final at = fromEnd ? read.total! : (from ?? 1);
+      if (at < read.lo || at > read.hi) {
+        read
+          ..restart()
+          ..anchor = start
+          ..wantLo = start
+          ..wantHi = start == null ? null : start + threadPage - 1;
+        _wake();
+      }
+    }
+    // The end followed apart, while the page's stretch doesn't follow it.
+    if (followEnd && read.wantHi != null) _threadReads.putIfAbsent('${root.tx.id}:end', () => make(null));
     _watchKey(key);
     if (!read.unavailable) return;
-    final from = root.height ?? height;
-    _watchItem(root.tx.hash, from);
+    final since = root.height ?? height;
+    _watchItem(root.tx.hash, since);
     for (final m in messages) {
-      _watchItem(m.tx.hash, from);
+      _watchItem(m.tx.hash, since);
     }
   }
 
@@ -1470,6 +1561,38 @@ class MurmurClient extends ChangeNotifier {
   /// A thread's replies, oldest first, among what's fetched. Threads are
   /// flat: a reply has none of its own.
   List<TxView> repliesOf(TxView v) => _messages.repliesOf(v);
+
+  /// What a thread's page shows of its replies, oldest first: those known,
+  /// but only within the stretch read from the node's index when there are
+  /// replies before or after it. A block fetched for something else may
+  /// hold a later reply, which would otherwise show after a gap; and a
+  /// pending one waits until the page reaches the thread's end.
+  List<TxView> threadReplies(TxView root) {
+    final all = repliesOf(root);
+    final read = _threadRead(root.tx.id);
+    if (read == null || !read.ready || (!read.hasEarlier && !read.hasLater)) return all;
+    (int, int)? first, last;
+    read.numbers.forEach((id, n) {
+      if (n == read.lo) first = read.entries[id];
+      if (n == read.hi) last = read.entries[id];
+    });
+    bool before((int, int) a, (int, int) b) => a.$1 < b.$1 || (a.$1 == b.$1 && a.$2 < b.$2);
+    bool shown(TxView r) {
+      final at = _placeOf(r.tx.id);
+      if (at == null) return !read.hasLater;
+      if (read.hasEarlier && first != null && before(at, first!)) return false;
+      return !(read.hasLater && last != null && before(last!, at));
+    }
+
+    return all.where(shown).toList();
+  }
+
+  /// Where a transaction on the chain is: its height and its place in its
+  /// block; null for one that isn't mined.
+  (int, int)? _placeOf(String txid) {
+    final loose = _loose[txid];
+    return loose != null ? (loose.height, loose.index) : _txIndex[txid];
+  }
 
   /// The threads and replies `address` wrote, among what's fetched, newest
   /// first.
@@ -2718,6 +2841,11 @@ class MurmurClient extends ChangeNotifier {
     _filterTested.removeWhere((at, _) => at > h);
     _filterMatches.clear();
     _loose.removeWhere((_, t) => t.height > h);
+    // What the lists read hold of the dropped blocks goes; the lists are
+    // read again (`_reorgs`).
+    for (final read in [..._threadReads.values, ..._addressReads.values]) {
+      read.entries.removeWhere((_, at) => at.$1 > h);
+    }
     _missingContent.removeWhere((_, e) => e.$1 > h);
     _proven.clear();
     _stateAsked.clear();
@@ -3036,27 +3164,38 @@ class MurmurClient extends ChangeNotifier {
     for (final answers in _flagReads.values) {
       if (answers.list != AddressList.answers || answers.entries.isEmpty) continue;
       final sent = _addressReads['${answers.address}:${AddressList.sent.index}'];
-      if (sent == null || sent.total == null || sent.complete || sent.behind || sent.unavailable) continue;
+      if (sent == null || !sent.ready || !sent.hasEarlier || sent.behind || sent.unavailable) continue;
       final open = answers.entries.keys.any((id) {
         final tx = lookupTx(id)?.tx;
         return tx != null && !answersTo(tx, answers.address);
       });
-      if (open) sent.wanted = sent.have + sent.page;
+      if (open) sent.wantLo = max(1, sent.lo - sent.page);
     }
     for (final read in [..._threadReads.values, ..._addressReads.values]) {
       if (read.unavailable) continue;
-      // Its newest page first, and again once the state shows the list has
-      // grown (or changed, after a reorganization); otherwise the page
-      // before the ones read, while more are wanted.
-      var back = false;
-      if (read.total != null) {
-        final proven = _proven[toHex(read.key)];
-        final now = proven == null ? null : read.count(proven.value);
-        final same = now == null || (now.$1 == read.total && bytesEqual(now.$2, read.digest!));
-        if (same && !read.behind) continue;
-        back = same;
+      if (read.reorgs != _reorgs) {
+        // The chain changed under what was read: read it again, from where
+        // it began.
+        read
+          ..restart()
+          ..reorgs = _reorgs;
       }
-      await _readPage(read, gen, back: back);
+      // The entry at the tip says when the list grows: then what is new is
+      // read too, if the stretch read reaches its end and follows it.
+      final proven = _proven[toHex(read.key)];
+      final now = proven == null ? null : read.count(proven.value);
+      if (read.total != null && now != null && proven!.height > read.provenAt) {
+        if (now.$1 < read.total! || (now.$1 == read.total && !bytesEqual(now.$2, read.root!))) {
+          read.restart();
+        } else {
+          read
+            ..total = now.$1
+            ..root = now.$2
+            ..provenAt = proven.height;
+        }
+      }
+      if (!read.behind) continue;
+      await _readPage(read, gen);
       return true;
     }
     for (final read in _flagReads.values) {
@@ -3127,10 +3266,28 @@ class MurmurClient extends ChangeNotifier {
     return (await _request(_addressWaiter = Completer<Address>(), msg)).page;
   }
 
-  /// Reads the page before the ones read (`back`), or the newest.
-  Future<void> _readPage(_ListRead read, int gen, {required bool back}) async {
-    final end = back ? read.total! - read.have : 0;
-    final page = await _askPage(read, end, read.page);
+  /// Reads one page of what `read` wants and doesn't hold: the first (the
+  /// newest, or the one from its anchor on), the one before the stretch
+  /// read, or the one after it. Each page is proven on its own against the
+  /// list's count and root in the state at the block the node answered for
+  /// (Sections 3.6 and 7.6): a node can't leave out, add or reorder an entry.
+  Future<void> _readPage(_ListRead read, int gen) async {
+    final first = !read.ready, back = !first && read.behindLow;
+    final step = min(read.page, read.most ?? read.page);
+    final int end, count;
+    if (first) {
+      // Beyond the last means the newest: a thread shorter than a page from
+      // its anchor comes whole.
+      end = read.anchor == null ? 0 : read.anchor! + read.page - 1;
+      count = read.page;
+    } else if (back) {
+      end = read.lo - 1;
+      count = min(step, end);
+    } else {
+      end = min(read.hi + step, read.total!);
+      count = end - read.hi;
+    }
+    final page = await _askPage(read, end, count);
     if (gen != _generation) throw _Aborted();
     if (page == null || !page.available) {
       // No index on this node: block filters find the same, more slowly.
@@ -3138,78 +3295,74 @@ class MurmurClient extends ChangeNotifier {
       read.fallback();
       return;
     }
-    final txids = [for (final e in page.entries) e.tx.hash];
-    final after = chainDigest(page.startDigest, txids);
-    if (back) {
-      // An earlier page is proven by chaining into the page after it.
-      if (page.entries.isEmpty || page.start + page.entries.length != end || !bytesEqual(after, read.lowDigest!)) {
-        // Not the list we were reading any more (a reorganization): again.
-        read
-          ..total = null
-          ..have = 0
-          ..entries.clear();
-        return;
-      }
-    } else {
-      // The newest page is proven against the state at the block it describes.
-      final at = _recentHeightOf(page.at);
-      if (at == null) {
-        // The node's tip is past ours: catch up, then read again.
-        _needHeaders = true;
-        return;
-      }
-      final reply = await _request(_stateWaiter = Completer<State>(), GetState(page.at, [read.key]));
-      if (gen != _generation) throw _Aborted();
-      if (!reply.available || !bytesEqual(reply.block, page.at) || reply.proofs.isEmpty) return;
-      if (at > height || !_headers.hashIs(at - 1, page.at)) return; // reorganized meanwhile
-      final (key, proof) = reply.proofs.first;
-      final fact = bytesEqual(key, read.key) ? verifyStateProof(_headers.stateRootAt(at - 1)!, key, proof) : null;
-      if (fact == null) throw FormatException('the node sent a state proof that does not match block $at');
-      final entry = read.count(fact.value);
-      if (entry == null) {
-        if (fact.value == null && page.total == 0 && page.entries.isEmpty) {
-          // No such entry, and nothing listed: an empty list, proven.
-          read
-            ..total = 0
-            ..digest = Uint8List(32)
-            ..have = 0
-            ..lowDigest = Uint8List(32);
+    if (read.reorgs != _reorgs) return; // read again from the start
+    final got = page.entries.length;
+    if (!first) {
+      final fits = got > 0 && (back ? page.start + got == read.lo - 1 : page.start == read.hi);
+      if (!fits) {
+        if (page.total < end) return; // the node is behind: later
+        if (!back && got > 0 && got < count && page.start > read.hi) {
+          // Fewer than asked for, the newest of the range: ask for no more.
+          read.most = got;
           return;
         }
+        read.restart();
+        return;
+      }
+    }
+    final at = _recentHeightOf(page.at);
+    if (at == null) {
+      // The node's tip is past ours: catch up, then read again.
+      _needHeaders = true;
+      return;
+    }
+    final reply = await _request(_stateWaiter = Completer<State>(), GetState(page.at, [read.key]));
+    if (gen != _generation) throw _Aborted();
+    if (!reply.available || !bytesEqual(reply.block, page.at) || reply.proofs.isEmpty) return;
+    if (read.reorgs != _reorgs || at > height || !_headers.hashIs(at - 1, page.at)) return; // reorganized meanwhile
+    final (key, proof) = reply.proofs.first;
+    final fact = bytesEqual(key, read.key) ? verifyStateProof(_headers.stateRootAt(at - 1)!, key, proof) : null;
+    if (fact == null) throw FormatException('the node sent a state proof that does not match block $at');
+    var entry = read.count(fact.value);
+    if (entry == null) {
+      // No such entry, and nothing listed: an empty list, proven.
+      if (fact.value != null || page.total != 0 || got != 0) {
         throw const FormatException('the node sent a list the state does not hold');
       }
-      final (total, digest) = entry;
-      if (page.total != total || page.start + page.entries.length != total || !bytesEqual(after, digest)) {
-        throw const FormatException('the node sent a list that does not match the state');
-      }
-      // Whether what was read before is still part of the list: its digest
-      // at the old length must come up while chaining this page. Then the
-      // new entries join the ones at hand, read whole or not.
-      final old = read.total, oldDigest = read.digest;
-      var continues = old != null && old >= page.start && old <= total;
-      if (continues) {
-        final upToOld = chainDigest(page.startDigest, txids.take(old - page.start));
-        continues = bytesEqual(upToOld, oldDigest!);
-      }
-      if (continues) {
-        read.have += total - old!;
-      } else {
-        read
-          ..entries.clear()
-          ..have = page.entries.length
-          ..lowDigest = page.startDigest;
-      }
+      entry = (0, Uint8List(32));
+    }
+    final (total, root) = entry;
+    final proven = page.total == total &&
+        verifyListRange(
+            total: total,
+            start: page.start,
+            txids: [for (final e in page.entries) e.tx.hash],
+            peaks: page.peaks,
+            siblings: page.siblings,
+            root: root);
+    if (!proven) throw const FormatException('the node sent a list that does not match the state');
+    await _takeEntries(page.entries, read.entries, gen);
+    if (read.reorgs != _reorgs) return;
+    for (var i = 0; i < got; i++) {
+      read.numbers[page.entries[i].tx.id] = page.start + i + 1;
+    }
+    if (first) {
+      read
+        ..lo = page.start + 1
+        ..hi = page.start + got;
+    } else if (back) {
+      read.lo = page.start + 1;
+    } else {
+      read.hi = page.start + got;
+    }
+    if (read.total == null || at >= read.provenAt) {
       read
         ..total = total
-        ..digest = digest;
+        ..root = root
+        ..provenAt = at;
     }
-    // That each entry is in the list, the digest has shown.
-    await _takeEntries(page.entries, read.entries, gen);
-    if (back) {
-      read
-        ..have += page.entries.length
-        ..lowDigest = page.startDigest;
-    }
+    // A stretch that reaches the end follows it: new entries join it.
+    if (read.wantHi != null && read.hi >= read.total!) read.wantHi = null;
   }
 
   // ---- gossip -------------------------------------------------------------------

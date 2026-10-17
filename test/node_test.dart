@@ -478,7 +478,7 @@ void main() {
       expect(reader.balanceChange(view.tx, me), 0);
     }, timeout: const Timeout(Duration(minutes: 4)));
 
-    test('a long thread opens with its newest replies, and reads earlier ones a page at a time', () async {
+    test('a long thread opens at its first replies, or where its reader left off, a page at a time', () async {
       final node = await short(mining: true);
       final writer = await node.connect(MurmurClient());
       final me = miner.addressHex;
@@ -504,27 +504,83 @@ void main() {
       await node.connect(reader);
       await until(reader, what: 'the thread by id', () => mined(reader, thread));
       final root = reader.lookupTx(thread.id)!;
-      List<String> read() => [for (final r in reader.repliesOf(root)) r.tx.id];
+      List<String> read() => [for (final r in reader.threadReplies(root)) r.tx.id];
       reader.watchThread(root, const []);
-      await until(reader, what: 'the newest page', () => read().length == 2 && !reader.threadReading(thread.id));
-      expect(read(), [replies[3].id, replies[4].id]);
-      expect(reader.threadHasEarlier(thread.id), isTrue);
+      // Its first page, proven on its own though the thread goes on.
+      await until(reader, what: 'the first page', () => read().length == 2 && !reader.threadReading(thread.id));
+      expect(read(), [replies[0].id, replies[1].id]);
+      expect(reader.threadHasEarlier(thread.id), isFalse);
+      expect(reader.threadHasLater(thread.id), isTrue);
       expect(reader.threadComplete(thread.id), isFalse);
+      expect([for (final r in replies.take(2)) reader.threadPlace(thread.id, r.id)], [1, 2]);
 
-      // A reply mined meanwhile joins the ones at hand; nothing earlier is read for it.
+      // A reply mined meanwhile waits until the reader gets there.
       final late = await writer.submit(
           wallet: miner, kind: TxKind.reply, amount: minFee, fee: minFee, message: utf('a late one'), reference: thread.id);
-      await until(reader, what: 'the new reply', () => read().contains(late.id));
-      expect(read(), [replies[3].id, replies[4].id, late.id]);
-
-      reader.readEarlier(thread.id);
-      await until(reader, what: 'the page before', () => read().length == 5 && !reader.threadReading(thread.id));
-      expect(read(), [for (final r in replies.skip(1)) r.id] + [late.id]);
-      expect(reader.threadHasEarlier(thread.id), isTrue);
-      reader.readEarlier(thread.id);
-      await until(reader, what: 'the whole thread', () => reader.threadComplete(thread.id));
+      await until(writer, what: 'the late reply mined', () => mined(writer, late));
+      reader.readLater(thread.id);
+      await until(reader, what: 'the page after', () => read().length == 4 && !reader.threadReading(thread.id));
+      expect(read(), [for (final r in replies.take(4)) r.id]);
+      reader.readLater(thread.id);
+      await until(reader, what: 'the whole thread', () => reader.threadComplete(thread.id) && read().length == 6);
       expect(read(), [for (final r in replies) r.id] + [late.id]);
-      expect(reader.threadHasEarlier(thread.id), isFalse);
+      expect(reader.threadHasLater(thread.id), isFalse);
+
+      // Reaching the end, the page follows it: a new reply joins.
+      final newer = await writer.submit(
+          wallet: miner, kind: TxKind.reply, amount: minFee, fee: minFee, message: utf('a newer one'), reference: thread.id);
+      await until(reader, what: 'the newer reply', () => read().contains(newer.id));
+      await until(reader, what: 'the thread whole again', () => reader.threadComplete(thread.id));
+
+      // Another session opens it where its reader left off, at the fourth
+      // reply, without reading the ones before until asked.
+      final back = MurmurClient(checkpoint: cp)..threadPage = 2;
+      back.requestTx(thread.id);
+      await node.connect(back);
+      await until(back, what: 'the thread by id', () => mined(back, thread));
+      final again = back.lookupTx(thread.id)!;
+      List<String> shown() => [for (final r in back.threadReplies(again)) r.tx.id];
+      back.watchThread(again, const [], from: 4);
+      await until(back, what: 'the page it left off at', () => shown().length == 2 && !back.threadReading(thread.id));
+      expect(shown(), [replies[3].id, replies[4].id]);
+      expect(back.threadHasEarlier(thread.id), isTrue);
+      expect(back.threadHasLater(thread.id), isTrue);
+      back.readEarlier(thread.id);
+      await until(back, what: 'the page before', () => shown().length == 4 && !back.threadReading(thread.id));
+      expect(shown(), [for (final r in replies.skip(1).take(4)) r.id]);
+      back.readLater(thread.id);
+      await until(back, what: 'the page after', () => shown().length == 6 && !back.threadReading(thread.id));
+      expect(shown(), [for (final r in replies.skip(1)) r.id] + [late.id, newer.id]);
+
+      // A page opened for a recent reply moves what was read to the
+      // thread's newest end, without reading what lies between; a first
+      // visit's page moves it back to the start.
+      final star = MurmurClient(checkpoint: cp)..threadPage = 2;
+      star.requestTx(thread.id);
+      await node.connect(star);
+      await until(star, what: 'the thread by id', () => mined(star, thread));
+      final starred = star.lookupTx(thread.id)!;
+      List<String> page() => [for (final r in star.threadReplies(starred)) r.tx.id];
+      star.watchThread(starred, const [], move: true);
+      await until(star, what: 'its first page', () => !star.threadReading(thread.id) && page().length == 2);
+      expect(page(), [replies[0].id, replies[1].id]);
+      star.watchThread(starred, const [], fromEnd: true, move: true);
+      await until(star, what: 'the newest page', () => !star.threadReading(thread.id) && page().contains(newer.id));
+      expect(page(), [late.id, newer.id]);
+      expect(star.threadHasEarlier(thread.id), isTrue);
+      star.watchThread(starred, const [], move: true);
+      await until(star, what: 'the first page again', () => !star.threadReading(thread.id) && page().contains(replies[0].id));
+      expect(page(), [replies[0].id, replies[1].id]);
+
+      // Starred, it follows its end while its page's stretch is at the
+      // start: the newest page is read apart.
+      star.watchThread(starred, const [], followEnd: true);
+      final newest = await writer.submit(
+          wallet: miner, kind: TxKind.reply, amount: minFee, fee: minFee, message: utf('the newest'), reference: thread.id);
+      await until(star, what: 'the newest reply mined, followed apart',
+          () => star.repliesOf(starred).any((r) => r.tx.id == newest.id && r.confirmed));
+      await until(writer, what: 'the newest reply mined', () => mined(writer, newest));
+      expect(page(), [replies[0].id, replies[1].id], reason: 'the page shows its own stretch');
 
       // The same for an address's history: its two lists are read from
       // their newest ends, and it shows as far down as both reach.

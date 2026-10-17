@@ -135,10 +135,11 @@ void main() {
       await tester.pump(const Duration(milliseconds: 400));
     }
 
-    testWidgets('new activity marks the tab and the rows, until it has been seen', (tester) async {
+    testWidgets('new activity marks the tab until seen, and the rows until opened', (tester) async {
       final root = txAt(TxKind.orphan, 10, text: 'a starred thread');
       final chain = FakeChain([root, replyTo(root, 20)]);
-      final prefs = Preferences();
+      // Read up to then.
+      final prefs = Preferences()..unreadFrom = _time(25);
       await prefs.setStarred(root.tx.id, true);
       await prefs.setStarredPerson(toHex(bob), true);
       await prefs.setStarredSeen(_time(25));
@@ -170,7 +171,24 @@ void main() {
       expect(badge(l, 2), findsNothing);
       expect(prefs.starredSeen, _time(40));
 
-      // Seen: gone at the next visit. Something newer is marked alone.
+      // Seen, not opened: still marked at the next visit, though the badge
+      // stays clear.
+      await tester.tap(find.text(l.tabThreads));
+      await frames(tester);
+      await tester.tap(find.text(l.starredTitle));
+      await frames(tester);
+      expect(find.byTooltip(l.newActivity), findsNWidgets(2));
+      expect(badge(l, 2), findsNothing);
+
+      // Opened: the row is read, and the other stays marked.
+      await tester.tap(find.text('a starred thread'));
+      await frames(tester);
+      expect(prefs.opened[root.tx.id], _time(30));
+      await tester.pageBack();
+      await frames(tester);
+      expect(find.byTooltip(l.newActivity), findsOneWidget);
+
+      // Something newer marks it again, and the tab.
       await tester.tap(find.text(l.tabThreads));
       await frames(tester);
       chain.add([replyTo(root, 50, from: carol)]);
@@ -178,7 +196,7 @@ void main() {
       expect(badge(l, 1), findsWidgets);
       await tester.tap(find.text(l.starredTitle));
       await frames(tester);
-      expect(find.byTooltip(l.newActivity), findsOneWidget);
+      expect(find.byTooltip(l.newActivity), findsNWidgets(2));
 
       await tester.pumpWidget(const SizedBox()); // stops the pages' timers
     });

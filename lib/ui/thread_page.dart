@@ -10,17 +10,22 @@ import 'compose_page.dart';
 import 'emoji.dart';
 import 'glyphs.dart';
 
-/// A thread: its first message, then its replies **from the newest down**,
-/// which is the end the node can prove first. However long the thread, it
-/// opens with its newest page; "Earlier replies" reads the one before.
-/// Threads are flat; a reply that answers another reply shows it quoted, and
-/// a tap on the quote goes to that reply.
+/// A thread: its first message, then its replies **oldest first**, as a
+/// forum reads. Its replies are read a page at a time, each page proven on
+/// its own: the first time from the first reply, later from where its
+/// reader left off, which the page goes to. Others' replies newer than that
+/// are highlighted for a moment as they come into view. "Earlier replies",
+/// under the first message, reads the page before the ones at hand;
+/// reaching the last of them reads the page after. Threads are flat; a
+/// reply that answers another reply shows it quoted, and a tap on the quote
+/// goes to that reply.
 class ThreadPage extends StatefulWidget {
   const ThreadPage({super.key, required this.rootTxid, this.focusTxid});
 
   final String rootTxid;
 
-  /// Message to highlight (the one the user tapped to get here).
+  /// Message to go to and highlight (the one the user tapped to get here),
+  /// in place of where the reader left off.
   final String? focusTxid;
 
   @override
@@ -30,16 +35,49 @@ class ThreadPage extends StatefulWidget {
 class _ThreadPageState extends State<ThreadPage> {
   final _scroll = ScrollController();
 
+  /// The list, to tell which cards are on screen.
+  final _list = GlobalKey();
+
   /// Each message's card, to find where it is on the page.
   final _cards = <String, GlobalKey>{};
 
-  /// The message highlighted: the one the page was opened for, then the
-  /// last one a quote led to.
-  late String? _focus = widget.focusTxid;
+  /// Where the reader left off last time; null on a first visit, which
+  /// marks nothing.
+  ({String txid, int? place})? _left;
+
+  /// The message to go to once it is here: the one the page was opened for,
+  /// or where the reader left off. Cleared once gone to.
+  String? _target;
+
+  /// When each message was highlighted: a reply newer than where the
+  /// reader left off, as it came into view, or one the page was opened for
+  /// or a quote led to. The highlight fades.
+  final _flashedAt = <String, DateTime>{};
+
+  /// The furthest reply down that has been on screen: where the reader
+  /// leaves off.
+  String? _furthest;
 
   /// A quote of a reply older than the ones loaded, which the user asked
   /// for: earlier pages are read until it is there.
   String? _seeking;
+
+  bool _started = false;
+
+  /// Whether the thread was asked for already: the first time, what was
+  /// read of it moves to where the page opens.
+  bool _watched = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_started) return;
+    _started = true;
+    final left = AppScope.of(context).prefs.threadsRead[widget.rootTxid];
+    _left = left;
+    final focus = widget.focusTxid;
+    _target = focus != null && focus != widget.rootTxid ? focus : left?.txid;
+  }
 
   @override
   void dispose() {
@@ -47,23 +85,57 @@ class _ThreadPageState extends State<ThreadPage> {
     super.dispose();
   }
 
-  /// Highlights the message `txid` and brings it into view. It is at or
-  /// below what is on screen (a quoted reply is older than its answer, so
-  /// further down): the page moves down until its card is built.
-  Future<void> _goTo(String txid) async {
-    setState(() => _focus = txid);
+  /// Brings message `txid` into view, highlighting it (`flash`). It is above
+  /// what is on screen when `up` (a quoted reply is older than its answer,
+  /// so further up), else below: the page moves that way until its card is
+  /// built.
+  Future<void> _goTo(String txid, {bool up = true, bool flash = true}) async {
     for (var step = 0; step < 400 && mounted; step++) {
       final card = _cards[txid]?.currentContext;
       if (card != null && card.mounted) {
         await Scrollable.ensureVisible(card, duration: const Duration(milliseconds: 250), alignment: 0.1);
+        if (flash && mounted) setState(() => _flashedAt[txid] = DateTime.now());
         return;
       }
       if (!_scroll.hasClients) return;
       final at = _scroll.position;
-      if (at.pixels >= at.maxScrollExtent) return;
-      _scroll.jumpTo(min(at.maxScrollExtent, at.pixels + at.viewportDimension * 0.8));
+      final by = at.viewportDimension * 0.8;
+      if (up ? at.pixels <= at.minScrollExtent : at.pixels >= at.maxScrollExtent) return;
+      _scroll.jumpTo(up ? max(at.minScrollExtent, at.pixels - by) : min(at.maxScrollExtent, at.pixels + by));
       await WidgetsBinding.instance.endOfFrame;
     }
+  }
+
+  /// Notes which replies are on screen: the furthest down is where the
+  /// reader leaves off, and one newer than where they left off last time
+  /// is highlighted as it comes into view.
+  void _onScreen(MurmurClient client, List<String> order, bool Function(String txid) unread) {
+    if (!mounted) return;
+    final list = _list.currentContext?.findRenderObject() as RenderBox?;
+    if (list == null || !list.attached || !list.hasSize) return;
+    var furthest = _furthest == null ? -1 : order.indexOf(_furthest!);
+    var changed = false;
+    for (final MapEntry(key: txid, value: key) in _cards.entries) {
+      final box = key.currentContext?.findRenderObject() as RenderBox?;
+      if (box == null || !box.attached || !box.hasSize) continue;
+      final top = box.localToGlobal(Offset.zero, ancestor: list).dy;
+      if (top + box.size.height <= 0 || top >= list.size.height) continue;
+      final at = order.indexOf(txid);
+      if (at > furthest) furthest = at;
+      if (unread(txid) && !_flashedAt.containsKey(txid)) {
+        _flashedAt[txid] = DateTime.now();
+        changed = true;
+      }
+    }
+    if (furthest >= 0 && order[furthest] != _furthest) {
+      _furthest = order[furthest];
+      final place = client.threadPlace(widget.rootTxid, _furthest!);
+      final left = _left;
+      // Never back from where they had got to before.
+      final behind = left != null && left.place != null && place != null && place < left.place!;
+      if (!behind) AppScope.of(context).prefs.setThreadRead(widget.rootTxid, _furthest!, place);
+    }
+    if (changed) setState(() {});
   }
 
   @override
@@ -87,22 +159,72 @@ class _ThreadPageState extends State<ThreadPage> {
 
       final theme = Theme.of(context);
       final muted = AppScope.of(context).prefs.muted;
-      // Oldest first, as the chain has them: what a reply may quote is
-      // before it. Replies from muted addresses are left out of the page.
-      final replies = client.repliesOf(root);
+      final me = wallets.wallet?.addressHex;
+      // Oldest first, as the chain has them and the page shows them: what a
+      // reply may quote is before it. Replies from muted addresses are left
+      // out of the page.
+      final replies = client.threadReplies(root);
       final ids = [for (final r in replies) r.tx.id];
       final shown = <(TxView, int)>[];
       var mutedReplies = 0;
-      for (var i = replies.length - 1; i >= 0; i--) {
+      for (var i = 0; i < replies.length; i++) {
         if (muted.contains(replies[i].tx.fromAddress)) {
           mutedReplies++;
         } else {
           shown.add((replies[i], i));
         }
       }
-      client.watchThread(root, [root, for (final (v, _) in shown) v]);
-      // Only the newest replies are here: the rest come when asked for.
+      // From where the reader left off; opened for a message, from the
+      // thread's newest end, where a reply just sent or received is. What
+      // was read before is moved there when the page opens.
+      final focus = widget.focusTxid;
+      client.watchThread(root, [root, for (final (v, _) in shown) v],
+          from: focus == null ? _left?.place : null, fromEnd: focus != null, move: !_watched);
+      _watched = true;
+      // There may be replies before the ones here, and after them: they
+      // come when asked for, above and below.
       final earlier = client.threadHasEarlier(rootTxid);
+      final later = client.threadHasLater(rootTxid);
+
+      // Others' replies newer than where the reader left off: by place in
+      // the thread where the node's index gave it, else by order.
+      final left = _left;
+      final leftAt = left == null ? -1 : ids.indexOf(left.txid);
+      bool unread(String txid) {
+        if (left == null) return false;
+        final at = ids.indexOf(txid);
+        if (at < 0 || replies[at].tx.fromAddress == me) return false;
+        final place = client.threadPlace(rootTxid, txid);
+        if (place != null && left.place != null) return place > left.place!;
+        return leftAt >= 0 && at > leftAt;
+      }
+
+      // The message to go to, once it is here: there may be pages to read
+      // down to it first.
+      final target = _target;
+      if (target != null) {
+        if (ids.contains(target)) {
+          _target = null;
+          final flash = target == focus;
+          WidgetsBinding.instance.addPostFrameCallback((_) => _goTo(target, up: false, flash: flash));
+        } else if (target == focus && earlier) {
+          // Read from the newest end: an older message is further back.
+          if (!client.threadReading(rootTxid)) client.readEarlier(rootTxid);
+        } else if (later) {
+          if (!client.threadReading(rootTxid)) client.readLater(rootTxid);
+        } else if (!client.threadReading(rootTxid) && client.threadComplete(rootTxid)) {
+          // Not shown any more (withdrawn, or its author muted): where the
+          // reader left off is then the reply before it that is.
+          _target = null;
+          final place = left?.place;
+          final before = place == null
+              ? null
+              : shown.where((s) => (client.threadPlace(rootTxid, s.$1.tx.id) ?? 0) <= place).lastOrNull;
+          if (before != null) {
+            WidgetsBinding.instance.addPostFrameCallback((_) => _goTo(before.$1.tx.id, up: false, flash: false));
+          }
+        }
+      }
 
       // The replies a reply answers: those shown here, and how many are
       // older than the replies loaded.
@@ -135,7 +257,7 @@ class _ThreadPageState extends State<ThreadPage> {
 
       // Withdrawn by its author: said first, and the thread shown faded.
       final withdrawn = client.selfFlagged(root);
-      final mine = root.tx.fromAddress == wallets.wallet?.addressHex;
+      final mine = root.tx.fromAddress == me;
 
       Widget card(TxView view, int? place) {
         final (quoted, notLoaded) = place == null ? (const <TxView>[], const <String>[]) : quotes(view, place);
@@ -150,13 +272,15 @@ class _ThreadPageState extends State<ThreadPage> {
             onQuote: _goTo,
             onNotLoaded: (quote) => setState(() => _seeking = quote),
             isRoot: place == null,
-            highlighted: view.tx.id == _focus,
+            flashedAt: _flashedAt[view.tx.id],
             canAct: wallets.wallet != null,
             flagged: wallets.wallet != null && client.hasFlagged(wallets.wallet!.addressHex, view.tx.id),
           ),
         );
         return withdrawn ? Opacity(opacity: 0.55, child: card) : card;
       }
+
+      Widget spinner() => const Center(child: Padding(padding: EdgeInsets.all(8), child: CircularProgressIndicator()));
 
       final items = <Widget Function()>[
         if (withdrawn)
@@ -169,18 +293,15 @@ class _ThreadPageState extends State<ThreadPage> {
                 ),
               ),
         () => card(root, null),
-        // Said outright: a forum's replies usually run the other way.
-        if (shown.length > 1 || earlier)
+        if (earlier)
           () => Padding(
                 padding: const EdgeInsetsDirectional.fromSTEB(20, 4, 0, 12),
-                child: Row(children: [
-                  const Expanded(child: Divider()),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    child: Text(l.repliesNewestFirst, style: theme.textTheme.bodySmall),
-                  ),
-                  const Expanded(child: Divider()),
-                ]),
+                child: client.threadReading(rootTxid, earlier: true)
+                    ? spinner()
+                    : OutlinedButton(
+                        onPressed: () => client.readEarlier(rootTxid),
+                        child: Text(l.earlierReplies),
+                      ),
               ),
         for (final (view, place) in shown) () => card(view, place),
         if (mutedReplies > 0)
@@ -189,29 +310,39 @@ class _ThreadPageState extends State<ThreadPage> {
                 child: Text(l.mutedRepliesHidden(mutedReplies),
                     textAlign: TextAlign.center, style: theme.textTheme.bodySmall),
               ),
-        if (earlier)
-          () => Padding(
-                padding: const EdgeInsetsDirectional.fromSTEB(20, 4, 0, 0),
-                child: client.threadReading(rootTxid)
-                    ? const Center(child: Padding(padding: EdgeInsets.all(8), child: CircularProgressIndicator()))
-                    : OutlinedButton(
-                        onPressed: () => client.readEarlier(rootTxid),
-                        child: Text(l.earlierReplies),
-                      ),
-              ),
+        // Built only as the reader nears the end: the page after is read.
+        if (later)
+          () {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) client.readLater(rootTxid);
+            });
+            return Padding(padding: const EdgeInsetsDirectional.only(start: 20), child: spinner());
+          },
       ];
+
+      // What is on screen, after each layout and whenever the page stops
+      // scrolling.
+      final order = [for (final (v, _) in shown) v.tx.id];
+      WidgetsBinding.instance.addPostFrameCallback((_) => _onScreen(client, order, unread));
 
       return Scaffold(
         appBar: AppBar(
           // The count is of the replies at hand: not said while there are more.
-          title: Text(earlier ? l.kindThread : '${l.kindThread} · ${l.replyCount(shown.length)}'),
+          title: Text(earlier || later ? l.kindThread : '${l.kindThread} · ${l.replyCount(shown.length)}'),
           actions: [StarButton(rootTxid), ShareButton(threadLink(rootTxid), subject: 'Murmur', size: 24)],
         ),
-        body: ListView.builder(
-          controller: _scroll,
-          padding: const EdgeInsets.fromLTRB(12, 12, 12, 32),
-          itemCount: items.length,
-          itemBuilder: (context, i) => items[i](),
+        body: NotificationListener<ScrollEndNotification>(
+          onNotification: (_) {
+            _onScreen(client, order, unread);
+            return false;
+          },
+          child: ListView.builder(
+            key: _list,
+            controller: _scroll,
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 32),
+            itemCount: items.length,
+            itemBuilder: (context, i) => items[i](),
+          ),
         ),
       );
     });
@@ -227,7 +358,7 @@ class _MessageCard extends StatelessWidget {
     required this.onQuote,
     required this.onNotLoaded,
     required this.isRoot,
-    required this.highlighted,
+    required this.flashedAt,
     required this.canAct,
     required this.flagged,
   });
@@ -244,7 +375,9 @@ class _MessageCard extends StatelessWidget {
   final void Function(String txid) onQuote;
   final void Function(String quote) onNotLoaded;
   final bool isRoot;
-  final bool highlighted;
+
+  /// When it was highlighted, if it was: the highlight fades.
+  final DateTime? flashedAt;
   final bool canAct;
 
   /// Whether the current wallet has already flagged this message.
@@ -257,65 +390,75 @@ class _MessageCard extends StatelessWidget {
     final tx = view.tx;
     final text = liveMessageText(context, view);
     final when = whenOf(context, view);
-    return Card(
-      color: highlighted ? theme.colorScheme.secondaryContainer : null,
-      margin: const EdgeInsets.only(bottom: 8),
-      child: Padding(
-        padding: const EdgeInsetsDirectional.fromSTEB(16, 12, 8, 4),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [
-            InkWell(
-              onTap: () => openAddress(context, tx.fromAddress),
-              child: Row(mainAxisSize: MainAxisSize.min, children: [
-                AddressAvatar(tx.fromAddress, size: 22),
-                const SizedBox(width: 6),
-                Text(nameOf(context, tx.fromAddress), style: TextStyle(color: theme.colorScheme.primary)),
-              ]),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                tx.kind == TxKind.reply ? '$when · ${l.paidToThreadAuthor(formatAmount(context, tx.amount))}' : when,
-                style: theme.textTheme.bodySmall,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-            CountBadges(replies: client.replyCountOf(view), flags: client.flagCountOf(view)),
-          ]),
-          const SizedBox(height: 8),
-          for (final q in quoted) _Quote(q, onTap: () => onQuote(q.tx.id)),
-          for (final q in notLoaded) _Quote(null, onTap: () => onNotLoaded(q)),
-          MessageText(
-            text ?? messageOrUnavailable(context, view),
-            selectable: true,
-            style: text == null
-                ? TextStyle(color: theme.colorScheme.outline)
-                : (isRoot ? theme.textTheme.titleMedium : theme.textTheme.bodyLarge),
+    final base = theme.cardTheme.color ?? theme.colorScheme.surfaceContainerLow;
+    final body = Padding(
+      padding: const EdgeInsetsDirectional.fromSTEB(16, 12, 8, 4),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          InkWell(
+            onTap: () => openAddress(context, tx.fromAddress),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              AddressAvatar(tx.fromAddress, size: 22),
+              const SizedBox(width: 6),
+              Text(nameOf(context, tx.fromAddress), style: TextStyle(color: theme.colorScheme.primary)),
+            ]),
           ),
-          Row(children: [
-            if (canAct) ...[
-              // Nothing replies to a message that isn't text (Section 2.4).
-              if (!client.isNonText(view))
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              tx.kind == TxKind.reply ? '$when · ${l.paidToThreadAuthor(formatAmount(context, tx.amount))}' : when,
+              style: theme.textTheme.bodySmall,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          CountBadges(replies: client.replyCountOf(view), flags: client.flagCountOf(view)),
+        ]),
+        const SizedBox(height: 8),
+        for (final q in quoted) _Quote(q, onTap: () => onQuote(q.tx.id)),
+        for (final q in notLoaded) _Quote(null, onTap: () => onNotLoaded(q)),
+        MessageText(
+          text ?? messageOrUnavailable(context, view),
+          selectable: true,
+          style: text == null
+              ? TextStyle(color: theme.colorScheme.outline)
+              : (isRoot ? theme.textTheme.titleMedium : theme.textTheme.bodyLarge),
+        ),
+        Row(children: [
+          if (canAct) ...[
+            // Nothing replies to a message that isn't text (Section 2.4).
+            if (!client.isNonText(view))
               TextButton.icon(
                 icon: const MurmurIcon(Glyph.reply, size: 18),
                 label: Text(l.actionReply),
                 // Only mined messages can be replied to (Section 2.4).
-                onPressed: !view.confirmed ? null : () => Navigator.of(context).push(MaterialPageRoute(
-                  builder: (_) => ComposePage(replyTo: view),
-                )),
+                onPressed: !view.confirmed
+                    ? null
+                    : () => Navigator.of(context).push(MaterialPageRoute(
+                          builder: (_) => ComposePage(replyTo: view),
+                        )),
               ),
-              TextButton.icon(
-                icon: const MurmurIcon(Glyph.flag, size: 18),
-                label: Text(flagged ? l.flagged : l.actionFlag),
-                onPressed: flagged ? null : () => Navigator.of(context).push(MaterialPageRoute(
-                  builder: (_) => ComposePage(flagTarget: view),
-                )),
-              ),
-            ],
-            const Spacer(),
-            TextButton(onPressed: () => openTx(context, tx.id), child: Text(l.details)),
-          ]),
+            TextButton.icon(
+              icon: const MurmurIcon(Glyph.flag, size: 18),
+              label: Text(flagged ? l.flagged : l.actionFlag),
+              onPressed: flagged
+                  ? null
+                  : () => Navigator.of(context).push(MaterialPageRoute(
+                        builder: (_) => ComposePage(flagTarget: view),
+                      )),
+            ),
+          ],
+          const Spacer(),
+          TextButton(onPressed: () => openTx(context, tx.id), child: Text(l.details)),
         ]),
+      ]),
+    );
+    // Highlighted for a moment, then as any other card.
+    return FadingHighlight(
+      since: flashedAt,
+      builder: (context, strength) => Card(
+        color: strength > 0 ? Color.alphaBlend(highlightTint(context, strength * 2)!, base) : null,
+        margin: const EdgeInsets.only(bottom: 8),
+        child: body,
       ),
     );
   }

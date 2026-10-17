@@ -15,6 +15,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:murmur_client/services/local_node.dart';
 import 'package:murmur_client/services/storage.dart';
+import 'package:murmur_client/ui/common.dart' show AvatarLink;
 import 'package:murmur_client/ui/invitations_page.dart';
 import 'package:murmur_client/ui/thread_page.dart';
 import 'package:murmur_client/ui/threads_tab.dart';
@@ -56,8 +57,13 @@ void main() {
     await app.waitFor(find.byType(ThreadPage), what: "the new thread's page");
     expect(find.text(threadText), findsWidgets);
 
-    // Once mined it can be replied to; the reply shows under it.
+    // Once mined it can be replied to; the reply shows under it. What it
+    // pays the thread's author is the suggested fee, nothing more, and the
+    // suggestion follows the chain by itself.
     await app.press<TextButton>(l.actionReply);
+    await app.waitUntil(() => app.fieldText(l.payToAuthor).isNotEmpty, what: 'the suggested fee');
+    expect(app.fieldText(l.payToAuthor), app.fieldText(l.feeToMiner));
+    expect(find.byTooltip('Check again'), findsNothing);
     await app.writeAndSend(replyText);
     await app.waitFor(find.text(replyText), what: 'the reply in its thread');
     expect(find.text(threadText), findsWidgets);
@@ -79,6 +85,31 @@ void main() {
         what: 'the thread in the list');
     await app.waitUntil(() => app.client.threads().any((t) => t.root.tx.fromAddress == me && t.replies == 2),
         what: 'the replies to be mined and counted');
+    final root = app.client.threads().firstWhere((t) => t.root.tx.fromAddress == me).root.tx.id;
+
+    // Pulled down, the list is taken again at the tip: no button for it.
+    // "As of block n (": the block the list is as of.
+    bool asOf(int height) => find.textContaining('${l.threadsAsOf(height, '', '').split(' (').first} (').evaluate().isNotEmpty;
+    await app.waitUntil(() => !asOf(app.client.height), what: 'a block since the list was taken');
+    final tip = app.client.height;
+    await app.pullDown(find.descendant(of: find.byType(ThreadsTab), matching: find.byType(Scrollable)));
+    expect([for (var h = tip; h <= app.client.height; h++) h].any(asOf), isTrue, reason: 'taken again at the tip');
+
+    // The thread remembers how far it was read, and opens there again.
+    final left = app.prefs.threadsRead[root];
+    expect(left, isNotNull, reason: 'where the reader left off');
+    await app.tap(find.descendant(of: find.byType(ThreadsTab), matching: find.text(threadText)), what: 'the thread');
+    await app.waitFor(find.byType(ThreadPage), what: "the thread's page");
+    await app.waitFor(find.text(answerText), what: 'where it was left');
+    await app.backHome();
+
+    // Messages: each row leads with its author's picture.
+    await app.openTab(l.tabMessages);
+    await app.waitFor(find.descendant(of: find.byType(ListTile), matching: find.text(answerText)),
+        what: 'the answer among the messages');
+    final row = find.ancestor(of: find.text(answerText), matching: find.byType(ListTile));
+    expect(app.tester.widget<AvatarLink>(find.descendant(of: row, matching: find.byType(AvatarLink))).address, me);
+    expect(app.tester.widget<ListTile>(row).tileColor, isNull, reason: "one's own messages are never unread");
 
     // One invitation card: funding it asks the passphrase once, for the
     // signature and for the cards' codes together.

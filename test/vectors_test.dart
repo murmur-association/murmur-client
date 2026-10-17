@@ -1,7 +1,7 @@
-// The node's test vectors for protocol 11: those PROTOCOL.md gives without a
-// chain (Sections 2.2, 3.1, 3.2, 3.6, 4 and 6), and `vectors/demo-11.txt`,
+// The node's test vectors for protocol 13: those PROTOCOL.md gives without a
+// chain (Sections 2.2, 3.1, 3.2, 3.6, 4 and 6), and `vectors/demo-12.txt`,
 // a nine-block chain on the demo network that the node's own tests rebuild
-// byte for byte (copied here as test/vectors/demo-11.txt). The chain is
+// byte for byte (copied here as test/vectors/demo-12.txt). The chain is
 // rebuilt here from its transactions and nonces: every header's target,
 // commitments and hash, the state entries, a filter, and the node's answers
 // to GetThread and GetAddress with their proofs.
@@ -61,9 +61,9 @@ class _Vectors {
 void main() {
   test('genesis hashes match PROTOCOL.md Section 6', () {
     expect(NetworkInfo.whitepaper.genesisHeader().id,
-        'd2be719286b0fe77cc5fa620c9b5b30fbe33ff5fc3740eeac6ea7a6616200707');
-    expect(NetworkInfo.demo.genesisHeader().id, '99a82ee332ec8986decad1bdd499cfa222c94d8ec21c878da362882edee97f54');
-    expect(NetworkInfo.forGenesis(NetworkInfo.demo.genesisHeader().hash).id, 'murmur-demo-11');
+        '1910d5ee9865e593f0b4b4141f715f958163ec36bb76f039262cfc8c1feb71db');
+    expect(NetworkInfo.demo.genesisHeader().id, '3312c98658403c230452ed20da787b5cd1e43ae0d1b95dbf394487761d5ad68e');
+    expect(NetworkInfo.forGenesis(NetworkInfo.demo.genesisHeader().hash).id, 'murmur-demo-12');
     expect(NetworkInfo.forGenesis(Uint8List(32)).known, isFalse);
   });
 
@@ -135,19 +135,19 @@ void main() {
     ];
     expect([for (final tx in txs) tx.bytes.length], [134, 169, 137, 134, 166, 134, 173]);
     expect([for (final tx in txs) tx.id], [
-      '41e83c098d059a1b3f4640827b04157a16147b0ba1821106a373781452a1bae5',
-      'f67af28ced52aadf6718e751a9b085af8621c005f0dd4b6c5ff0a09e560ce432',
-      'f3193f77b527d8abe35a8d7f2ba3b0aef69827035869dbd51e74ce4b14e16528',
-      'a57864c97553f76ac6b032056e41e7ad7550c479e42677313198b29a04725bda',
-      '9d8456f68037996d639c23b8cc1482d119472534404883a4cd3dc3b7a94713db',
-      '141f6d97c53cc20bbcc8b79451ffa1be2f01e499383cb9fe80ed4a9dbd68f9fd',
-      '77296e70e9ab68044198a716cd21a8588c34fc5311c653db25fd3e7c9fc9be9d',
+      '199a39f5af78082d686760bf7e352f481e152374e1273ef3b5febe71ad94fc47',
+      '4d9839706d3537f8d9d2f7827e88b2504e8e7bae3c04994c2061b4d06ba0a29a',
+      '86ded0aeda2be59149239163ab69ec8939013543d25aad913ecb89237e141915',
+      '57afa15407a26cb1e6a6973812d3fd39a32d07ad381a53e327c14e0abe474910',
+      '267ba2ac8f2f3044630f33360cd977f3606fcf6c76cf74e855b77dad18188d50',
+      '45b2a019bdac4afe9238e0c7eb8ffeba413983408d79c392fdd4f7bf29401a88',
+      '9dc72fd28c22dff4d61fa380bf7ed7097a6a39270f10659d9852999e6117186c',
     ]);
     expect(
         toHex(txs[0].bytes),
         '00ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c00a0c21e06c343731700ca16797f96e987'
-        '180093e28b4c653e08efccb4f5fbb91313f56c15a690728a067c25b8731eedb91603d33dc89821d1fe1d208fd7e0881211a4'
-        'c37fb2169ef54c2bcd80837803820597f141584b3e5d626e9cdda101a7fdcd0acf02');
+        '180093e28b4c653e08efccb4f5fbb91313f56c15c6f40cd9dbef82d4c10b838faeef45b5c57c494119cd75bf3d5f75665cd9'
+        '0cc7410e6958148e328305f8406f833bdbee26382d672b2767344b475e3c7fbb5f0e');
     // An Answer is a Reply on every count but its tag and its last 4 bytes.
     expect(txs[6].bytes.first, 5);
     expect(txs[6].kind, TxKind.reply);
@@ -322,8 +322,8 @@ void main() {
     expect(bagged.data.length, 112);
   });
 
-  group('the demo chain of vectors/demo-11.txt', () {
-    final v = _Vectors(File('test/vectors/demo-11.txt').readAsStringSync());
+  group('the demo chain of vectors/demo-12.txt', () {
+    final v = _Vectors(File('test/vectors/demo-12.txt').readAsStringSync());
     const net = NetworkInfo.demo;
     final alice = fromHex(v.one(0, 'alice')), bob = fromHex(v.one(0, 'bob'));
 
@@ -415,7 +415,7 @@ void main() {
       expect(filterMatchesAny(filter, chain[8].hash, [_filled(0x55)]), isFalse);
     });
 
-    test('state entries: accounts, threads and names, and the digests they commit to', () {
+    test('state entries: accounts, threads and names, and the list roots they commit to', () {
       final thread = blocks[3].transactions.single;
       String entry(int block, String label) => v.blocks[block]!.firstWhere((l) => l.$1.startsWith('state[$label]')).$2;
       String keyOf(int block, String label) =>
@@ -431,7 +431,7 @@ void main() {
       expect(paid.balance, 25 * unitsPerToken);
       expect(paid.nonce, 0);
       expect(paid.credits, 0);
-      expect(paid.creditDigest, Uint8List(32));
+      expect(paid.creditRoot, Uint8List(32));
 
       // Block 5: the thread has three events, and alice was credited by each
       // (her own reply there included).
@@ -443,19 +443,19 @@ void main() {
       final t5 = ThreadEntry.parse(fromHex(entry(5, 'thread')))!;
       expect(t5.author, alice);
       expect(t5.events, 3);
-      expect(t5.digest, chainDigest(Uint8List(32), events));
+      expect(t5.eventsRoot, listRoot(events));
       final a5 = AccountEntry.parse(fromHex(entry(5, 'account alice')))!;
       expect(a5.nonce, 2);
-      expect(a5.sentDigest, chainDigest(Uint8List(32), [thread.hash, blocks[5].transactions[1].hash]));
+      expect(a5.sentRoot, listRoot([thread.hash, blocks[5].transactions[1].hash]));
       expect(a5.credits, 3);
-      expect(a5.creditDigest, t5.digest);
+      expect(a5.creditRoot, t5.eventsRoot);
       // 25 − 5.5 for the thread, + 0.75 twice from bob, − 0.5 for her own reply's fee.
       expect(a5.balance, 25000000 - 5500000 + 2 * 750000 - 500000);
 
       // Block 6: a flag is an event of the thread it names, and credits nobody.
       final t6 = ThreadEntry.parse(fromHex(entry(6, 'thread')))!;
       expect(t6.events, 4);
-      expect(t6.digest, chainDigest(t5.digest, [blocks[6].transactions.single.hash]));
+      expect(t6.eventsRoot, listRoot([...events, blocks[6].transactions.single.hash]));
       expect(AccountEntry.parse(fromHex(entry(6, 'account alice')))!.credits, 3);
 
       // Blocks 7 and 8: a name is its message's hash, replaced by the next;
@@ -465,7 +465,7 @@ void main() {
       final ofName = ThreadEntry.parse(fromHex(entry(8, 'thread of name1')))!;
       expect(ofName.author, alice);
       expect(ofName.events, 1);
-      expect(ofName.digest, chainDigest(Uint8List(32), [blocks[8].transactions[1].hash]));
+      expect(ofName.eventsRoot, listRoot([blocks[8].transactions[1].hash]));
       expect(toHex(threadKey(blocks[7].transactions.single.hash)), keyOf(7, 'thread of name1'));
 
       expect(AccountEntry.parse(Uint8List(16)), isNull);
@@ -481,28 +481,105 @@ void main() {
       }
     }
 
-    test('a node\'s answer to GetThread, proven against the thread\'s entry', () {
-      final bytes = fromHex(v.one(-1, 'thread.answer'));
-      final msg = decodeMessage(bytes) as Thread;
-      expect(encodePayload(msg), bytes);
+    bool proven(ListPage page, Uint8List root) => verifyListRange(
+        total: page.total,
+        start: page.start,
+        txids: [for (final e in page.entries) e.tx.hash],
+        peaks: page.peaks,
+        siblings: page.siblings,
+        root: root);
+
+    test('list roots and range proofs (Section 3.6)', () {
+      List<Uint8List> txids(int n) => [for (var i = 0; i < n; i++) _filled(i)];
+      for (final n in [0, 1, 2, 3, 4, 11, 1024]) {
+        expect(toHex(listRoot(txids(n))), v.one(-1, 'list.root[$n]'), reason: 'root of $n');
+      }
+      final list = txids(11), root = listRoot(list);
+      for (final (name, start, count) in [('4..8', 3, 5), ('last', 10, 1), ('first', 0, 1)]) {
+        final peaks = [for (final p in v.all(-1, 'list.proof[$name].peak')) fromHex(p)];
+        final siblings = [for (final s in v.all(-1, 'list.proof[$name].sibling')) fromHex(s)];
+        final entries = list.sublist(start, start + count);
+        bool check({int? at, List<Uint8List>? with_, List<Uint8List>? peaksIn, List<Uint8List>? siblingsIn, int n = 11}) =>
+            verifyListRange(
+                total: n,
+                start: at ?? start,
+                txids: with_ ?? entries,
+                peaks: peaksIn ?? peaks,
+                siblings: siblingsIn ?? siblings,
+                root: root);
+        expect(check(), isTrue, reason: name);
+        // Anything changed fails: a sibling, a peak, an entry, the place, a
+        // sibling left out or one too many, the list's length.
+        for (var i = 0; i < siblings.length; i++) {
+          expect(check(siblingsIn: [...siblings]..[i] = _filled(0x77)), isFalse);
+          expect(check(siblingsIn: [...siblings]..removeAt(i)), isFalse);
+        }
+        expect(check(siblingsIn: [...siblings, _filled(0x77)]), isFalse);
+        expect(check(peaksIn: [...peaks]..[0] = _filled(0x77)), isFalse);
+        expect(check(with_: [_filled(0x77), ...entries.skip(1)]), isFalse);
+        if (start > 0) expect(check(at: start - 1), isFalse);
+        expect(check(n: 12), isFalse);
+      }
+      // No entries: the peaks alone prove the count and the root.
+      final peaks = [for (final p in v.all(-1, 'list.proof[first].peak')) fromHex(p)];
+      expect(verifyListRange(total: 11, start: 11, txids: const [], peaks: peaks, siblings: const [], root: root), isTrue);
+      expect(verifyListRange(total: 12, start: 11, txids: const [], peaks: peaks, siblings: const [], root: root), isFalse);
+      // Every range of short lists, with proofs made as the node makes them.
+      for (var n = 1; n <= 9; n++) {
+        final all = txids(n);
+        for (var a = 0; a < n; a++) {
+          for (var b = a; b < n; b++) {
+            final (p, s) = _rangeProof(all, a, b);
+            expect(
+                verifyListRange(
+                    total: n, start: a, txids: all.sublist(a, b + 1), peaks: p, siblings: s, root: listRoot(all)),
+                isTrue,
+                reason: '$n: $a..$b');
+          }
+        }
+      }
+    });
+
+    test('a node\'s answers to GetThread, each page proven on its own against the thread\'s entry', () {
       final thread = blocks[3].transactions.single;
-      expect(msg.root, thread.hash);
-      final page = msg.page;
-      expect(page.available, isTrue);
-      expect(page.at, chain[11].hash);
-      expect(page.total, int.parse(v.one(-1, 'thread.total')));
-      expect(page.start, int.parse(v.one(-1, 'thread.start')));
-      expect(toHex(page.startDigest), v.one(-1, 'thread.start_digest'));
-      // Its last two events are Answers: events like any reply.
-      expect([for (final e in page.entries) e.tx.answers != null], [true, true]);
-      expect([for (final e in page.entries) e.tx.kind], everyElement(TxKind.reply));
-      expectOnChain(page);
       final entry = ThreadEntry.parse(fromHex(
           v.blocks[11]!.firstWhere((l) => l.$1.startsWith('state[thread]')).$2))!;
-      expect(page.total, entry.events);
-      expect(chainDigest(page.startDigest, [for (final e in page.entries) e.tx.hash]), entry.digest);
-      // An entry left out, or another put in its place, doesn't chain to it.
-      expect(chainDigest(page.startDigest, [page.entries.last.tx.hash]), isNot(entry.digest));
+      for (final name in ['thread', 'thread_first', 'thread_middle']) {
+        final bytes = fromHex(v.one(-1, '$name.answer'));
+        final msg = decodeMessage(bytes) as Thread;
+        expect(encodePayload(msg), bytes);
+        expect(msg.root, thread.hash);
+        final page = msg.page;
+        expect(page.available, isTrue);
+        expect(page.at, chain[11].hash);
+        expect(page.total, int.parse(v.one(-1, '$name.total')));
+        expect(page.start, int.parse(v.one(-1, '$name.start')));
+        expect(page.entries.length, int.parse(v.one(-1, '$name.count')));
+        expect([for (final p in page.peaks) toHex(p)], v.all(-1, '$name.peak'));
+        expect([for (final s in page.siblings) toHex(s)], v.all(-1, '$name.sibling'));
+        expectOnChain(page);
+        expect(page.total, entry.events);
+        expect(proven(page, entry.eventsRoot), isTrue, reason: name);
+        // An entry left out doesn't prove.
+        if (page.entries.length > 1) {
+          expect(
+              verifyListRange(
+                  total: page.total,
+                  start: page.start,
+                  txids: [page.entries.last.tx.hash],
+                  peaks: page.peaks,
+                  siblings: page.siblings,
+                  root: entry.eventsRoot),
+              isFalse);
+        }
+      }
+      // The newest page: its last two events are Answers, events like any reply.
+      final newest = (decodeMessage(fromHex(v.one(-1, 'thread.answer'))) as Thread).page;
+      expect([for (final e in newest.entries) e.tx.answers != null], [true, true]);
+      expect([for (final e in newest.entries) e.tx.kind], everyElement(TxKind.reply));
+      // The first page is the thread's first reply, though the thread goes on.
+      final first = (decodeMessage(fromHex(v.one(-1, 'thread_first.answer'))) as Thread).page;
+      expect(first.entries.single.tx.id, blocks[4].transactions.single.id);
     });
 
     test('a node\'s answers to GetAddress: sent and credited proven, flags against as the node knows them', () {
@@ -515,7 +592,6 @@ void main() {
         expect(msg.address, of ?? alice);
         expect(msg.page.total, int.parse(v.one(-1, '$name.total')));
         expect(msg.page.start, 0);
-        expect(msg.page.startDigest, Uint8List(32));
         expectOnChain(msg.page);
         return msg;
       }
@@ -525,13 +601,22 @@ void main() {
       expect(sent.list, AddressList.sent);
       expect(sent.page.entries.every((e) => bytesEqual(e.tx.from, alice)), isTrue);
       expect(sent.page.entries.where((e) => e.tx.answers != null).length, 2);
-      expect(chainDigest(Uint8List(32), [for (final e in sent.page.entries) e.tx.hash]), account.sentDigest);
+      expect(proven(sent.page, account.sentRoot), isTrue);
+      expect(listRoot([for (final e in sent.page.entries) e.tx.hash]), account.sentRoot);
       expect(account.nonce, sent.page.total);
+
+      // Her first transaction alone, proven though the list goes on.
+      final first = answer('alice.sent_first');
+      expect(first.page.entries.single.tx.id, sent.page.entries.first.tx.id);
+      expect([for (final p in first.page.peaks) toHex(p)], v.all(-1, 'alice.sent_first.peak'));
+      expect([for (final s in first.page.siblings) toHex(s)], v.all(-1, 'alice.sent_first.sibling'));
+      expect(proven(first.page, account.sentRoot), isTrue);
+      expect(proven(first.page, account.creditRoot), isFalse);
 
       final credited = answer('alice.credited');
       expect(credited.list, AddressList.credited);
       expect(credited.page.total, account.credits);
-      expect(chainDigest(Uint8List(32), [for (final e in credited.page.entries) e.tx.hash]), account.creditDigest);
+      expect(proven(credited.page, account.creditRoot), isTrue);
 
       final flags = answer('alice.flags');
       expect(flags.list, AddressList.flagsAgainst);
@@ -565,7 +650,8 @@ void main() {
       expect(msg.address, bob);
       expect(msg.list, AddressList.answers);
       expect(msg.page.total, 2);
-      expect(msg.page.startDigest, Uint8List(32));
+      expect(msg.page.peaks, isEmpty, reason: 'no state entry holds this list');
+      expect(msg.page.siblings, isEmpty);
       expectOnChain(msg.page);
       expect([for (final e in msg.page.entries) e.tx.id], [answer1.id, answer3.id]);
       // Each proves itself: it names a reply of bob's, in a thread of his reply.
@@ -597,4 +683,30 @@ void main() {
     expect(decodeMessage(encodePayload(state(96))), isA<State>());
     expect(() => decodeMessage(encodePayload(state(97))), throwsFormatException);
   });
+}
+
+/// The range proof of entries `a` to `b` (from 0) of `txids`, made the way
+/// the node makes it (PROTOCOL.md Section 3.6): every peak, and the
+/// siblings of the walk over the peaks the range meets, left to right.
+(List<Uint8List>, List<Uint8List>) _rangeProof(List<Uint8List> txids, int a, int b) {
+  Uint8List subtree(int first, int height) => height == 0
+      ? listLeaf(txids[first])
+      : listJoin(subtree(first, height - 1), subtree(first + (1 << (height - 1)), height - 1));
+  final peaks = <Uint8List>[], siblings = <Uint8List>[];
+  void walk(int first, int height) {
+    final last = first + (1 << height) - 1;
+    if (last < a || first > b) {
+      siblings.add(subtree(first, height));
+    } else if (first < a || last > b) {
+      walk(first, height - 1);
+      walk(first + (1 << (height - 1)), height - 1);
+    }
+  }
+
+  for (final (first, height) in listLayout(txids.length)) {
+    peaks.add(subtree(first, height));
+    final last = first + (1 << height) - 1;
+    if (last >= a && first <= b) walk(first, height);
+  }
+  return (peaks, siblings);
 }
