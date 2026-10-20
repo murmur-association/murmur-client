@@ -85,6 +85,13 @@ class AppDriver {
         await Future<void>.delayed(const Duration(milliseconds: 200));
       }
     }
+    // Typing goes to the test's text input, not the system's keyboard, which
+    // integration tests otherwise keep: an iPhone's reports its own state
+    // back, and moved the cursor away from what the test had just typed.
+    if (!tester.testTextInput.isRegistered) {
+      tester.testTextInput.register();
+      addTearDown(tester.testTextInput.unregister);
+    }
     await app.main();
     await waitFor(find.byType(HomePage), what: 'the home page');
     await waitUntil(() => client.state == LinkState.live, what: 'the app to follow the chain');
@@ -195,17 +202,6 @@ class AppDriver {
     await waitFor(field, what: 'the "$label" field');
     await tester.enterText(field.last, text);
     await tester.pump();
-    // The cursor after the text, as typing leaves it. (On an iPhone the
-    // system's own text input, which these tests don't replace, can report
-    // it elsewhere; then the "@" suggestions, which read the word before the
-    // cursor, wouldn't show.)
-    final controller = tester.widget<TextField>(field.last).controller!;
-    final end = TextSelection.collapsed(offset: controller.text.length);
-    if (controller.selection != end) {
-      debugPrint('typing into "$label" left the cursor at ${controller.selection}: put after the text');
-      controller.selection = end;
-      await tester.pump();
-    }
   }
 
   /// What the field labelled `label` holds.
