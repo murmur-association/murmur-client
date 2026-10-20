@@ -690,6 +690,13 @@ class MurmurClient extends ChangeNotifier {
   int get height => _headers.length;
   bool get isOnline => state == LinkState.syncing || state == LinkState.live;
 
+  /// Whether, live, everything views asked for is fetched: the worker has
+  /// only background work left (the check of old headers from genesis, the
+  /// filter scan of a node without an index, prefetching), or none. What a
+  /// short run, such as a background check for news, waits for.
+  bool get settled => _settled && state == LinkState.live;
+  bool _settled = false;
+
   /// Blocks fetched so far, of `height`.
   int get fetchedBlocks => _fetched;
 
@@ -2237,6 +2244,7 @@ class MurmurClient extends ChangeNotifier {
   }
 
   Future<bool> _step(int gen) async {
+    _settled = false;
     if (_needHeaders) {
       await _syncHeaders(gen);
       return true;
@@ -2275,6 +2283,7 @@ class MurmurClient extends ChangeNotifier {
       return true;
     }
     _wantOlder = false;
+    _settled = true;
     // Started from a checkpoint: check the headers back to genesis.
     if (await _backfillHeaders(gen)) return true;
     // Histories and threads being followed: filters, then matching blocks.

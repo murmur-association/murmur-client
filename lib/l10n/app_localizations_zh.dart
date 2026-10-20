@@ -1784,6 +1784,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get starredThreads => '话题和消息';
 
   @override
+  String get noStarredThreads => '没有加星标的话题或消息。在其页面上加星标，它就会出现在这里。';
+
+  @override
+  String get noStarredPeople => '没有加星标的用户。在用户页面上加星标，就会出现在这里。';
+
+  @override
   String get newActivity => '有新动态';
 
   @override
@@ -1801,4 +1807,80 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get inviteLockedPoint => '**代码以加密方式保存。** 显示、打印或取消邀请卡时需要**解锁**。';
+
+  @override
+  String get notifications => '通知';
+
+  @override
+  String get notifyReplies => '给你的回复和回答';
+
+  @override
+  String get notifyMentions => '提到你的消息';
+
+  @override
+  String get notifyStarred => '加星标内容的新动态';
+
+  @override
+  String get notifyNeedsWallet => '需要此设备上有钱包';
+
+  @override
+  String get notifyDenied => 'Murmur 的通知已在系统设置中关闭。';
+
+  @override
+  String get notifyPointLocal =>
+      '**由本应用自己检查**，只连你选的节点：不经过 Google、Apple 或任何其他方。';
+
+  @override
+  String get notifyPointBackground => '应用关闭时，在系统允许的范围内**大约每 15 分钟**检查一次。';
+
+  @override
+  String get notifyPointOpen => '仅在**应用打开时**，且不在前台时通知。';
+
+  @override
+  String get notifyPointLockScreen => '锁屏上**不显示内容**。';
+
+  @override
+  String get notifyChannel => '消息';
+
+  @override
+  String get notifyOpen => '打开';
+
+  @override
+  String notifyReply(String name) {
+    return '$name 回复了你的话题';
+  }
+
+  @override
+  String notifyAnswer(String name) {
+    return '$name 回答了你';
+  }
+
+  @override
+  String notifyMention(String name) {
+    return '$name 提到了你';
+  }
+
+  @override
+  String notifyStarredReply(String name) {
+    return '$name 在加星标的话题中回复了';
+  }
+
+  @override
+  String notifyStarredPerson(String name) {
+    return '来自 $name 的新消息';
+  }
+
+  @override
+  String notifyMore(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '另有 $countString 条新消息',
+    );
+    return '$_temp0';
+  }
 }

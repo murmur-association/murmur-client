@@ -1874,6 +1874,14 @@ class AppLocalizationsIt extends AppLocalizations {
   String get starredThreads => 'Discussioni e messaggi';
 
   @override
+  String get noStarredThreads =>
+      'Nessuna discussione o messaggio con la stella. Metti una stella dalla sua pagina e comparirà qui.';
+
+  @override
+  String get noStarredPeople =>
+      'Nessuna persona con la stella. Metti una stella a qualcuno dalla sua pagina e comparirà qui.';
+
+  @override
   String get newActivity => 'Nuova attività';
 
   @override
@@ -1894,4 +1902,85 @@ class AppLocalizationsIt extends AppLocalizations {
   @override
   String get inviteLockedPoint =>
       '**I codici sono salvati cifrati.** Per mostrare, stampare o annullare una carta devi **sbloccarli**.';
+
+  @override
+  String get notifications => 'Notifiche';
+
+  @override
+  String get notifyReplies => 'Risposte a te';
+
+  @override
+  String get notifyMentions => 'Menzioni di te';
+
+  @override
+  String get notifyStarred => 'Novità su ciò che ha la stella';
+
+  @override
+  String get notifyNeedsWallet => 'Serve un portafoglio su questo dispositivo';
+
+  @override
+  String get notifyDenied =>
+      'Le notifiche di Murmur sono disattivate nelle impostazioni di sistema.';
+
+  @override
+  String get notifyPointLocal =>
+      '**Controlla questa app**, sul nodo che hai scelto: niente passa da Google, Apple o altri.';
+
+  @override
+  String get notifyPointBackground =>
+      'Ad app chiusa, controlla **circa ogni 15 minuti**, come il sistema consente.';
+
+  @override
+  String get notifyPointOpen =>
+      'Solo **mentre l\'app è aperta**, quando non è in primo piano.';
+
+  @override
+  String get notifyPointLockScreen =>
+      'La schermata di blocco **nasconde il contenuto**.';
+
+  @override
+  String get notifyChannel => 'Messaggi';
+
+  @override
+  String get notifyOpen => 'Apri';
+
+  @override
+  String notifyReply(String name) {
+    return '$name ha risposto nella tua discussione';
+  }
+
+  @override
+  String notifyAnswer(String name) {
+    return '$name ti ha risposto';
+  }
+
+  @override
+  String notifyMention(String name) {
+    return '$name ti ha menzionato';
+  }
+
+  @override
+  String notifyStarredReply(String name) {
+    return '$name ha risposto in una discussione con la stella';
+  }
+
+  @override
+  String notifyStarredPerson(String name) {
+    return 'Nuovo messaggio da $name';
+  }
+
+  @override
+  String notifyMore(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Altri $countString messaggi nuovi',
+      one: 'Un altro messaggio nuovo',
+    );
+    return '$_temp0';
+  }
 }

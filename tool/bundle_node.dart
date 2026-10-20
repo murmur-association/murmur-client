@@ -117,7 +117,8 @@ String _arch() {
 String _triple() {
   if (Platform.isWindows) return 'x86_64-pc-windows-msvc';
   if (Platform.isLinux) return _arch() == 'arm64' ? 'aarch64-unknown-linux-musl' : 'x86_64-unknown-linux-musl';
-  _usage('no published macOS build yet: build murmur-node yourself and use --from');
+  // One file for Apple silicon and Intel (node releases from v0.10.8 on).
+  return 'universal-apple-darwin';
 }
 
 Future<List<int>> _get(String url) async {

@@ -1866,6 +1866,14 @@ class AppLocalizationsNl extends AppLocalizations {
   String get starredThreads => 'Draadjes en berichten';
 
   @override
+  String get noStarredThreads =>
+      'Geen draadjes of berichten met een ster. Geef er een een ster op de eigen pagina, dan verschijnt het hier.';
+
+  @override
+  String get noStarredPeople =>
+      'Geen personen met een ster. Geef iemand een ster op de eigen pagina, dan verschijnt die hier.';
+
+  @override
   String get newActivity => 'Nieuwe activiteit';
 
   @override
@@ -1886,4 +1894,85 @@ class AppLocalizationsNl extends AppLocalizations {
   @override
   String get inviteLockedPoint =>
       '**De codes worden versleuteld bewaard.** Om een kaart te tonen, af te drukken of te annuleren moet je ze **ontgrendelen**.';
+
+  @override
+  String get notifications => 'Meldingen';
+
+  @override
+  String get notifyReplies => 'Antwoorden aan jou';
+
+  @override
+  String get notifyMentions => 'Vermeldingen van jou';
+
+  @override
+  String get notifyStarred => 'Nieuws over wat een ster heeft';
+
+  @override
+  String get notifyNeedsWallet => 'Vraagt een wallet op dit apparaat';
+
+  @override
+  String get notifyDenied =>
+      'Meldingen staan uit voor Murmur in de systeeminstellingen.';
+
+  @override
+  String get notifyPointLocal =>
+      '**Deze app kijkt zelf**, bij de node die je koos: niets gaat via Google, Apple of iemand anders.';
+
+  @override
+  String get notifyPointBackground =>
+      'Is de app dicht, dan kijkt hij **ongeveer elke 15 minuten**, zoals het systeem toelaat.';
+
+  @override
+  String get notifyPointOpen =>
+      'Alleen **zolang de app open is**, als hij niet vooraan staat.';
+
+  @override
+  String get notifyPointLockScreen =>
+      'Het vergrendelscherm **verbergt de inhoud**.';
+
+  @override
+  String get notifyChannel => 'Berichten';
+
+  @override
+  String get notifyOpen => 'Openen';
+
+  @override
+  String notifyReply(String name) {
+    return '$name antwoordde in je draadje';
+  }
+
+  @override
+  String notifyAnswer(String name) {
+    return '$name antwoordde je';
+  }
+
+  @override
+  String notifyMention(String name) {
+    return '$name noemde je';
+  }
+
+  @override
+  String notifyStarredReply(String name) {
+    return '$name antwoordde in een draadje met een ster';
+  }
+
+  @override
+  String notifyStarredPerson(String name) {
+    return 'Nieuw bericht van $name';
+  }
+
+  @override
+  String notifyMore(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Nog $countString nieuwe berichten',
+      one: 'Nog 1 nieuw bericht',
+    );
+    return '$_temp0';
+  }
 }

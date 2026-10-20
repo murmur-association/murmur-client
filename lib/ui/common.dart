@@ -14,6 +14,7 @@ import '../protocol/quote.dart';
 import '../services/chain_cache.dart';
 import '../services/local_node.dart';
 import '../services/node_client.dart';
+import '../services/notifier.dart';
 import '../services/storage.dart';
 import 'address_page.dart';
 import 'brand.dart';
@@ -38,6 +39,7 @@ class AppScope extends InheritedWidget {
       required this.wallets,
       required this.prefs,
       this.localNode,
+      this.notifier,
       required super.child});
 
   final MurmurClient client;
@@ -47,6 +49,9 @@ class AppScope extends InheritedWidget {
   /// The app's own node (desktop builds with the node program next to
   /// them); null or unavailable elsewhere.
   final LocalNode? localNode;
+
+  /// The system's notifications, where the app has them (services/notifier.dart).
+  final Notifier? notifier;
 
   static AppScope of(BuildContext context) =>
       context.dependOnInheritedWidgetOfExactType<AppScope>()!;
@@ -152,7 +157,11 @@ Glyph kindIcon(TxKind k) => switch (k) {
 /// Of a `reply`, this is what it says itself: the lines that name the
 /// replies it answers (protocol/quote.dart) are left out; [quotesOf] gives
 /// those.
-String? messageText(BuildContext context, Uint8List? content, {bool reply = false}) {
+String? messageText(BuildContext context, Uint8List? content, {bool reply = false}) =>
+    messageTextIn(context.l10n, content, reply: reply);
+
+/// [messageText], away from the widgets: for a notification.
+String? messageTextIn(AppLocalizations l, Uint8List? content, {bool reply = false}) {
   if (content == null) return null;
   final message = messageOf(content);
   if (!isNonText(message)) {
@@ -160,7 +169,6 @@ String? messageText(BuildContext context, Uint8List? content, {bool reply = fals
     return reply ? quotesIn(text).body : text;
   }
   final alias = aliasOf(message);
-  final l = context.l10n;
   return alias == null ? l.nonTextMessage : (alias.isEmpty ? l.aliasCleared : l.aliasSetTo(alias));
 }
 

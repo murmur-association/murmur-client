@@ -81,6 +81,23 @@ Future<void> _stopOwnNode(Directory data) async {
     // Still held for a moment by the node on its way out.
   }
 }
+/// Allows the app on the Android device `device` to notify, as its user
+/// would when it asks (Android 13 and later ask; an in-app test can't tap
+/// the system's question): granted again every few seconds, since `flutter
+/// test` installs the app anew, until the run ends. Null without the app's
+/// Android project (generated per machine, README).
+Timer? _allowNotifications(String device) {
+  final gradle = [File('android/app/build.gradle.kts'), File('android/app/build.gradle')]
+      .where((f) => f.existsSync())
+      .firstOrNull;
+  final id = gradle == null
+      ? null
+      : RegExp(r"""applicationId\s*=?\s*["']([^"']+)["']""").firstMatch(gradle.readAsStringSync())?.group(1);
+  if (id == null) return null;
+  return Timer.periodic(const Duration(seconds: 3), (_) {
+    Process.run('adb', ['-s', device, 'shell', 'pm', 'grant', id, 'android.permission.POST_NOTIFICATIONS']);
+  });
+}
 
 void main() {
   test('acceptance: the app on $_device, against a node of its own', () async {
@@ -111,6 +128,10 @@ void main() {
     if (browser) {
       final driver = await _startWebDriver();
       addTearDown(driver.kill);
+    }
+    if (_device.startsWith('emulator-')) {
+      final allowing = _allowNotifications(_device);
+      if (allowing != null) addTearDown(allowing.cancel);
     }
     final args = !browser
         ? ['test', _suite, '-d', _device, ...settings]

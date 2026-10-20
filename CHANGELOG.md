@@ -8,6 +8,8 @@ Newest first. Each release is a `vX.Y.Z` tag matching `version` in `pubspec.yaml
 
 - **Added: mentions.** Type `@` in a thread or a reply to name someone the app knows: up to four per message, each costing 8 bytes of fee. They learn of it in Messages (a new "Mentions" filter, counted in the badge), and a message shows whom it mentions under its text. A mention is public, and the summary before signing says so.
 - **Changed: blocks hold at most 1 MB** on the new testnet, half of before.
+- **Added: notifications.** The bell in Messages and Starred switches on notifications of replies and answers to you, mentions of you, and news on what you starred, each on its own; all are off until you choose. The app checks by itself, on your node, with no push service: nobody else learns what you follow. On Android it also checks while closed, about every 15 minutes, and the lock screen hides what they say; on Windows, Linux and in a browser they come while the app is open but not in front.
+- **Changed: Starred has two lists**, one for threads and messages and one for people, each on a tab of its own; a dot on a tab says that list has news.
 
 ## v0.7.1: checkpoint refresh (2026-10-19)
 

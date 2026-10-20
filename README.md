@@ -15,6 +15,8 @@ A Flutter light client for the Murmur chain, speaking **protocol 14** (networks 
   - **New thread:** the button at the bottom starts one.
   - **Languages** are detected on the device from each thread's text. By default the list shows your device's languages, plus text too short to tell. The header counts what's hidden.
 - **Messages:** the wallet's own messages, newest first, following new blocks: threads it started, replies it sent or received, threads and replies that mention it, and flags it raised or received. Filter chips choose which; flags are off by default. Plain transfers aren't messages and live in the Wallet tab. A badge on the tab counts new replies to you. Each row shows its author's picture, which opens their page; what others wrote stays highlighted until you open it, and so do starred things with news in the Starred tab.
+- **Starred:** what you starred, in two lists: threads and messages, and people. A dot on a list says it has news.
+- **Notifications** (the bell in Messages and Starred): replies and answers to you, mentions of you, and news on what you starred, each switched on apart, off until you do. The app checks by itself, on the node you chose: nothing goes through Google, Apple or a push service, so nobody else learns what you follow. On Android it also checks while closed, about every 15 minutes as the system allows, and the lock screen hides what notifications say; on Windows, Linux and in a browser, notifications come while the app is open but not in front. Not on iPhones or Macs.
 - **A thread** shows its replies oldest first. The first visit opens at the top; later ones go to where you left off, and replies newer than that light up for a moment as they come into view. Further replies load as you scroll down, earlier ones with "Earlier replies".
 
 **People.**
@@ -96,7 +98,7 @@ flutter run -d windows
 
 Platform notes:
 
-- **Android:** add `<uses-permission android:name="android.permission.INTERNET"/>` and `<uses-permission android:name="android.permission.USE_BIOMETRIC"/>` to `android/app/src/main/AndroidManifest.xml`. Make `MainActivity` extend `FlutterFragmentActivity`: the key store (`biometric_storage`) needs it. From the emulator, the host machine's node is at `10.0.2.2`.
+- **Android:** add `<uses-permission android:name="android.permission.INTERNET"/>` and `<uses-permission android:name="android.permission.USE_BIOMETRIC"/>` to `android/app/src/main/AndroidManifest.xml`. Make `MainActivity` extend `FlutterFragmentActivity`: the key store (`biometric_storage`) needs it. Notifications (`flutter_local_notifications`) need `compileSdk = 36` and core library desugaring in `android/app/build.gradle.kts`: `isCoreLibraryDesugaringEnabled = true` under `compileOptions`, and `coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")` under `dependencies`. From the emulator, the host machine's node is at `10.0.2.2`.
 - **iOS:** add `NSFaceIDUsageDescription` ("Confirm it's you before your wallet seed is shown") to `ios/Runner/Info.plist`.
 - **macOS:** add `com.apple.security.network.client` = `true` to both `macos/Runner/*.entitlements` files.
 - **Linux:** secure storage needs `libsecret-1-dev` to build.
@@ -220,14 +222,18 @@ For how the code works, the rules it keeps, recipes and known gaps, see [AGENTS.
 | `lib/services/node_client.dart` | Connection, headers-first sync, balances, gossip, submission |
 | `lib/services/storage.dart` | Wallet seed in secure storage; node address, theme, language and filters in preferences |
 | `lib/services/chain_cache*.dart` | The local copy of the chain: IndexedDB in the browser, files natively |
+| `lib/services/news.dart` | What's news for the user (replies, answers, mentions, starred activity), for the badges and notifications |
+| `lib/services/notifier.dart` | The system's notifications, raised by the app itself |
+| `lib/ui/notifications*.dart` | Telling of news: while the app runs, and Android's background checks; the settings dialog |
 | `lib/services/local_node*.dart` | The app's own node on desktops: starting `murmur-node`, and keeping it in line with the settings and wallet |
 | `tool/bundle_node.dart` | Puts `murmur-node` next to a built desktop app |
 | `tool/refresh_checkpoint.dart` | Refreshes the testnet checkpoint from the live network, before a release |
 | `tool/check_checkpoint.dart` | Checks the shipped checkpoint against the live network (the release job runs it) |
 | `tool/package_desktop.dart` | Archives the built Windows or Linux app with its node and the notices (the release jobs run it) |
 | `tool/desktop_smoke_test.dart` | Tries the packaged desktop app, the same on Windows and Linux: its own node starts and stops with it, a node left by a crash is replaced, a wallet is saved through the system's secure storage (on Linux inside `tool/linux_session.sh`, a session of its own) |
-| `integration_test/acceptance_test.dart` | The acceptance tests: a wallet, a thread, a reply, an answer to it, an invitation card and a restart, inside the built app, the same on every flavour |
+| `integration_test/acceptance_test.dart` | The acceptance tests: a wallet, a thread, a reply, an answer to it, an invitation card, a restart and a notification of someone else's reply, inside the built app, the same on every flavour |
 | `tool/acceptance_test.dart` | Runs them on one flavour (this desktop, `ACCEPTANCE_DEVICE=chrome`, `chrome-passkey` with a virtual passkey, or an Android emulator) against a node of its own on a demo chain |
+| `tool/notification_server.dart` | A stand-in desktop notification server in Linux test sessions: the acceptance tests read what the app showed, and click it |
 | `tool/fetch_test_browser.dart` | The pinned Chrome for Testing the browser run uses; never in a release |
 | `tool/fetch_test_graphics.ps1` | Software graphics for the copy tried on the Windows release runner; never in a release |
 | `lib/protocol/commitments.dart` | The state tree, block filter and header history verifiers (PROTOCOL.md Section 3.6) |

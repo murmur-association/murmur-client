@@ -2800,6 +2800,18 @@ abstract class AppLocalizations {
   /// **'Threads and messages'**
   String get starredThreads;
 
+  /// Starred tab: the threads and messages list, empty
+  ///
+  /// In en, this message translates to:
+  /// **'No starred threads or messages. Star one from its page and it shows up here.'**
+  String get noStarredThreads;
+
+  /// Starred tab: the people list, empty
+  ///
+  /// In en, this message translates to:
+  /// **'No starred people. Star someone from their page and they show up here.'**
+  String get noStarredPeople;
+
   /// Starred tab: a mark on a starred thread or person with activity the user has not seen
   ///
   /// In en, this message translates to:
@@ -2823,6 +2835,114 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'**Codes are stored encrypted.** Showing, printing or cancelling a card asks you to **unlock** them.'**
   String get inviteLockedPoint;
+
+  /// Notifications: the settings dialog's title, and its button's tooltip
+  ///
+  /// In en, this message translates to:
+  /// **'Notifications'**
+  String get notifications;
+
+  /// Notifications: switch for replies in the wallet's threads and answers to its replies
+  ///
+  /// In en, this message translates to:
+  /// **'Replies and answers to you'**
+  String get notifyReplies;
+
+  /// Notifications: switch for messages that mention the wallet
+  ///
+  /// In en, this message translates to:
+  /// **'Mentions of you'**
+  String get notifyMentions;
+
+  /// Notifications: switch for replies under starred threads and messages by starred people
+  ///
+  /// In en, this message translates to:
+  /// **'News on what you starred'**
+  String get notifyStarred;
+
+  /// Notifications: under a switch that needs a wallet when there is none
+  ///
+  /// In en, this message translates to:
+  /// **'Needs a wallet on this device'**
+  String get notifyNeedsWallet;
+
+  /// Notifications: the system refused the permission
+  ///
+  /// In en, this message translates to:
+  /// **'Notifications are turned off for Murmur in the system\'s settings.'**
+  String get notifyDenied;
+
+  /// Notifications dialog, a point: the app checks by itself, no push service. **…** marks the key words
+  ///
+  /// In en, this message translates to:
+  /// **'**Checked by this app**, on the node you chose: nothing goes through Google, Apple or anyone else.'**
+  String get notifyPointLocal;
+
+  /// Notifications dialog, a point (Android): how often the app checks while closed. **…** marks the key words
+  ///
+  /// In en, this message translates to:
+  /// **'While the app is closed, it checks **about every 15 minutes**, as the system allows.'**
+  String get notifyPointBackground;
+
+  /// Notifications dialog, a point (desktop and web): only while the app is open. **…** marks the key words
+  ///
+  /// In en, this message translates to:
+  /// **'Only **while the app is open**, when it isn\'t in front.'**
+  String get notifyPointOpen;
+
+  /// Notifications dialog, a point (Android): the lock screen hides the text. **…** marks the key words
+  ///
+  /// In en, this message translates to:
+  /// **'The lock screen **hides what they say**.'**
+  String get notifyPointLockScreen;
+
+  /// Android's name for the app's notifications, shown in the system's settings
+  ///
+  /// In en, this message translates to:
+  /// **'Messages'**
+  String get notifyChannel;
+
+  /// Linux: the name of a notification's default action
+  ///
+  /// In en, this message translates to:
+  /// **'Open'**
+  String get notifyOpen;
+
+  /// Notification title: a reply in the wallet's thread
+  ///
+  /// In en, this message translates to:
+  /// **'{name} replied to your thread'**
+  String notifyReply(String name);
+
+  /// Notification title: an answer to the wallet's reply
+  ///
+  /// In en, this message translates to:
+  /// **'{name} answered you'**
+  String notifyAnswer(String name);
+
+  /// Notification title: a message mentioning the wallet
+  ///
+  /// In en, this message translates to:
+  /// **'{name} mentioned you'**
+  String notifyMention(String name);
+
+  /// Notification title: a reply under a starred thread or message
+  ///
+  /// In en, this message translates to:
+  /// **'{name} replied in a thread you starred'**
+  String notifyStarredReply(String name);
+
+  /// Notification title: a message by a starred person
+  ///
+  /// In en, this message translates to:
+  /// **'New message from {name}'**
+  String notifyStarredPerson(String name);
+
+  /// Notification: how many more messages than the ones shown
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 more new message} other{{count} more new messages}}'**
+  String notifyMore(int count);
 }
 
 class _AppLocalizationsDelegate

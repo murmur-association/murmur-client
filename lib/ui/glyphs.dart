@@ -125,6 +125,15 @@ enum Glyph {
     _Ring(50, 52),
   ]),
 
+  /// Notifications: a bell hung from a node, its clapper a solid endpoint.
+  /// On, the node fills.
+  bell([
+    _Arc(50, 46, 22, 180, 180),
+    _Line([28, 46, 28, 64, 16, 76, 84, 76, 72, 64, 72, 46]),
+    _Ring(50, 15),
+    _Dot(50, 88, 7),
+  ]),
+
   /// Share: one node passing to two others, like the logo's links.
   share([
     _Line([72, 22, 28, 50, 72, 78]),

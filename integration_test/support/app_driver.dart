@@ -8,10 +8,15 @@
 // from nothing wherever it runs. (Storing for real is
 // wallet_storage_test.dart's subject.)
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:murmur_client/crypto/wallet.dart';
 import 'package:murmur_client/main.dart' as app;
+import 'package:murmur_client/protocol/bytes.dart';
+import 'package:murmur_client/protocol/models.dart';
 import 'package:murmur_client/services/local_node.dart';
 import 'package:murmur_client/services/node_client.dart';
 import 'package:murmur_client/services/storage.dart';
@@ -208,6 +213,9 @@ class AppDriver {
 
   /// Back, page by page, to the home page.
   Future<void> backHome() async {
+    // Not while a page still slides in: the home page under it counts as
+    // on screen until it has.
+    await tester.pump(const Duration(milliseconds: 600));
     for (var pages = 0; find.byType(HomePage).evaluate().isEmpty; pages++) {
       if (pages == 10) fail('no way back to the home page\n${_onScreen()}');
       await tester.pageBack();
@@ -252,6 +260,54 @@ class AppDriver {
     await press<FilledButton>(l.import);
     await choosePassphrase();
     await waitUntil(() => wallets.wallet != null, what: 'the wallet to be saved');
+  }
+
+  /// Switches on notifications of `topic` (its switch's title), from the
+  /// bell in the Messages tab, and closes the settings.
+  Future<void> switchOnNotifications(String topic) async {
+    await openTab(l.tabMessages);
+    await tap(find.byTooltip(l.notifications), what: 'the notifications bell');
+    await flip(topic);
+    await press<TextButton>(l.done);
+    await waitGone(find.text(topic), what: 'the notification settings to close');
+  }
+
+  /// The app stops being in front, as when another window takes the focus;
+  /// [comeBack] brings it back. (Not hidden: a hidden app draws no frames,
+  /// and the test drives it by frames.)
+  void goAway() => tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+
+  void comeBack() => tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+
+  /// Someone else, with a wallet of their own on another device, replies to
+  /// the thread `root`: the test's wallet funds theirs, they send the reply,
+  /// and both are mined. Returns their address and the reply.
+  Future<(String, Transaction)> someoneReplies(String root, String text) async {
+    final payer = await MurmurWallet.fromSeed(fromHex(acceptanceSeed));
+    final someone = await MurmurWallet.generate();
+    final colon = acceptanceNode.lastIndexOf(':');
+    final other = MurmurClient();
+    bool mined(Transaction tx) => other.lookupTx(tx.id)?.confirmed ?? false;
+    try {
+      unawaited(other.connect(acceptanceNode.substring(0, colon), int.parse(acceptanceNode.substring(colon + 1))));
+      await waitUntil(() => other.state == LinkState.live && (other.availableTo(payer.addressHex) ?? 0) > 0,
+          what: "the other device to see the test's wallet");
+      final fund = await other.submit(
+          wallet: payer, kind: TxKind.raw, to: someone.address, amount: 5 * unitsPerToken, fee: minFee);
+      await waitUntil(() => mined(fund) && (other.availableTo(someone.addressHex) ?? 0) > 0,
+          what: 'their wallet to be funded', timeout: const Duration(minutes: 3));
+      final reply = await other.submit(
+          wallet: someone,
+          kind: TxKind.reply,
+          amount: minFee,
+          fee: minFee,
+          message: MurmurClient.encodeText(text),
+          reference: root);
+      await waitUntil(() => mined(reply), what: 'their reply to be mined', timeout: const Duration(minutes: 3));
+      return (someone.addressHex, reply);
+    } finally {
+      other.dispose();
+    }
   }
 
   /// Writes `text` on the compose page that's open, and signs and sends it:

@@ -1852,6 +1852,14 @@ class AppLocalizationsEn extends AppLocalizations {
   String get starredThreads => 'Threads and messages';
 
   @override
+  String get noStarredThreads =>
+      'No starred threads or messages. Star one from its page and it shows up here.';
+
+  @override
+  String get noStarredPeople =>
+      'No starred people. Star someone from their page and they show up here.';
+
+  @override
   String get newActivity => 'New activity';
 
   @override
@@ -1872,4 +1880,85 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get inviteLockedPoint =>
       '**Codes are stored encrypted.** Showing, printing or cancelling a card asks you to **unlock** them.';
+
+  @override
+  String get notifications => 'Notifications';
+
+  @override
+  String get notifyReplies => 'Replies and answers to you';
+
+  @override
+  String get notifyMentions => 'Mentions of you';
+
+  @override
+  String get notifyStarred => 'News on what you starred';
+
+  @override
+  String get notifyNeedsWallet => 'Needs a wallet on this device';
+
+  @override
+  String get notifyDenied =>
+      'Notifications are turned off for Murmur in the system\'s settings.';
+
+  @override
+  String get notifyPointLocal =>
+      '**Checked by this app**, on the node you chose: nothing goes through Google, Apple or anyone else.';
+
+  @override
+  String get notifyPointBackground =>
+      'While the app is closed, it checks **about every 15 minutes**, as the system allows.';
+
+  @override
+  String get notifyPointOpen =>
+      'Only **while the app is open**, when it isn\'t in front.';
+
+  @override
+  String get notifyPointLockScreen =>
+      'The lock screen **hides what they say**.';
+
+  @override
+  String get notifyChannel => 'Messages';
+
+  @override
+  String get notifyOpen => 'Open';
+
+  @override
+  String notifyReply(String name) {
+    return '$name replied to your thread';
+  }
+
+  @override
+  String notifyAnswer(String name) {
+    return '$name answered you';
+  }
+
+  @override
+  String notifyMention(String name) {
+    return '$name mentioned you';
+  }
+
+  @override
+  String notifyStarredReply(String name) {
+    return '$name replied in a thread you starred';
+  }
+
+  @override
+  String notifyStarredPerson(String name) {
+    return 'New message from $name';
+  }
+
+  @override
+  String notifyMore(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$countString more new messages',
+      one: '1 more new message',
+    );
+    return '$_temp0';
+  }
 }

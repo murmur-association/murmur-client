@@ -23,6 +23,8 @@ dependencies:
   qr: ^4.0.0
   share_plus: ^12.0.2
   biometric_storage: ^5.0.1
+  flutter_local_notifications: ^22.3.2
+  workmanager: ^0.10.10
 
 dev_dependencies:
   flutter_test:
@@ -36,6 +38,8 @@ dev_dependencies:
   ffi: ^2.1.0
   integration_test:
     sdk: flutter
+  # The stand-in notification server of a Linux test session (tool/notification_server.dart).
+  dbus: ^0.8.0
 
 flutter:
   uses-material-design: true

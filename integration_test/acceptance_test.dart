@@ -16,14 +16,18 @@ import 'package:integration_test/integration_test.dart';
 import 'package:murmur_client/protocol/bytes.dart';
 import 'package:murmur_client/protocol/models.dart';
 import 'package:murmur_client/services/local_node.dart';
+import 'package:murmur_client/services/news.dart' show NotifyTopic;
+import 'package:murmur_client/services/notifier.dart';
 import 'package:murmur_client/services/storage.dart';
-import 'package:murmur_client/ui/common.dart' show AvatarLink;
+import 'package:murmur_client/ui/common.dart' show AvatarLink, shortHex;
 import 'package:murmur_client/ui/invitations_page.dart';
+import 'package:murmur_client/ui/notifications.dart' show openNotification, payloadTarget;
 import 'package:murmur_client/ui/thread_page.dart';
 import 'package:murmur_client/ui/threads_tab.dart';
 
 import 'support/app_driver.dart';
 import 'support/header_nonce_checks.dart';
+import 'support/system_notifications.dart';
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -175,6 +179,60 @@ void main() {
     await app.waitUntil(() => inviteStore.invites.length == 1, what: 'the card kept on the device');
     // Listing asks nothing; its code is still locked.
     expect(app.asksPassphrase, isFalse);
+  });
+
+  testWidgets('notifications: a reply from someone else is told while the app is away, once, and opens its thread',
+      (tester) async {
+    final app = AppDriver(tester);
+    await app.start();
+    final l = app.l;
+    await app.waitUntil(() => app.wallets.wallet != null, what: 'the wallet to be found');
+    final me = app.wallets.wallet!.addressHex;
+    // What the app hands the system, on every flavour.
+    final told = <({int id, String title, String body, String payload})>[];
+    SystemNotifier.onShown = told.add;
+    addTearDown(() => SystemNotifier.onShown = null);
+
+    // Switched on: the system is asked (a desktop asks nothing; the test's
+    // browser has granted it, test_driver/integration_test.dart).
+    await app.switchOnNotifications(l.notifyReplies);
+    expect(app.prefs.notifyTopics, {NotifyTopic.replies});
+    await app.waitUntil(() => app.client.threads().any((t) => t.root.tx.fromAddress == me),
+        what: "the wallet's thread");
+    final root = app.client.threads().firstWhere((t) => t.root.tx.fromAddress == me).root.tx.id;
+
+    // Away from the app, someone else replies to the wallet's thread.
+    app.goAway();
+    final text = 'Notified reply $stamp';
+    final (someone, reply) = await app.someoneReplies(root, text);
+    await app.waitUntil(() => told.any((n) => n.body == text),
+        what: 'the notification of their reply', timeout: const Duration(minutes: 2));
+    final shown = told.singleWhere((n) => n.body == text);
+    expect(shown.title, l.notifyReply(shortHex(someone)));
+    expect(payloadTarget(shown.payload), (root: root, txid: reply.id));
+
+    // The system has it, where the test can read the system.
+    final system = await systemNotifications();
+    debugPrint(system == null ? "the system's notifications: not readable here" : 'the system shows: $system');
+    final there = system?.where((n) => n.title == shown.title && n.body == text).toList();
+    if (there != null) expect(there, hasLength(1));
+
+    // Back in the app, a click on it opens the reply in its thread: from the
+    // system where a test can click there, else as the app takes a click.
+    app.comeBack();
+    if (there == null || !await clickSystemNotification(there.single)) openNotification(shown.payload);
+    await app.waitFor(find.byType(ThreadPage), what: 'the thread the notification opens');
+    await app.waitFor(find.text(text), what: 'their reply in it');
+    await app.backHome();
+
+    // Told once, however many checks come after.
+    final tip = app.client.height;
+    await app.waitUntil(() => app.client.height > tip, what: 'a block since', timeout: const Duration(minutes: 2));
+    expect(told.where((n) => n.body == text), hasLength(1));
+
+    // And off again.
+    await app.switchOnNotifications(l.notifyReplies);
+    expect(app.prefs.notifyTopics, isEmpty);
   });
 
   testWidgets("a desktop's own node: it runs beside the app, and mines on the graphics card or says why not",

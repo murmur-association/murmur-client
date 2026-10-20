@@ -23,9 +23,9 @@ fi
 # Downloaded packages stay where they are; everything else moves.
 export PUB_CACHE=${PUB_CACHE:-$HOME/.pub-cache}
 home=$(mktemp -d)
-display='' wm=''
+display='' wm='' notifier=''
 cleanup() {
-  for pid in $wm $display; do kill "$pid" 2>/dev/null || true; done
+  for pid in $notifier $wm $display; do kill "$pid" 2>/dev/null || true; done
   rm -rf "$home"
 }
 trap cleanup EXIT
@@ -38,5 +38,13 @@ sleep 1
 openbox >/dev/null 2>&1 & wm=$!
 sleep 1
 echo -n smoke | gnome-keyring-daemon --unlock --components=secrets >/dev/null 2>&1
+
+# A notification server, as a desktop has, that keeps what it's given in a
+# log the tests read (tool/notification_server.dart); it's ready once the
+# log exists.
+export MURMUR_NOTIFY_LOG=$home/notifications.log
+dart run tool/notification_server.dart "$MURMUR_NOTIFY_LOG" & notifier=$!
+for _ in $(seq 150); do [ -e "$MURMUR_NOTIFY_LOG" ] && break; sleep 0.2; done
+[ -e "$MURMUR_NOTIFY_LOG" ] || { echo 'the notification server did not start' >&2; exit 1; }
 
 "$@"

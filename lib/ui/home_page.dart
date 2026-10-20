@@ -11,6 +11,7 @@ import 'chain_tab.dart';
 import 'common.dart';
 import 'compose_page.dart';
 import 'messages_tab.dart';
+import '../services/news.dart';
 import '../services/starred.dart';
 import 'starred_tab.dart';
 import 'threads_tab.dart';
@@ -24,7 +25,7 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> with RouteAware {
+class _HomePageState extends State<HomePage> with RouteAware, WidgetsBindingObserver {
   static const _threads = 0, _messages = 1, _starred = 2, _wallet = 3;
 
   int _tab = _threads;
@@ -54,8 +55,30 @@ class _HomePageState extends State<HomePage> with RouteAware {
     if (_tab == _starred) setState(() => _starredShown++);
   }
 
+  /// Whether the user can be looking at the app: it's in front. Only then
+  /// does an open tab count as seeing what's in it; otherwise it's news to
+  /// be told of (ui/notifications.dart).
+  static bool get _inFront {
+    final state = WidgetsBinding.instance.lifecycleState;
+    return state == null || state == AppLifecycleState.resumed;
+  }
+
+  /// Whether the tab `tab` is open, in front of the user.
+  bool _looking(int tab) => _tab == tab && _inFront;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  // Back in front, what the open tab shows is seen.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) => setState(() {});
+
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     routeObserver.unsubscribe(this);
     super.dispose();
   }
@@ -87,16 +110,10 @@ class _HomePageState extends State<HomePage> with RouteAware {
     final seen = prefs.messagesSeen[me] ?? 0;
     var count = 0;
     int? newest;
-    for (final v in client.activityOf(me)) {
-      final t = activityTime(v);
-      if (v.confirmed && t <= seen) break; // newest first: the rest were seen
-      final tx = v.tx;
-      // Replies in the wallet's threads (those credit it), and answers to
-      // its replies in other people's, and threads and replies that mention it.
-      if (tx.fromAddress == me) continue;
-      final replied = tx.kind == TxKind.reply && (client.creditedBy(tx) == me || client.answersTo(tx, me));
-      if (!replied && !client.mentions(tx, me)) continue;
-      if (prefs.muted.contains(tx.fromAddress)) continue;
+    // Replies in the wallet's threads (those credit it), and answers to its
+    // replies in other people's, and threads and replies that mention it.
+    for (final news in walletNews(client, me, since: seen, muted: prefs.muted)) {
+      final t = news.time;
       newest = max(newest ?? 0, t);
       if (t > seen && ++count == 99) break;
     }
@@ -116,10 +133,10 @@ class _HomePageState extends State<HomePage> with RouteAware {
         final int? newest;
         (newReplies, newest) = _newReplies(client, prefs, me);
         // A wallet starts from now, not its whole history. On the Messages
-        // tab, what's there is seen.
+        // tab, in front, what's there is seen.
         final seen = prefs.messagesSeen[me];
         final until =
-            seen == null ? DateTime.now().millisecondsSinceEpoch ~/ 1000 : (_tab == _messages ? newest : null);
+            seen == null ? DateTime.now().millisecondsSinceEpoch ~/ 1000 : (_looking(_messages) ? newest : null);
         if (until != null && until > (seen ?? 0)) {
           WidgetsBinding.instance.addPostFrameCallback((_) => prefs.setMessagesSeen(me, until));
         }
@@ -127,14 +144,15 @@ class _HomePageState extends State<HomePage> with RouteAware {
       }
       // Starred threads and people: followed, and counted when they have
       // activity not seen yet. Seeing starts when the first star is given,
-      // not with its whole history, and moves on while the tab is open.
+      // not with its whole history, and moves on while the tab is open in
+      // front.
       final activity = starredActivity(client,
           starred: prefs.starred, people: prefs.starredPeople, me: me, muted: prefs.muted);
       var starredNew = 0;
       if (prefs.starred.isNotEmpty || prefs.starredPeople.isNotEmpty) {
         final seen = prefs.starredSeen;
         final until =
-            seen == null ? DateTime.now().millisecondsSinceEpoch ~/ 1000 : (_tab == _starred ? activity.newest : null);
+            seen == null ? DateTime.now().millisecondsSinceEpoch ~/ 1000 : (_looking(_starred) ? activity.newest : null);
         if (until != null && until > (seen ?? -1)) {
           WidgetsBinding.instance.addPostFrameCallback((_) => prefs.setStarredSeen(until));
         }

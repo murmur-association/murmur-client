@@ -1804,6 +1804,13 @@ class AppLocalizationsJa extends AppLocalizations {
   String get starredThreads => 'スレッドとメッセージ';
 
   @override
+  String get noStarredThreads =>
+      'スター付きのスレッドやメッセージはありません。ページでスターを付けると、ここに表示されます。';
+
+  @override
+  String get noStarredPeople => 'スター付きのユーザーはいません。ユーザーのページでスターを付けると、ここに表示されます。';
+
+  @override
   String get newActivity => '新しいアクティビティ';
 
   @override
@@ -1822,4 +1829,81 @@ class AppLocalizationsJa extends AppLocalizations {
   @override
   String get inviteLockedPoint =>
       '**コードは暗号化して保存されます。** カードの表示、印刷、取り消しには**ロック解除**が必要です。';
+
+  @override
+  String get notifications => '通知';
+
+  @override
+  String get notifyReplies => 'あなたへの返信と回答';
+
+  @override
+  String get notifyMentions => 'あなたへのメンション';
+
+  @override
+  String get notifyStarred => 'スター付きの新着';
+
+  @override
+  String get notifyNeedsWallet => 'この端末にウォレットが必要です';
+
+  @override
+  String get notifyDenied => 'システム設定で Murmur の通知がオフになっています。';
+
+  @override
+  String get notifyPointLocal =>
+      '**このアプリ自身が確認します**。選んだノードに対してのみで、Google や Apple などを経由しません。';
+
+  @override
+  String get notifyPointBackground =>
+      'アプリを閉じている間も、システムが許す範囲で**約 15 分ごと**に確認します。';
+
+  @override
+  String get notifyPointOpen => '**アプリを開いている間だけ**、前面にないときに通知します。';
+
+  @override
+  String get notifyPointLockScreen => 'ロック画面では**内容を表示しません**。';
+
+  @override
+  String get notifyChannel => 'メッセージ';
+
+  @override
+  String get notifyOpen => '開く';
+
+  @override
+  String notifyReply(String name) {
+    return '$name さんがあなたのスレッドに返信しました';
+  }
+
+  @override
+  String notifyAnswer(String name) {
+    return '$name さんがあなたに回答しました';
+  }
+
+  @override
+  String notifyMention(String name) {
+    return '$name さんがあなたをメンションしました';
+  }
+
+  @override
+  String notifyStarredReply(String name) {
+    return '$name さんがスター付きのスレッドに返信しました';
+  }
+
+  @override
+  String notifyStarredPerson(String name) {
+    return '$name さんから新しいメッセージ';
+  }
+
+  @override
+  String notifyMore(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'ほかに新しいメッセージが $countString 件',
+    );
+    return '$_temp0';
+  }
 }

@@ -136,6 +136,89 @@ acceptance:
   # browser is none the worse for it.
   - tool/linux_session.sh flutter test tool/acceptance_test.dart
 
+# Trials of what GitLab's hosted runners offer, before the phones'
+# acceptance tests rely on them. Started by hand (they cost compute
+# minutes), never in a scheduled pipeline, and allowed to fail: their log
+# is the answer.
+.probe:
+  stage: test
+  rules:
+  - if: $CI_PIPELINE_SOURCE == "schedule"
+    when: never
+  - when: manual
+  allow_failure: true
+
+# Android: an emulator needs the processor's virtualisation (KVM) inside the
+# job's machine, which GitLab's documentation doesn't promise. If it's
+# there, an emulator is booted, and the time it takes is the answer.
+probe-android-emulator:
+  extends: .probe
+  image: ghcr.io/cirruslabs/flutter:3.44.0
+  tags:
+  - saas-linux-large-amd64
+  timeout: 40m
+  script:
+  - grep -cE 'vmx|svm' /proc/cpuinfo || echo 'no virtualisation flag in /proc/cpuinfo'
+  - ls -l /dev/kvm || true
+  - test -r /dev/kvm && test -w /dev/kvm || { echo 'NO KVM: an Android emulator cannot run on this runner'; exit 1; }
+  # Libraries the emulator loads even without a window.
+  - apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends libpulse0 libnss3 libgbm1 libxkbfile1 libxcomposite1 libxcursor1 libxdamage1 libxi6 libxtst6 >/dev/null || true
+  - yes | sdkmanager --licenses >/dev/null
+  - sdkmanager --install emulator 'system-images;android-35;google_apis;x86_64' >/dev/null
+  - echo no | avdmanager create avd -n probe -k 'system-images;android-35;google_apis;x86_64' -d pixel_6
+  - start=$(date +%s)
+  - $ANDROID_HOME/emulator/emulator -avd probe -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect -accel on &
+  - adb wait-for-device
+  - timeout 900 sh -c 'until [ "$(adb shell getprop sys.boot_completed | tr -d "\r")" = 1 ]; do sleep 5; done'
+  - echo "KVM there: the emulator booted in $(( $(date +%s) - start )) s"
+  - adb shell getprop ro.build.version.release
+  - adb emu kill || true
+
+# iOS: a simulator on the macOS runners, and a Flutter test inside an app on
+# it, as the acceptance tests would run (Flutter's own in-app tests need no
+# UI automation, which these headless runners don't offer).
+probe-ios-simulator:
+  extends: .probe
+  image: macos-26-xcode-26
+  tags:
+  - saas-macos-medium-m1
+  timeout: 60m
+  script:
+  - sw_vers
+  - xcodebuild -version
+  - xcrun simctl list runtimes
+  - runtime=$(xcrun simctl list runtimes | awk '/^iOS/ {print $NF}' | tail -1)
+  - device=$(xcrun simctl list devicetypes | awk -F'[()]' '/iPhone/ {id=$2} END {print id}')
+  - echo "runtime $runtime, device type $device"
+  - udid=$(xcrun simctl create probe "$device" "$runtime")
+  - xcrun simctl boot "$udid"
+  - xcrun simctl bootstatus "$udid" -b
+  - git clone --depth 1 --branch "$FLUTTER_VERSION" https://github.com/flutter/flutter.git "$HOME/flutter"
+  - export PATH="$HOME/flutter/bin:$PATH"
+  - flutter create --platforms=ios --project-name probe "$HOME/probe"
+  - cd "$HOME/probe"
+  - flutter pub add 'dev:integration_test:{"sdk":"flutter"}'
+  - mkdir -p integration_test
+  - |
+    cat > integration_test/probe_test.dart <<'EOF'
+    import 'package:flutter/material.dart';
+    import 'package:flutter_test/flutter_test.dart';
+    import 'package:integration_test/integration_test.dart';
+    import 'package:probe/main.dart' as app;
+
+    void main() {
+      IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+      testWidgets('an app runs on the simulator, and a test drives it', (tester) async {
+        app.main();
+        await tester.pumpAndSettle();
+        await tester.tap(find.byIcon(Icons.add));
+        await tester.pumpAndSettle();
+        expect(find.text('1'), findsOneWidget);
+      });
+    }
+    EOF
+  - flutter test integration_test/probe_test.dart -d "$udid"
+
 build-web:
   extends:
   - .flutter

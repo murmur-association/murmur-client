@@ -6,20 +6,22 @@ import '../services/starred.dart';
 import 'common.dart';
 import 'emoji.dart';
 import 'glyphs.dart';
+import 'notifications.dart';
 import 'thread_page.dart';
 
-/// Everything the user starred, newest star first: people, then whole
-/// threads (starred by their root) and single messages. A tap opens the
-/// person's page, or the message in its thread. What has activity the user
-/// hasn't opened is marked until opened: a reply under a starred thread or
-/// message, a message written by a starred person.
+/// Everything the user starred, newest star first, in two lists of their own:
+/// whole threads (starred by their root) and single messages, then people. A
+/// tap opens the message in its thread, or the person's page. What has
+/// activity the user hasn't opened is marked until opened: a reply under a
+/// starred thread or message, a message written by a starred person. A list
+/// with such a row has a dot on its tab.
 ///
-/// The list is the one at the time the tab came into view, so unstarring a
+/// The lists are the ones at the time the tab came into view, so unstarring a
 /// row leaves it in place with an empty star, ready to be starred again.
 class StarredTab extends StatefulWidget {
   const StarredTab({super.key, this.refreshToken = 0, this.activity = const StarredActivity()});
 
-  /// Changes each time the tab comes into view: the list is taken again.
+  /// Changes each time the tab comes into view: the lists are taken again.
   final int refreshToken;
 
   /// The newest activity on each starred thing (`starredActivity`).
@@ -29,15 +31,21 @@ class StarredTab extends StatefulWidget {
   State<StarredTab> createState() => _StarredTabState();
 }
 
-class _StarredTabState extends State<StarredTab> {
+class _StarredTabState extends State<StarredTab> with SingleTickerProviderStateMixin {
   List<String>? _txids;
   late List<String> _people;
+  late final TabController _lists = TabController(length: 2, vsync: this);
+
+  /// The people's list, after the threads' (0).
+  static const _peopleList = 1;
 
   void _take() {
     // Stars are kept in the order they were given: newest last.
     final prefs = AppScope.of(context).prefs;
     _txids = prefs.starred.toList().reversed.toList();
     _people = prefs.starredPeople.toList().reversed.toList();
+    // With only people starred, their list is the one to see.
+    if (_txids!.isEmpty && _people.isNotEmpty) _lists.index = _peopleList;
   }
 
   @override
@@ -50,6 +58,12 @@ class _StarredTabState extends State<StarredTab> {
   void didUpdateWidget(StarredTab old) {
     super.didUpdateWidget(old);
     if (old.refreshToken != widget.refreshToken) _take();
+  }
+
+  @override
+  void dispose() {
+    _lists.dispose();
+    super.dispose();
   }
 
   @override
@@ -67,37 +81,59 @@ class _StarredTabState extends State<StarredTab> {
         return time != null && prefs.isUnread(key, time) ? time : null;
       }
 
-      final rows = <Widget>[
-        if (_people.isNotEmpty) _Heading(l.starredPeople),
-        for (final address in _people) _PersonTile(address: address, client: client, unread: unread(address)),
-        if (txids.isNotEmpty) _Heading(l.starredThreads),
-        for (final txid in txids) _StarredTile(txid: txid, client: client, unread: unread(txid)),
-      ];
+      Widget list(List<Widget> rows, String empty) => rows.isEmpty
+          ? EmptyState(icon: Glyph.star, text: empty)
+          : ListView.builder(
+              padding: const EdgeInsets.only(bottom: 24),
+              itemCount: rows.length,
+              itemBuilder: (context, i) => rows[i],
+            );
+
       return ListenableBuilder(
         listenable: prefs,
-        builder: (context, _) => ListView.builder(
-          padding: const EdgeInsets.only(bottom: 24),
-          itemCount: rows.length,
-          itemBuilder: (context, i) => rows[i],
-        ),
+        builder: (context, _) => Column(children: [
+          Row(children: [
+            Expanded(
+              child: TabBar(controller: _lists, tabs: [
+                _ListTab(l.starredThreads, unread: txids.any((t) => unread(t) != null)),
+                _ListTab(l.starredPeople, unread: _people.any((a) => unread(a) != null)),
+              ]),
+            ),
+            const NotificationsButton(),
+          ]),
+          Expanded(
+            child: TabBarView(controller: _lists, children: [
+              list([for (final txid in txids) _StarredTile(txid: txid, client: client, unread: unread(txid))],
+                  l.noStarredThreads),
+              list([for (final address in _people) _PersonTile(address: address, client: client, unread: unread(address))],
+                  l.noStarredPeople),
+            ]),
+          ),
+        ]),
       );
     });
   }
 }
 
-class _Heading extends StatelessWidget {
-  const _Heading(this.text);
+/// One list's tab, with a dot while the list has a row not opened yet.
+class _ListTab extends StatelessWidget {
+  const _ListTab(this.text, {required this.unread});
 
   final String text;
+  final bool unread;
 
   @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsetsDirectional.fromSTEB(16, 16, 16, 4),
-      child: Text(text, style: theme.textTheme.labelLarge?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-    );
-  }
+  Widget build(BuildContext context) => Tab(
+        child: Badge(
+          isLabelVisible: unread,
+          smallSize: 8,
+          // Room for the dot after the text, on whichever side that is.
+          child: Padding(
+            padding: const EdgeInsetsDirectional.only(end: 10),
+            child: Text(text, maxLines: 1, overflow: TextOverflow.ellipsis),
+          ),
+        ),
+      );
 }
 
 /// A row's picture, with a dot when the row has activity not opened yet.

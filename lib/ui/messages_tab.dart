@@ -5,6 +5,7 @@ import '../services/node_client.dart';
 import 'common.dart';
 import 'paged_list.dart';
 import 'glyphs.dart';
+import 'notifications.dart';
 
 /// The current wallet's messages, newest first: threads it started, replies
 /// it sent and received, and (when chosen) flags it raised or received.
@@ -49,10 +50,16 @@ class MessagesTab extends StatelessWidget {
             onNeedMore: () => client.readEarlierHistory(me),
             header: [
               SliverToBoxAdapter(
-                child: _FilterChips(
-                  selected: filters,
-                  onChanged: prefs.setMessageFilters,
-                ),
+                child: Row(children: [
+                  Expanded(
+                    child: _FilterChips(
+                      selected: filters,
+                      onChanged: prefs.setMessageFilters,
+                    ),
+                  ),
+                  const NotificationsButton(),
+                  const SizedBox(width: 8),
+                ]),
               ),
             ],
           );

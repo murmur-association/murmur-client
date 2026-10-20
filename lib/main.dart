@@ -6,6 +6,7 @@ import 'services/chain_cache.dart';
 import 'services/local_node.dart';
 import 'services/local_node_link.dart';
 import 'services/node_client.dart';
+import 'services/notifier.dart';
 import 'services/storage.dart';
 import 'ui/address_page.dart';
 import 'ui/brand.dart';
@@ -13,6 +14,7 @@ import 'ui/common.dart';
 import 'services/invitations.dart' show inviteInRoute;
 import 'ui/claim_page.dart';
 import 'ui/home_page.dart';
+import 'ui/notifications.dart';
 import 'ui/thread_page.dart';
 
 Future<void> main() async {
@@ -37,16 +39,23 @@ Future<void> main() async {
       return AppExitResponse.exit;
     });
   }
-  runApp(MurmurApp(client: client, wallets: wallets, prefs: prefs, localNode: localNode));
+  // Notifications the app raises itself, where the platform has them.
+  final notifier = notificationsSupported ? SystemNotifier() : null;
+  runApp(MurmurApp(client: client, wallets: wallets, prefs: prefs, localNode: localNode, notifier: notifier));
+  if (notifier != null) {
+    await startNotifications(client: client, prefs: prefs, wallets: wallets, notifier: notifier);
+  }
 }
 
 class MurmurApp extends StatelessWidget {
-  const MurmurApp({super.key, required this.client, required this.wallets, required this.prefs, this.localNode});
+  const MurmurApp(
+      {super.key, required this.client, required this.wallets, required this.prefs, this.localNode, this.notifier});
 
   final MurmurClient client;
   final WalletController wallets;
   final Preferences prefs;
   final LocalNode? localNode;
+  final Notifier? notifier;
 
   @override
   Widget build(BuildContext context) {
@@ -55,6 +64,7 @@ class MurmurApp extends StatelessWidget {
       wallets: wallets,
       prefs: prefs,
       localNode: localNode,
+      notifier: notifier,
       child: ListenableBuilder(
         listenable: prefs,
         builder: (context, _) => MaterialApp(
@@ -71,6 +81,7 @@ class MurmurApp extends StatelessWidget {
           locale: prefs.locale,
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
+          navigatorKey: appNavigator,
           navigatorObservers: [routeObserver],
           home: const HomePage(),
           onGenerateRoute: routeOfLink,

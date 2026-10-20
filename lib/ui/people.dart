@@ -10,6 +10,8 @@
 import 'package:flutter/material.dart';
 
 import '../protocol/bytes.dart';
+import '../services/node_client.dart';
+import '../services/storage.dart';
 import 'common.dart';
 
 /// What to call `address`: the name the user gave it, its published alias
@@ -17,9 +19,14 @@ import 'common.dart';
 /// its short hex.
 String nameOf(BuildContext context, String address) {
   final scope = AppScope.of(context);
-  final own = scope.prefs.aliases[address];
+  return nameFor(scope.prefs, scope.client, address);
+}
+
+/// [nameOf], away from the widgets: for a notification.
+String nameFor(Preferences prefs, MurmurClient client, String address) {
+  final own = prefs.aliases[address];
   if (own != null) return own;
-  final published = tryParseHash32(address) == null ? null : scope.client.publishedAlias(address);
+  final published = tryParseHash32(address) == null ? null : client.publishedAlias(address);
   return published == null ? shortHex(address) : publicNameOf(published, address);
 }
 

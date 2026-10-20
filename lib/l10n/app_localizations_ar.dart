@@ -1885,6 +1885,14 @@ class AppLocalizationsAr extends AppLocalizations {
   String get starredThreads => 'المواضيع والرسائل';
 
   @override
+  String get noStarredThreads =>
+      'لا مواضيع ولا رسائل مميزة بنجمة. ميّز واحدًا بنجمة من صفحته وسيظهر هنا.';
+
+  @override
+  String get noStarredPeople =>
+      'لا أشخاص مميزون بنجمة. ميّز شخصًا بنجمة من صفحته وسيظهر هنا.';
+
+  @override
   String get newActivity => 'نشاط جديد';
 
   @override
@@ -1907,4 +1915,86 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get inviteLockedPoint =>
       '**تُحفظ الرموز مشفّرة.** عرض بطاقة أو طباعتها أو إلغاؤها يطلب منك **فتحها**.';
+
+  @override
+  String get notifications => 'الإشعارات';
+
+  @override
+  String get notifyReplies => 'الردود والإجابات عليك';
+
+  @override
+  String get notifyMentions => 'الإشارات إليك';
+
+  @override
+  String get notifyStarred => 'الجديد فيما ميّزته بنجمة';
+
+  @override
+  String get notifyNeedsWallet => 'يتطلب محفظة على هذا الجهاز';
+
+  @override
+  String get notifyDenied => 'إشعارات Murmur متوقفة في إعدادات النظام.';
+
+  @override
+  String get notifyPointLocal =>
+      '**يتحقق هذا التطبيق بنفسه**، من العقدة التي اخترتها: لا يمر شيء عبر Google أو Apple أو أي جهة أخرى.';
+
+  @override
+  String get notifyPointBackground =>
+      'حين يكون التطبيق مغلقًا، يتحقق **كل 15 دقيقة تقريبًا**، بقدر ما يسمح النظام.';
+
+  @override
+  String get notifyPointOpen =>
+      'فقط **ما دام التطبيق مفتوحًا**، حين لا يكون في المقدمة.';
+
+  @override
+  String get notifyPointLockScreen => 'شاشة القفل **تُخفي المحتوى**.';
+
+  @override
+  String get notifyChannel => 'الرسائل';
+
+  @override
+  String get notifyOpen => 'فتح';
+
+  @override
+  String notifyReply(String name) {
+    return 'ردّ $name في موضوعك';
+  }
+
+  @override
+  String notifyAnswer(String name) {
+    return 'أجابك $name';
+  }
+
+  @override
+  String notifyMention(String name) {
+    return 'أشار إليك $name';
+  }
+
+  @override
+  String notifyStarredReply(String name) {
+    return 'ردّ $name في موضوع مميز بنجمة';
+  }
+
+  @override
+  String notifyStarredPerson(String name) {
+    return 'رسالة جديدة من $name';
+  }
+
+  @override
+  String notifyMore(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$countString رسالة جديدة أخرى',
+      many: '$countString رسالة جديدة أخرى',
+      few: '$countString رسائل جديدة أخرى',
+      two: 'رسالتان جديدتان أخريان',
+      one: 'رسالة جديدة أخرى',
+    );
+    return '$_temp0';
+  }
 }

@@ -8,6 +8,10 @@
 // passes its own check, with the PRF extension the app's vault needs
 // (lib/services/key_vault_web.dart). The app then takes its real passkey
 // path, with nobody at the keyboard.
+//
+// It also allows the page's notifications, as a user does when the app
+// asks: the acceptance tests switch them on, and read back what the
+// browser shows.
 
 // ignore_for_file: avoid_print
 
@@ -18,6 +22,11 @@ import 'package:integration_test/common.dart';
 
 Future<void> main() async {
   final driver = await FlutterDriver.connect();
+  // WebDriver's "Set Permission" (the Permissions specification).
+  await driver.webDriver.postRequest('permissions', {
+    'descriptor': {'name': 'notifications'},
+    'state': 'granted',
+  });
   if (Platform.environment['ACCEPTANCE_PASSKEY'] != null) {
     // WebDriver's "Add Virtual Authenticator": built into the device
     // ("internal"), with a user check that always passes.

@@ -129,6 +129,12 @@ void main() {
     Finder badge(AppLocalizations l, int n) =>
         find.byWidgetPredicate((w) => w is Semantics && w.properties.label == l.starredNew(n));
 
+    /// Whether each of the Starred tab's lists (threads, people) has its dot.
+    List<bool> listDots(WidgetTester tester) => tester
+        .widgetList<Badge>(find.descendant(of: find.byType(Tab), matching: find.byType(Badge)))
+        .map((b) => b.isLabelVisible)
+        .toList();
+
     /// The pages tick and spin, so nothing ever settles: a few frames do.
     Future<void> frames(WidgetTester tester) async {
       await tester.pump();
@@ -160,16 +166,25 @@ void main() {
       expect(badge(l, 2), findsWidgets);
       expect(prefs.starredSeen, _time(25), reason: 'not seen while another tab is open');
 
-      // Opening the tab: both rows are marked, and the tab's badge clears.
+      // Opening the tab: the threads' list, its row marked, and a dot on the
+      // people's list; the tab's badge clears.
       await tester.tap(find.text(l.starredTitle));
       await frames(tester);
       expect(find.text(l.starredPeople), findsOneWidget);
       expect(find.text(l.starredThreads), findsOneWidget);
       expect(find.text('a starred thread'), findsOneWidget);
-      expect(find.textContaining('bob writes again'), findsOneWidget);
-      expect(find.byTooltip(l.newActivity), findsNWidgets(2));
+      expect(find.textContaining('bob writes again'), findsNothing, reason: 'people have a list of their own');
+      expect(find.byTooltip(l.newActivity), findsOneWidget);
+      expect(listDots(tester), [true, true]);
       expect(badge(l, 2), findsNothing);
       expect(prefs.starredSeen, _time(40));
+
+      // The people's list, its row marked too.
+      await tester.tap(find.text(l.starredPeople));
+      await frames(tester);
+      expect(find.text('a starred thread'), findsNothing);
+      expect(find.textContaining('bob writes again'), findsOneWidget);
+      expect(find.byTooltip(l.newActivity), findsOneWidget);
 
       // Seen, not opened: still marked at the next visit, though the badge
       // stays clear.
@@ -177,16 +192,19 @@ void main() {
       await frames(tester);
       await tester.tap(find.text(l.starredTitle));
       await frames(tester);
-      expect(find.byTooltip(l.newActivity), findsNWidgets(2));
+      expect(listDots(tester), [true, true]);
       expect(badge(l, 2), findsNothing);
 
-      // Opened: the row is read, and the other stays marked.
+      // Opened: the row is read, and its list's dot goes; the other stays.
+      await tester.tap(find.text(l.starredThreads));
+      await frames(tester);
       await tester.tap(find.text('a starred thread'));
       await frames(tester);
       expect(prefs.opened[root.tx.id], _time(30));
       await tester.pageBack();
       await frames(tester);
-      expect(find.byTooltip(l.newActivity), findsOneWidget);
+      expect(find.byTooltip(l.newActivity), findsNothing);
+      expect(listDots(tester), [false, true]);
 
       // Something newer marks it again, and the tab.
       await tester.tap(find.text(l.tabThreads));
@@ -196,9 +214,36 @@ void main() {
       expect(badge(l, 1), findsWidgets);
       await tester.tap(find.text(l.starredTitle));
       await frames(tester);
-      expect(find.byTooltip(l.newActivity), findsNWidgets(2));
+      expect(find.byTooltip(l.newActivity), findsOneWidget);
+      expect(listDots(tester), [true, true]);
 
       await tester.pumpWidget(const SizedBox()); // stops the pages' timers
+    });
+
+    testWidgets('an open tab sees only while the app is in front: away, its news is left to notifications',
+        (tester) async {
+      final root = txAt(TxKind.orphan, 10, text: 'a starred thread');
+      final chain = FakeChain([root, replyTo(root, 20)]);
+      final prefs = Preferences()..unreadFrom = _time(15);
+      await prefs.setStarred(root.tx.id, true);
+      await prefs.setStarredSeen(_time(20));
+      await pumpHome(tester, chain, prefs);
+      final l = tester.element(find.byType(HomePage)).l10n;
+      await tester.tap(find.text(l.starredTitle));
+      await frames(tester);
+
+      // Another window takes the focus; a reply comes.
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      chain.add([replyTo(root, 30, from: carol)]);
+      await frames(tester);
+      expect(prefs.starredSeen, _time(20), reason: 'nobody was looking');
+
+      // Back in front, the open tab shows it: seen.
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await frames(tester);
+      expect(prefs.starredSeen, _time(30));
+
+      await tester.pumpWidget(const SizedBox());
     });
 
     testWidgets('a first star starts from now: what is already there is not new', (tester) async {
@@ -238,8 +283,11 @@ void main() {
       expect(find.text('a starred thread'), findsOneWidget);
       expect(find.text(l.starredGone), findsOneWidget);
       expect(find.byTooltip(l.newActivity), findsNothing);
+      expect(find.text(shortHex(toHex(carol))), findsNothing, reason: 'people have a list of their own');
 
       // Unstarring the person leaves the row, to star again.
+      await tester.tap(find.text(l.starredPeople));
+      await frames(tester);
       final person = find.ancestor(of: find.text(shortHex(toHex(carol))), matching: find.byType(ListTile));
       await tester.tap(find.descendant(of: person, matching: find.byTooltip(l.unstar)));
       await tester.pump();
@@ -254,6 +302,23 @@ void main() {
       await tester.tap(find.descendant(of: page, matching: find.byTooltip(l.star)));
       await tester.pump();
       expect(prefs.starredPeople, {toHex(carol)});
+
+      await tester.pumpWidget(const SizedBox());
+    });
+
+    testWidgets('with only people starred, their list opens, and the other says how to star', (tester) async {
+      final prefs = Preferences();
+      await prefs.setStarredPerson(toHex(carol), true);
+      await pumpHome(tester, FakeChain(), prefs);
+      final l = tester.element(find.byType(HomePage)).l10n;
+      await tester.tap(find.text(l.starredTitle));
+      await frames(tester);
+      expect(find.text(shortHex(toHex(carol))), findsOneWidget);
+
+      await tester.tap(find.text(l.starredThreads));
+      await frames(tester);
+      expect(find.text(l.noStarredThreads), findsOneWidget);
+      expect(find.text(shortHex(toHex(carol))), findsNothing);
 
       await tester.pumpWidget(const SizedBox());
     });

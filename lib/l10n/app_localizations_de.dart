@@ -1876,6 +1876,14 @@ class AppLocalizationsDe extends AppLocalizations {
   String get starredThreads => 'Threads und Nachrichten';
 
   @override
+  String get noStarredThreads =>
+      'Keine markierten Threads oder Nachrichten. Markiere einen auf seiner Seite, dann erscheint er hier.';
+
+  @override
+  String get noStarredPeople =>
+      'Keine markierten Personen. Markiere jemanden auf seiner Seite, dann erscheint er hier.';
+
+  @override
   String get newActivity => 'Neue Aktivität';
 
   @override
@@ -1896,4 +1904,85 @@ class AppLocalizationsDe extends AppLocalizations {
   @override
   String get inviteLockedPoint =>
       '**Die Codes werden verschlüsselt gespeichert.** Zum Anzeigen, Drucken oder Stornieren einer Karte musst du sie **entsperren**.';
+
+  @override
+  String get notifications => 'Benachrichtigungen';
+
+  @override
+  String get notifyReplies => 'Antworten an dich';
+
+  @override
+  String get notifyMentions => 'Erwähnungen von dir';
+
+  @override
+  String get notifyStarred => 'Neues bei Markiertem';
+
+  @override
+  String get notifyNeedsWallet => 'Braucht eine Wallet auf diesem Gerät';
+
+  @override
+  String get notifyDenied =>
+      'Benachrichtigungen sind für Murmur in den Systemeinstellungen ausgeschaltet.';
+
+  @override
+  String get notifyPointLocal =>
+      '**Diese App prüft selbst**, beim Knoten deiner Wahl: nichts läuft über Google, Apple oder sonst jemanden.';
+
+  @override
+  String get notifyPointBackground =>
+      'Ist die App geschlossen, prüft sie **etwa alle 15 Minuten**, soweit das System es zulässt.';
+
+  @override
+  String get notifyPointOpen =>
+      'Nur **solange die App offen ist**, wenn sie nicht im Vordergrund ist.';
+
+  @override
+  String get notifyPointLockScreen =>
+      'Der Sperrbildschirm **verbirgt den Inhalt**.';
+
+  @override
+  String get notifyChannel => 'Nachrichten';
+
+  @override
+  String get notifyOpen => 'Öffnen';
+
+  @override
+  String notifyReply(String name) {
+    return '$name hat in deinem Thread geantwortet';
+  }
+
+  @override
+  String notifyAnswer(String name) {
+    return '$name hat dir geantwortet';
+  }
+
+  @override
+  String notifyMention(String name) {
+    return '$name hat dich erwähnt';
+  }
+
+  @override
+  String notifyStarredReply(String name) {
+    return '$name hat in einem markierten Thread geantwortet';
+  }
+
+  @override
+  String notifyStarredPerson(String name) {
+    return 'Neue Nachricht von $name';
+  }
+
+  @override
+  String notifyMore(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$countString weitere neue Nachrichten',
+      one: '1 weitere neue Nachricht',
+    );
+    return '$_temp0';
+  }
 }

@@ -14,6 +14,7 @@ import '../protocol/bytes.dart';
 import '../protocol/invite.dart';
 import 'activity.dart';
 import 'local_node.dart' show defaultLocalNodeCpu;
+import 'news.dart' show NotifyTopic;
 import 'key_vault.dart';
 import 'transport.dart';
 
@@ -86,6 +87,9 @@ class Preferences extends ChangeNotifier {
       await prefs.setBool('mentions_filter_added', true);
     }
     walletFilters = _names(prefs.getStringList('wallet_filters'), WalletFilter.values) ?? walletFilters;
+    notifyTopics = _names(prefs.getStringList('notify_topics'), NotifyTopic.values) ?? {};
+    notifiedUntil = prefs.getInt('notified_until');
+    notifiedIds = prefs.getStringList('notified_ids') ?? const [];
     await _loadOwnView(prefs);
     notifyListeners();
   }
@@ -131,7 +135,49 @@ class Preferences extends ChangeNotifier {
         .setStringList('wallet_filters', [for (final f in value) f.name]);
   }
 
-  // ---- this device's own view of people and threads ------------------------------
+  // ---- notifications ----------------------------------------------------------------
+  //
+  /// What the user asked to be notified of: nothing until they switch a
+  /// topic on.
+  Set<NotifyTopic> notifyTopics = {};
+
+  /// The newest message time (Unix seconds) notifications have considered:
+  /// older news is never told. Set to now when the first topic is switched
+  /// on, so a wallet's past doesn't arrive as notifications.
+  int? notifiedUntil;
+
+  /// The txids notified lately, newest last: a block may carry an earlier
+  /// time than the one before it, so messages a little older than
+  /// [notifiedUntil] are still looked at, and these aren't told twice.
+  List<String> notifiedIds = const [];
+
+  /// How many txids [notifiedIds] keeps.
+  static const maxNotifiedIds = 500;
+
+  Future<void> setNotifyTopics(Set<NotifyTopic> value) async {
+    if (value.isNotEmpty && notifyTopics.isEmpty) {
+      notifiedUntil = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    }
+    notifyTopics = value;
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList('notify_topics', [for (final t in value) t.name]);
+    if (notifiedUntil != null) await prefs.setInt('notified_until', notifiedUntil!);
+  }
+
+  /// Records that `txids` were notified, and messages up to `until`
+  /// considered.
+  Future<void> setNotified(Iterable<String> txids, int until) async {
+    final told = txids.toSet();
+    final ids = [...notifiedIds.where((id) => !told.contains(id)), ...told];
+    notifiedIds = ids.length > maxNotifiedIds ? ids.sublist(ids.length - maxNotifiedIds) : ids;
+    if (until > (notifiedUntil ?? 0)) notifiedUntil = until;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList('notified_ids', notifiedIds);
+    if (notifiedUntil != null) await prefs.setInt('notified_until', notifiedUntil!);
+  }
+
+  // ---- this device's own view of people and threads------------------------------
   //
   // Everything below stays on this device: names, mutes and what's been
   // read are nobody else's business, and nothing on the chain changes.

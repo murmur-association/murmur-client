@@ -46,6 +46,29 @@ StarredActivity starredActivity(
   String? me,
   Set<String> muted = const {},
 }) {
+  final messages = <String, int>{};
+  final byPeople = <String, int>{};
+  for (final (key, v, person) in starredMessages(client, starred: starred, people: people, me: me, muted: muted)) {
+    final into = person ? byPeople : messages;
+    into[key] = max(into[key] ?? 0, activityTime(v));
+  }
+  return StarredActivity(messages: messages, people: byPeople);
+}
+
+/// The messages that are activity on what's starred, following it (as
+/// [starredActivity] says): each with the starred txid or address it's
+/// under, and whether that is a person. Under a starred thread or message,
+/// every reply that counts; of a starred person, their messages newest
+/// first, down to the first at or before `since` (only the newest without
+/// it).
+Iterable<(String, TxView, bool)> starredMessages(
+  MurmurClient client, {
+  required Set<String> starred,
+  required Set<String> people,
+  String? me,
+  Set<String> muted = const {},
+  int? since,
+}) sync* {
   bool counts(TxView v) =>
       v.confirmed &&
       v.tx.fromAddress != me &&
@@ -53,7 +76,6 @@ StarredActivity starredActivity(
       !client.selfFlagged(v) &&
       !client.isNonText(v);
 
-  final messages = <String, int>{};
   for (final txid in starred) {
     final view = client.lookupTx(txid);
     if (view == null) {
@@ -65,20 +87,18 @@ StarredActivity starredActivity(
     final root = client.threadRootOf(view);
     if (root != null && root.confirmed) client.watchThread(root, [view, ...under], followEnd: true);
     for (final reply in under) {
-      if (!counts(reply)) continue;
-      messages[txid] = max(messages[txid] ?? 0, activityTime(reply));
+      if (counts(reply)) yield (txid, reply, false);
     }
   }
 
-  final byPeople = <String, int>{};
   for (final address in people) {
     client.watchAddress(address);
     if (address == me || muted.contains(address)) continue;
     for (final v in client.messagesBy(address)) {
+      if (since != null && v.confirmed && activityTime(v) <= since) break; // newest first
       if (!counts(v)) continue;
-      byPeople[address] = activityTime(v); // newest first
-      break;
+      yield (address, v, true);
+      if (since == null) break;
     }
   }
-  return StarredActivity(messages: messages, people: byPeople);
 }
