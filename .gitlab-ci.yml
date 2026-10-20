@@ -189,8 +189,14 @@ probe-ios-simulator:
   - sw_vers
   - xcodebuild -version
   - xcrun simctl list runtimes
-  - runtime=$(xcrun simctl list runtimes | awk '/^iOS/ {print $NF}' | tail -1)
-  - device=$(xcrun simctl list devicetypes | awk -F'[()]' '/iPhone/ {id=$2} END {print id}')
+  # The newest iOS runtime, and the newest iPhone it says it supports (not
+  # every iPhone Xcode knows runs every runtime).
+  - |
+    read -r runtime device <<< "$(xcrun simctl list runtimes -j | python3 -c '
+    import json, sys
+    ios = [r for r in json.load(sys.stdin)["runtimes"] if r["platform"] == "iOS" and r["isAvailable"]][-1]
+    phones = [d["identifier"] for d in ios["supportedDeviceTypes"] if d["productFamily"] == "iPhone"]
+    print(ios["identifier"], phones[-1])')"
   - echo "runtime $runtime, device type $device"
   - udid=$(xcrun simctl create probe "$device" "$runtime")
   - xcrun simctl boot "$udid"
