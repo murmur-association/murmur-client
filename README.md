@@ -85,20 +85,17 @@ A page opened with `?node=host:port` (for example `http://localhost:8080/?node=1
 
 ## Running
 
-The repo holds the Dart code (`lib/`, `test/`, `tool/`), the web shell (`web/`), the Windows, Linux and iPhone apps' shells (`windows/`, `linux/`, `ios/`: shown as Murmur, with the app's icon) and `pubspec.yaml`, but not the other native platform folders. Generate those once:
+The repo holds the Dart code (`lib/`, `test/`, `tool/`), the web shell (`web/`), the Windows, Linux, Android and iPhone apps' shells (`windows/`, `linux/`, `android/`, `ios/`: shown as Murmur, with the app's icon) and `pubspec.yaml`. (Not macOS's: the desktop client for macOS is out of scope.) To start:
 
 ```
-flutter create . --platforms=android --project-name murmur_client --org info.murmur
 flutter pub get
 flutter test
 flutter run -d windows
 ```
 
-`flutter create .` only adds missing files; it leaves `lib/` and `pubspec.yaml` alone.
-
 Platform notes:
 
-- **Android:** add `<uses-permission android:name="android.permission.INTERNET"/>` and `<uses-permission android:name="android.permission.USE_BIOMETRIC"/>` to `android/app/src/main/AndroidManifest.xml`. Make `MainActivity` extend `FlutterFragmentActivity`: the key store (`biometric_storage`) needs it. Notifications (`flutter_local_notifications`) need `compileSdk = 36` and core library desugaring in `android/app/build.gradle.kts`: `isCoreLibraryDesugaringEnabled = true` under `compileOptions`, and `coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")` under `dependencies`. From the emulator, the host machine's node is at `10.0.2.2`.
+- **Android:** `android/` is committed: application id `info.murmur.client`, the name Murmur, the icons and launch screen (`tool/render_brand.dart`), the internet and biometric permissions, `MainActivity` as a `FlutterFragmentActivity` (the key store, `biometric_storage`, needs it), and what notifications need (compile SDK 36, Android 7 at least, core library desugaring). Release builds are signed with the debug keys until an Android release is published. From the emulator, the host machine's node is at `10.0.2.2`; `tool/android_emulator.sh` boots one for the acceptance tests.
 - **iOS:** `ios/` is committed: bundle id `info.murmur.client`, the name Murmur, the icon and launch screen (`tool/render_brand.dart`) and the Face ID reason in every language (`tool/ios_localizations.dart`, from the ARB files). Builds for the simulator need nothing more; builds for iPhones need the Apple developer account's signing.
 - **macOS:** add `com.apple.security.network.client` = `true` to both `macos/Runner/*.entitlements` files.
 - **Linux:** secure storage needs `libsecret-1-dev` to build.
@@ -246,6 +243,7 @@ For how the code works, the rules it keeps, recipes and known gaps, see [AGENTS.
 | `lib/ui/l10n.dart` | Language list, number and date formatting, wording of client errors |
 | `lib/ui/brand.dart` | Copper-on-ink palette and themes, and the logo (from `murmur-logo.svg` / `murmur-logo-badge.svg`) |
 | `lib/ui/glyphs.dart` | The app's icons, drawn in the logo's node-and-line style |
+| `tool/android_emulator.sh` | Boots an Android emulator (with or without KVM) and prints its serial, for the acceptance tests |
 | `tool/ios_simulator.sh` | Boots an iPhone simulator and prints its id, for the acceptance tests on a Mac |
 | `tool/render_brand.dart` | `flutter test tool/render_brand.dart` regenerates the web, desktop and iPhone icons from the logo and writes a glyph preview to `build/brand_preview.png` |
 | `test/protocol_test.dart` | Genesis hashes pinned in `consensus.rs`, RFC 8032 vector, wire round-trips |

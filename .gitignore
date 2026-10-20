@@ -50,10 +50,9 @@ app.*.map.json
 # Widget Preview related
 .widget_preview/
 
-# The other native platform folders: generated with `flutter create .` (see
-# README), not kept in the repository. windows/, linux/ and ios/ are, with the
-# app's name, identifier and icon.
-/android/
+# The macOS folder: generated with `flutter create .` if ever needed, not kept
+# (the desktop client for macOS is out of scope). windows/, linux/, ios/ and
+# android/ are, with the app's name, identifier and icon.
 /macos/
 
 # Keys and local node data never belong here.

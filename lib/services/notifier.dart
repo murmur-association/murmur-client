@@ -64,7 +64,8 @@ class SystemNotifier implements Notifier {
     _started = true;
     await _plugin.initialize(
       settings: InitializationSettings(
-        android: const AndroidInitializationSettings('@mipmap/ic_launcher'),
+        // A white silhouette, which Android tints (tool/render_brand.dart).
+        android: const AndroidInitializationSettings('@drawable/ic_stat_murmur'),
         linux: LinuxInitializationSettings(defaultActionName: openLabel),
         // An app installed without a package names itself to Windows here:
         // the company and product the app's settings live under.

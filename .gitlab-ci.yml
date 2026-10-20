@@ -217,6 +217,36 @@ probe-android-emulator:
   after_script:
   - tail -n 40 emulator.log || true
 
+# The acceptance tests in an Android emulator, on GitLab's hosted Linux
+# runner, against a node of their own. The runner has no KVM, so the
+# emulator emulates the processor (probe-android-emulator measured it: a
+# boot in about three minutes, a small app's test in two and a half), and
+# the suite is slower than elsewhere. Like iOS: by itself on the default
+# branch and on tags, by hand elsewhere. New, so allowed to fail until it
+# has run green.
+acceptance-android:
+  extends: .flutter
+  stage: test
+  tags:
+  - saas-linux-large-amd64
+  timeout: 90m
+  allow_failure: true
+  rules:
+  - if: $CI_PIPELINE_SOURCE == "schedule"
+    when: never
+  - if: $CI_COMMIT_TAG || $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  - when: manual
+  variables:
+    MURMUR_REQUIRE_NODE: "1"
+  script:
+  # Libraries the emulator loads even without a window.
+  - apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends libpulse0 libnss3 libgbm1 libxkbfile1 libxcomposite1 libxcursor1 libxdamage1 libxi6 libxtst6 >/dev/null
+  - dart run tool/bundle_node.dart --for-tests
+  - export ACCEPTANCE_DEVICE=$(tool/android_emulator.sh)
+  - flutter test tool/acceptance_test.dart
+  after_script:
+  - tail -n 60 /tmp/murmur-emulator.log || true
+
 # The acceptance tests in an iPhone simulator, on GitLab's macOS runner (the
 # trial of 2026-10-20 found a simulator there, and a Flutter app's tests
 # running in it), against a node of their own: the node's macOS build. It

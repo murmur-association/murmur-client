@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Written by tool/render_brand.dart from the brand's colours (lib/ui/brand.dart). -->
+<resources>
+    <color name="launch_background">#FAF7F3</color>
+    <color name="ic_launcher_background">#17171A</color>
+</resources>

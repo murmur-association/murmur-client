@@ -8,7 +8,8 @@
 // safe zone), windows/runner/resources/app_icon.ico and
 // linux/runner/resources/app_icon.png (the badge, for the desktop apps),
 // ios/Runner/Assets.xcassets/AppIcon.appiconset (the iPhone's, opaque), its
-// launch screen's logo and background (LaunchImage, LaunchBackground) and
+// launch screen's logo and background (LaunchImage, LaunchBackground), the
+// Android app's icons, launch logo and colours (android/app/src/main/res) and
 // build/brand_preview.png.
 
 import 'dart:convert';
@@ -154,6 +155,50 @@ Future<void> _writeIosLaunch(String assets) async {
     }));
 }
 
+/// The Android app's images and colours, in `res` (android/app/src/main/res):
+/// the launcher icon (the badge for Android 7, and for 8 and later the
+/// adaptive icon's foreground, the logo inside the launcher's safe zone, with
+/// a monochrome copy for themed icons), the notifications' small icon (a
+/// white silhouette, which Android tints), the launch screen's logo, and the
+/// colours behind them.
+Future<void> _writeAndroid(String res) async {
+  const densities = {'mdpi': 1.0, 'hdpi': 1.5, 'xhdpi': 2.0, 'xxhdpi': 3.0, 'xxxhdpi': 4.0};
+  // The logo at `logo` of a `canvas`-sized square, centred as the maskable
+  // web icon's is.
+  Future<ui.Image> logoIn(int canvas, double logo, Color color) {
+    final recorder = ui.PictureRecorder();
+    final c = Canvas(recorder);
+    final s = canvas.toDouble(), side = s * logo;
+    c.translate((s - side) / 2, (s - side) / 2 - s * 0.02);
+    paintLogo(c, Size(side, side), color);
+    return recorder.endRecording().toImage(canvas, canvas);
+  }
+
+  for (final MapEntry(key: name, value: scale) in densities.entries) {
+    int px(int dp) => (dp * scale).round();
+    await _writePng(await _badge(px(48)), '$res/mipmap-$name/ic_launcher.png');
+    // 108 dp, of which the launcher shows the middle 72 and keeps a circle
+    // of 66 whole: the logo stays inside it.
+    await _writePng(await logoIn(px(108), 0.44, BrandColors.copper), '$res/mipmap-$name/ic_launcher_foreground.png');
+    await _writePng(await logoIn(px(108), 0.44, Colors.white), '$res/mipmap-$name/ic_launcher_monochrome.png');
+    await _writePng(await logoIn(px(24), 0.92, Colors.white), '$res/drawable-$name/ic_stat_murmur.png');
+    await _writePng(await logoIn(px(96), 1, BrandColors.copper), '$res/drawable-$name/launch_logo.png');
+  }
+  String hex(Color c) => '#${[c.r, c.g, c.b].map((v) => (v * 255).round().toRadixString(16).padLeft(2, '0')).join().toUpperCase()}';
+  void colours(String dir, Map<String, Color> colours) => File('$res/$dir/colors.xml')
+    ..createSync(recursive: true)
+    ..writeAsStringSync([
+      '<?xml version="1.0" encoding="utf-8"?>',
+      "<!-- Written by tool/render_brand.dart from the brand's colours (lib/ui/brand.dart). -->",
+      '<resources>',
+      for (final MapEntry(:key, :value) in colours.entries) '    <color name="$key">${hex(value)}</color>',
+      '</resources>',
+      '',
+    ].join('\n'));
+  colours('values', {'launch_background': BrandColors.paper, 'ic_launcher_background': BrandColors.ink});
+  colours('values-night', {'launch_background': BrandColors.ink});
+}
+
 /// The badge at `size`, as an image.
 Future<ui.Image> _badge(int size) {
   final recorder = ui.PictureRecorder();
@@ -234,6 +279,7 @@ void main() {
       await _writePng(await _badge(256), 'linux/runner/resources/app_icon.png');
       await _writeIosIcon('ios/Runner/Assets.xcassets/AppIcon.appiconset');
       await _writeIosLaunch('ios/Runner/Assets.xcassets');
+      await _writeAndroid('android/app/src/main/res');
     });
   });
 
