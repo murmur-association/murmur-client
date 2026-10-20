@@ -84,17 +84,16 @@ class NetworkInfo {
   /// transaction signed for one network is invalid on every other.
   Uint8List get tag => sha256Bytes(utf8.encode(id));
 
-  /// The difficulty rule's three times (PROTOCOL.md Section 4), in seconds:
-  /// a parent this much faster or slower than the block time halves or
-  /// doubles the target; how long after its parent a block may come before
-  /// it is eased; and how fast it is eased beyond that.
+  /// The difficulty rule's two times (PROTOCOL.md Section 4), in seconds: a
+  /// parent this much faster or slower than the block time halves or doubles
+  /// the target, and a block later than its parent by more than the slack is
+  /// eased at that same rate.
   int get difficultyTau => 30 * targetBlockSecs;
   int get difficultySlack => 40 * targetBlockSecs;
-  int get difficultyEase => 10 * targetBlockSecs;
 
   static const whitepaper = NetworkInfo(
-    id: 'murmur-testnet-13',
-    genesisTimestamp: 1790208000, // 2026-09-24T00:00:00Z
+    id: 'murmur-testnet-14',
+    genesisTimestamp: 1792454400, // 2026-10-20T00:00:00Z
     genesisTargetShift: 8,
     targetBlockSecs: 30,
     halvingInterval: 4200000,
@@ -107,7 +106,7 @@ class NetworkInfo {
   );
 
   static const demo = NetworkInfo(
-    id: 'murmur-demo-13',
+    id: 'murmur-demo-14',
     genesisTimestamp: 0,
     genesisTargetShift: 4,
     targetBlockSecs: 2,

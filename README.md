@@ -1,6 +1,6 @@
 # Murmur client
 
-A Flutter light client for the Murmur chain, speaking **protocol 14** (networks `murmur-testnet-13` and `murmur-demo-13`). The node, the whitepaper and the protocol specification live in the [murmur repository](https://gitlab.com/murmur-association/murmur); section numbers below refer to its [PROTOCOL.md](https://gitlab.com/murmur-association/murmur/-/blob/main/PROTOCOL.md). With the client you can:
+A Flutter light client for the Murmur chain, speaking **protocol 15** (networks `murmur-testnet-14` and `murmur-demo-14`). The node, the whitepaper and the protocol specification live in the [murmur repository](https://gitlab.com/murmur-association/murmur); section numbers below refer to its [PROTOCOL.md](https://gitlab.com/murmur-association/murmur/-/blob/main/PROTOCOL.md). With the client you can:
 
 - read threads, newest activity first, each with its replies from the newest down, and see which reply an answer is for;
 - browse blocks, transactions and addresses, and search by height, txid, block hash or address;
@@ -111,7 +111,7 @@ Platform notes:
   The bridge binds to localhost only, always dials the one configured node, and accepts only pages served from localhost.
 - **Paths with an apostrophe** (such as `C:\Users\o'brien`) break `flutter test` and web builds, because Flutter pastes the path into generated Dart code. Work around it by mapping a drive letter: `subst M: "C:\Users\o'brien"`, then work from `M:\murmur-client` with `TEMP`/`TMP` set to `M:\AppData\Local\Temp`.
 
-**Which node a fresh install uses:** `127.0.0.1:7878` natively and `127.0.0.1:7880` (the bridge) on the web, until the user picks another. Builds for the public testnet (`murmur-testnet-13`) set their own default:
+**Which node a fresh install uses:** `127.0.0.1:7878` natively and `127.0.0.1:7880` (the bridge) on the web, until the user picks another. Builds for the public testnet (`murmur-testnet-14`) set their own default:
 
 ```
 # Web: the TLS proxy in front of node 1's WebSocket listener

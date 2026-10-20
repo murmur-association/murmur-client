@@ -67,12 +67,14 @@ Uint8List nextTarget({
   if (took > s) took = s;
   var late = _limited(timestamp - parent.timestamp) - s;
   if (late < 0) late = 0;
-  // In 1/65536ths of a doubling. BigInt: the limits above allow products
-  // past 2^53, which a browser's numbers don't hold.
-  final exponent = _floorDiv(BigInt.from(took - t) * _two16, BigInt.from(net.difficultyTau)) +
-      _floorDiv(BigInt.from(late) * _two16, BigInt.from(net.difficultyEase));
-  // A parent found exactly on time, and a block within the slack: unchanged.
-  if (exponent == BigInt.zero) return parent.target;
+  // In 1/65536ths of a doubling, one division (protocol 15): a block late
+  // beyond the slack is eased at the rate of a slow parent. BigInt: the
+  // limits above allow products past 2^53, which a browser's numbers don't
+  // hold.
+  final exponent = _floorDiv(BigInt.from(took - t + late) * _two16, BigInt.from(net.difficultyTau));
+  // A parent found exactly on time, and a block within the slack: unchanged
+  // (a parent target of 0, which no chain holds, gives 1, as the node does).
+  if (exponent == BigInt.zero && parent.targetValue > BigInt.zero) return parent.target;
   return u256Bytes(scaleTarget(parent.targetValue, exponent));
 }
 

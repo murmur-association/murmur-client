@@ -1,7 +1,7 @@
 // The node's test vectors for protocol 14: those PROTOCOL.md gives without a
-// chain (Sections 2.2, 3.1, 3.2, 3.6, 4 and 6), and `vectors/demo-13.txt`,
+// chain (Sections 2.2, 3.1, 3.2, 3.6, 4 and 6), and `vectors/demo-14.txt`,
 // a twelve-block chain on the demo network that the node's own tests rebuild
-// byte for byte (copied here as test/vectors/demo-13.txt). The chain is
+// byte for byte (copied here as test/vectors/demo-14.txt). The chain is
 // rebuilt here from its transactions and nonces: every header's target,
 // commitments and hash, the state entries, a filter, and the node's answers
 // to GetThread and GetAddress with their proofs.
@@ -61,9 +61,9 @@ class _Vectors {
 void main() {
   test('genesis hashes match PROTOCOL.md Section 6', () {
     expect(NetworkInfo.whitepaper.genesisHeader().id,
-        'b0a1ba92bb7bde1c9a8e59818a7e2228eecb612f79c8969b7e0404d80defe558');
-    expect(NetworkInfo.demo.genesisHeader().id, 'b14081755ae79e77fcaed2c98c4183de12b64fa4b1881ae403858d27f5aa5110');
-    expect(NetworkInfo.forGenesis(NetworkInfo.demo.genesisHeader().hash).id, 'murmur-demo-13');
+        '9b9b3449fa5bd25ea4b4dd536a27652d69ea2de76f66930025b4144dae936dfd');
+    expect(NetworkInfo.demo.genesisHeader().id, '60c485775a5e3a56f2a802be8c75ad6b01f3615fb301f53fb518d33cd10fc9a1');
+    expect(NetworkInfo.forGenesis(NetworkInfo.demo.genesisHeader().hash).id, 'murmur-demo-14');
     expect(NetworkInfo.forGenesis(Uint8List(32)).known, isFalse);
     expect(NetworkInfo.whitepaper.maxBlockBytes, 1000000);
   });
@@ -166,29 +166,35 @@ void main() {
     ];
     expect([for (final tx in txs) tx.bytes.length], [135, 170, 137, 134, 166, 134, 174, 143, 202, 190]);
     expect([for (final tx in txs) tx.id], [
-      'fb9b81cbdce8f3545491789a1e3559068afafc736a555e21cbc4afe167d12dbb',
-      'cccbf83bdc7dd2c642a283400a1ac1a1b62a032c89d19b263ed6119166e96553',
-      '5e085298fe8f2db6ddbd0d24c270ce06ca57bd9ebc83077785a95db48d78d66c',
-      'b7e486bfaef82bfbd3d859455608eb5827c94b36ffd862dddaf95f27b56e4fe5',
-      '7a73bdc2e712d84704af641b3092d7fb2ba21e757493fb5487f15a745ae8adbe',
-      '9b2af0b9fd1a7e4707fcb3e0e4143da2b64dd8f153c6c3afb6127d4151b8c57e',
-      '997b9d398f9c71fc34aa7c5b8d774a75d5cca926587c820f14c5d8951eccffba',
-      '1028a5e5260fb79eb01a1a50dd4c62b87e29fd16e2574b8fc84c556ffa04b2d3',
-      '76aadc381a43c77560cad20ca23cb2c433bdd92b3084339278ee719ce5612504',
-      '61711436e5dde4a4a8947bfbe949236221f6027a2d2e316fb234ee4425089a85',
+      'e4364d13c2dcef31b4f5e3214fea03c29cb93cff481cad5912930d807f2d7ffe',
+      'a51312bc0c4ca0a0a6a36e261466bfcc8be9a34c2eb5c13aefd0a53007282dfb',
+      '71beb132b35d878285c4d38caadacd7dcaa3983bfe6bbaeda3e63c5efed90fcd',
+      '9fb343fb9469e923ee3f5e638cea5ba75943b0c43a1e07ab0a74825119fd6b76',
+      '6ee91cc1316fe42e071ac29385fd902f5bd868639320355ef6d5655d760c125d',
+      'cfb85cdb556adeede977dc941d745e3d37b81cc2a16d8bc9eecda08fedcfcbb9',
+      '1931d6620e6796917b85e5d763809c49ba2a95a0730c1c84d1bf61927fc549ef',
+      '4b93bcc5d2c8fd3557ffd207dd0e50ffcb4afe42744ee6e62efb4aca5c013b73',
+      'dc885725ba53a41c59c460e6c2da40e46f555f5abe2aff7383834fb02bca541b',
+      '1e810854b9c283087ee47258a802f83df93ed491ab146094fe04ef1242819037',
     ]);
     expect(
         toHex(txs[0].bytes),
         '00ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c00a0c21e06c343731700ca16797f96e987'
-        '180093e28b4c653e08efccb4f5fbb91313f56c1500b9fdb8043e32b1b49c70c3a8d4dd0d5f4172891c707e31514f6e16051a'
-        'e41004e1c6fa99fa9e000822abb2223e525b028ca8e75432af7bae8acaa64b6817440d');
+        '180093e28b4c653e08efccb4f5fbb91313f56c15005d7d907aeeba35d62d702730474fa0e9340a5533e35e5e218ab01a0a6f'
+        '7d196de238525761ef258f6a536f7f9dd73c186b4ccc2be949a607e48095aca168ad09');
+    expect(
+        toHex(txs[1].bytes),
+        '01ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c01a0c21eb0e32d06c343731700ca16797f'
+        '96e987180093e28b4c653e08efccb4f5fbb91313f56c15aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+        'aaaaaaaaaa0055e5679fc75aa05be1134671377a2c24c56676e485e9ded0afb62579c0703b11360feebb1e8aa3748cd787e0'
+        '0d2a955887688106988279fb40f918543e013c05');
     expect(
         toHex(txs[8].bytes),
         '01ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c08a0c21eb0e32d06c343731700ca16797f'
         '96e987180093e28b4c653e08efccb4f5fbb91313f56c15aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
-        'aaaaaaaaaa04101010101010101011111111111111111212121212121212131313131313131321900fdbbfb420af0baab749'
-        'c18aeb1d13fb2ca0de0de6691fcf01c9466fe6cd5ced2dab6b886135779a22e7839148fe0221506f0fee583f4156a5403f39'
-        '2e0f');
+        'aaaaaaaaaa041010101010101010111111111111111112121212121212121313131313131313eeffd16f98e722a5d669a63e'
+        '1b3230037d5fb677d6005fc94c213c9d6bd228200f417b0fd4c9450378704f5b20cbccaa01602ae1dccdb9a683fdfc8d2a4a'
+        '9e00');
     // A mention costs 8 bytes of weight; four, the heaviest transaction.
     expect(txs[7].weight, txs[0].weight + 8);
     expect(txs[8].weight, txs[1].weight + 32);
@@ -318,8 +324,17 @@ void main() {
       expect(target(9999, 10030), padded('00000000000000fa5b80'));
       expect(target(9940, 10030), padded('0000000000000106'));
       expect(target(10020, 10030), padded('00000000000000f659'));
-      expect(target(9970, 11237), padded('0000000000000116e'));
-      expect(target(9000, 13000), padded('000000000000871a8'));
+      // A block late beyond the slack is eased at the rate of a slow parent
+      // (protocol 15: one division).
+      expect(target(9970, 11237), padded('00000000000001076b0'));
+      expect(target(9000, 13000), padded('0000000000000871a80'));
+    });
+
+    test('a parent target of 0, which no chain holds, gives 1, as the node does', () {
+      final zero = Uint8List(32);
+      final grandparent = _header(98, 9970, zero);
+      final parent = _header(99, 10000, zero, parent: grandparent);
+      expect(nextTarget(parent: parent, grandparent: grandparent, timestamp: 10030, net: net), u256Bytes(BigInt.one));
     });
 
     test('on time leaves the target, the first block keeps genesis\'s, and the limits hold', () {
@@ -370,8 +385,8 @@ void main() {
     expect(bagged.data.length, 112);
   });
 
-  group('the demo chain of vectors/demo-13.txt', () {
-    final v = _Vectors(File('test/vectors/demo-13.txt').readAsStringSync());
+  group('the demo chain of vectors/demo-14.txt', () {
+    final v = _Vectors(File('test/vectors/demo-14.txt').readAsStringSync());
     const net = NetworkInfo.demo;
     final alice = fromHex(v.one(0, 'alice')), bob = fromHex(v.one(0, 'bob'));
 

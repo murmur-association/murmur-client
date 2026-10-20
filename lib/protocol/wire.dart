@@ -13,7 +13,7 @@ import 'bytes.dart';
 import 'commitments.dart';
 import 'models.dart';
 
-const protocolVersion = 14;
+const protocolVersion = 15;
 
 /// Payloads over this are a protocol violation.
 const maxPayloadBytes = 16 * 1024 * 1024;
