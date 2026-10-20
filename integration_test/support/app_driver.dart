@@ -195,6 +195,17 @@ class AppDriver {
     await waitFor(field, what: 'the "$label" field');
     await tester.enterText(field.last, text);
     await tester.pump();
+    // The cursor after the text, as typing leaves it. (On an iPhone the
+    // system's own text input, which these tests don't replace, can report
+    // it elsewhere; then the "@" suggestions, which read the word before the
+    // cursor, wouldn't show.)
+    final controller = tester.widget<TextField>(field.last).controller!;
+    final end = TextSelection.collapsed(offset: controller.text.length);
+    if (controller.selection != end) {
+      debugPrint('typing into "$label" left the cursor at ${controller.selection}: put after the text');
+      controller.selection = end;
+      await tester.pump();
+    }
   }
 
   /// What the field labelled `label` holds.
