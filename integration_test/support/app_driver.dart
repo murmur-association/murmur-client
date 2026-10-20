@@ -316,8 +316,17 @@ class AppDriver {
           what: "the other device to see the test's wallet");
       final fund = await other.submit(
           wallet: payer, kind: TxKind.raw, to: someone.address, amount: 5 * unitsPerToken, fee: minFee);
-      await waitUntil(() => mined(fund) && (other.availableTo(someone.addressHex) ?? 0) > 0,
-          what: 'their wallet to be funded', timeout: const Duration(minutes: 3));
+      try {
+        await waitUntil(() => mined(fund) && (other.availableTo(someone.addressHex) ?? 0) > 0,
+            what: 'their wallet to be funded', timeout: const Duration(minutes: 3));
+      } on TestFailure catch (e) {
+        // What the other device knew, to tell a refused transaction from a
+        // slow chain.
+        fail('${e.message}\nthe funding ${fund.id}, nonce ${fund.nonce}: the node says ${other.statusOf(fund.id)}, '
+            'mined ${mined(fund)}; the payer\'s proven nonce ${other.account(payer.addressHex)?.nonce}, '
+            'their balance ${other.availableTo(someone.addressHex)}, the other device at ${other.height} '
+            '(${other.state.name}, error ${other.error})');
+      }
       final reply = await other.submit(
           wallet: someone,
           kind: TxKind.reply,
