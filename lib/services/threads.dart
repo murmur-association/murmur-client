@@ -183,6 +183,15 @@ class MessageIndex {
   /// first.
   List<TxView> messagesBy(String address) => _byAuthor[address] ?? const [];
 
+  /// An author of the messages here whose address starts with `start` (hex),
+  /// if any: what a mention's 8 bytes name.
+  String? authorStartingWith(String start) {
+    for (final address in _byAuthor.keys) {
+      if (address.startsWith(start)) return address;
+    }
+    return null;
+  }
+
   int flagCountOf(TxView v) => _flaggers[v.tx.id]?.length ?? 0;
 
   /// Whether the message's own author flagged it: withdrawn.

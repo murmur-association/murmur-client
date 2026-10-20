@@ -9,6 +9,7 @@ import 'common.dart';
 import 'compose_page.dart';
 import 'emoji.dart';
 import 'glyphs.dart';
+import 'mentions.dart';
 
 /// A thread: its first message, then its replies **oldest first**, as a
 /// forum reads. Its replies are read a page at a time, each page proven on
@@ -423,6 +424,7 @@ class _MessageCard extends StatelessWidget {
               ? TextStyle(color: theme.colorScheme.outline)
               : (isRoot ? theme.textTheme.titleMedium : theme.textTheme.bodyLarge),
         ),
+        MentionsLine(tx),
         Row(children: [
           if (canAct) ...[
             // Nothing replies to a message that isn't text (Section 2.4).

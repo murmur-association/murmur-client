@@ -389,6 +389,20 @@ class AppLocalizationsJa extends AppLocalizations {
   String get filterFlagsReceived => '受けた通報';
 
   @override
+  String get filterMentions => 'メンション';
+
+  @override
+  String get mentionsLabel => 'メンション';
+
+  @override
+  String get mentionPublicPoint => '**メンションは公開されます：**誰を指名したかは誰でも見られます。';
+
+  @override
+  String mentionsMax(int max) {
+    return '1件のメッセージにつきメンションは最大$max件です';
+  }
+
+  @override
   String get balance => '残高';
 
   @override

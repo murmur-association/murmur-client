@@ -51,7 +51,7 @@ void main() {
       await client.connect('seed.test', good.port);
       await _until(() => client.state == LinkState.live);
       expect(accepted, hasLength(1), reason: 'the broken node was tried first');
-      expect(client.network?.id, 'murmur-demo-12');
+      expect(client.network?.id, 'murmur-demo-13');
       expect(client.error, isNull);
     });
 

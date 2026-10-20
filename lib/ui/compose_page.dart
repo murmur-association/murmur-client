@@ -12,6 +12,7 @@ import 'thread_page.dart';
 import 'tx_page.dart';
 import 'unlock.dart';
 import 'emoji.dart';
+import 'mentions.dart';
 import 'glyphs.dart';
 
 /// Builds, signs and sends a transaction: a new thread (an Orphan) or a
@@ -54,6 +55,9 @@ class _ComposePageState extends State<ComposePage> {
   final _fee = TextEditingController(text: '1');
   final _message = TextEditingController();
   bool _sending = false;
+
+  /// Whom the message mentions (addresses), at most four.
+  List<String> _mentions = [];
 
   /// The node's fee figures as last asked, at each new block.
   FeeInfo? _feeInfo;
@@ -165,7 +169,7 @@ class _ComposePageState extends State<ComposePage> {
   /// content (the 16-byte salt and the message).
   int get _weight {
     final message = _messageBytes();
-    return txWeight(message == null ? 0 : saltLength + message.length);
+    return txWeight(message == null ? 0 : saltLength + message.length, mentions: _mentions.length);
   }
 
   /// What a field holds, in units (tokens with decimals as typed).
@@ -193,12 +197,20 @@ class _ComposePageState extends State<ComposePage> {
     final paidTo = _isReply ? scope.client.threadRootOf(widget.replyTo!)?.tx.fromAddress : null;
     final message = _messageBytes();
     final reference = widget.replyTo?.tx.id ?? widget.flagTarget?.tx.id;
+    final mentions = [..._mentions];
     // What can't be sent is said before the summary and the unlock. The
     // summary checks again as blocks and transactions arrive.
     TxProblem? check(MurmurClient client) => client.state != LinkState.live
         ? const TxProblem(TxProblemKind.notLive)
         : client.checkTransaction(
-            fromAddress: from, kind: _kind, to: to, amount: amount, fee: fee, message: message, reference: reference);
+            fromAddress: from,
+            kind: _kind,
+            to: to,
+            amount: amount,
+            fee: fee,
+            message: message,
+            reference: reference,
+            mentions: mentions);
     final problem = check(scope.client);
     if (problem != null) {
       showSnack(context, txProblemText(l, problem));
@@ -221,6 +233,7 @@ class _ComposePageState extends State<ComposePage> {
         burn: _kind.startsThread ? orphanBurn(fee) : null,
         paid: _hasRecipient ? amount : null,
         suggested: _feeInfo?.suggested(_weight),
+        mentions: mentions,
         check: check,
       ),
     );
@@ -241,6 +254,7 @@ class _ComposePageState extends State<ComposePage> {
         fee: fee,
         message: message,
         reference: reference,
+        mentions: mentions,
       );
       if (!mounted) return;
       // Show a new thread or reply in its thread; anything else on its own page.
@@ -451,6 +465,16 @@ class _ComposePageState extends State<ComposePage> {
                 },
               ),
               EmojiPicker(_message),
+              MentionPicker(
+                message: _message,
+                candidates: mentionCandidates(client, AppScope.of(context).prefs,
+                    replyTo: widget.replyTo, me: wallet.addressHex),
+                chosen: _mentions,
+                onChanged: (now) => setState(() {
+                  _mentions = now;
+                  _follow();
+                }),
+              ),
             ],
             const SizedBox(height: 16),
             _CostSummary(
@@ -502,6 +526,7 @@ class _SendSummary extends StatelessWidget {
     required this.burn,
     required this.paid,
     required this.suggested,
+    required this.mentions,
     required this.check,
   });
 
@@ -525,6 +550,9 @@ class _SendSummary extends StatelessWidget {
   /// The suggested fee for it when it was checked, if known: a fee that
   /// differs is pointed out, lightly.
   final int? suggested;
+
+  /// Whom it mentions: public, like the rest.
+  final List<String> mentions;
 
   /// What stops it being sent now, if anything: asked again whenever the
   /// client changes (a new block, a transaction), with the balance.
@@ -592,6 +620,14 @@ class _SendSummary extends StatelessWidget {
                 row(l.type, Text(typeName ?? kindLabel(context, kind), style: theme.textTheme.titleMedium)),
                 row(l.from, who(from)),
                 if (to != null) row(l.to, who(to!)),
+                if (mentions.isNotEmpty)
+                  row(
+                    l.mentionsLabel,
+                    Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      for (final m in mentions) Padding(padding: const EdgeInsets.only(bottom: 4), child: who(m)),
+                      InfoPoint(Glyph.show, l.mentionPublicPoint),
+                    ]),
+                  ),
                 if (target != null)
                   row(
                     kind == TxKind.flag ? l.reports : l.inReplyTo,

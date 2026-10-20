@@ -77,6 +77,7 @@ class _FilterChips extends StatelessWidget {
           MessageFilter.received => l.filterRepliesReceived,
           MessageFilter.flagsSent => l.filterFlagsSent,
           MessageFilter.flagsReceived => l.filterFlagsReceived,
+          MessageFilter.mentioned => l.filterMentions,
         };
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,

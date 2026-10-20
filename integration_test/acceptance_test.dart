@@ -13,6 +13,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
+import 'package:murmur_client/protocol/bytes.dart';
+import 'package:murmur_client/protocol/models.dart';
 import 'package:murmur_client/services/local_node.dart';
 import 'package:murmur_client/services/storage.dart';
 import 'package:murmur_client/ui/common.dart' show AvatarLink;
@@ -52,10 +54,24 @@ void main() {
     // A thread: written, summarized, signed with the passphrase, and shown
     // in its own page at once.
     await app.openTab(l.tabThreads);
+    // It mentions a friend the device knows by name: "@" suggests them.
+    final friend = 'f1' * 32;
+    await app.prefs.setAlias(friend, 'Friend');
     await app.tapText(l.newThread);
-    await app.writeAndSend(threadText);
+    // On a line of its own: the thread's first line is its title in lists.
+    await app.type(l.message, '$threadText\n@Fri');
+    await app.tap(find.widgetWithText(ActionChip, '@Friend'), what: 'the suggested friend');
+    expect(app.fieldText(l.message), '$threadText\n@Friend ');
+    await app.press<FilledButton>(l.signAndSend);
+    await app.waitFor(find.text(l.confirmSendTitle), what: 'the summary before signing');
+    expect(find.text(l.mentionsLabel), findsWidgets, reason: 'the summary says whom it mentions');
+    await app.press<FilledButton>(l.signAndSend);
+    await app.unlock();
     await app.waitFor(find.byType(ThreadPage), what: "the new thread's page");
-    expect(find.text(threadText), findsWidgets);
+    expect(find.textContaining(threadText), findsWidgets);
+    final sent = app.client.messagesBy(me).firstWhere((v) => v.tx.kind == TxKind.orphan).tx;
+    expect([for (final m in sent.mentions) toHex(m)], [friend.substring(0, 16)]);
+    await app.waitFor(find.text('@Friend'), what: 'whom the thread mentions, under it');
 
     // Once mined it can be replied to; the reply shows under it. What it
     // pays the thread's author is the suggested fee, nothing more, and the
@@ -66,7 +82,7 @@ void main() {
     expect(find.byTooltip('Check again'), findsNothing);
     await app.writeAndSend(replyText);
     await app.waitFor(find.text(replyText), what: 'the reply in its thread');
-    expect(find.text(threadText), findsWidgets);
+    expect(find.textContaining(threadText), findsWidgets);
 
     // An answer to the reply (its own Reply button, once the reply is
     // mined): in the same thread, with the reply quoted above it.

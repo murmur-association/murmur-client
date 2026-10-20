@@ -93,18 +93,21 @@ class NetworkInfo {
   int get difficultyEase => 10 * targetBlockSecs;
 
   static const whitepaper = NetworkInfo(
-    id: 'murmur-testnet-12',
+    id: 'murmur-testnet-13',
     genesisTimestamp: 1790208000, // 2026-09-24T00:00:00Z
     genesisTargetShift: 8,
     targetBlockSecs: 30,
     halvingInterval: 4200000,
-    maxBlockBytes: 2000000,
+    maxBlockBytes: 1000000,
     burnPayoutBlocks: 2880,
-    checkpoint: Checkpoint(2200, '000000d4828dfbeac20cc2af17d46f31400e645562aed1564eca803a2d4d1ea9'),
+    // No checkpoint while the network is under a day old: sessions start
+    // from genesis. tool/refresh_checkpoint.dart puts the first in place of
+    // these lines, and refreshes it with every release (AGENTS.md, Recipes).
+    // checkpoint: none yet
   );
 
   static const demo = NetworkInfo(
-    id: 'murmur-demo-12',
+    id: 'murmur-demo-13',
     genesisTimestamp: 0,
     genesisTargetShift: 4,
     targetBlockSecs: 2,
@@ -155,7 +158,7 @@ class NetworkInfo {
       genesisTargetShift: 8,
       targetBlockSecs: 30,
       halvingInterval: 4200000,
-      maxBlockBytes: 2000000,
+      maxBlockBytes: 1000000,
       burnPayoutBlocks: 2880,
       known: false,
     );

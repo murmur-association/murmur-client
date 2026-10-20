@@ -401,6 +401,21 @@ class AppLocalizationsDe extends AppLocalizations {
   String get filterFlagsReceived => 'Erhaltene Meldungen';
 
   @override
+  String get filterMentions => 'Erwähnungen';
+
+  @override
+  String get mentionsLabel => 'Erwähnt';
+
+  @override
+  String get mentionPublicPoint =>
+      '**Eine Erwähnung ist öffentlich:** Jeder sieht, wen du genannt hast.';
+
+  @override
+  String mentionsMax(int max) {
+    return 'Höchstens $max Erwähnungen pro Nachricht';
+  }
+
+  @override
   String get balance => 'Guthaben';
 
   @override

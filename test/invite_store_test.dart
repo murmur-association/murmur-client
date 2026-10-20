@@ -56,7 +56,8 @@ class _Client extends MurmurClient {
       int amount = 0,
       required int fee,
       Uint8List? message,
-      String? reference}) {
+      String? reference,
+      List<String> mentions = const []}) {
     sent++;
     throw const TxProblem(TxProblemKind.notLive);
   }

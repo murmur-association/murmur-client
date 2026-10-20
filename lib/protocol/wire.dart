@@ -13,7 +13,7 @@ import 'bytes.dart';
 import 'commitments.dart';
 import 'models.dart';
 
-const protocolVersion = 13;
+const protocolVersion = 14;
 
 /// Payloads over this are a protocol violation.
 const maxPayloadBytes = 16 * 1024 * 1024;
@@ -351,6 +351,10 @@ enum AddressList {
   /// The Answers that answer one of its replies: how someone learns they
   /// were answered in another person's thread. In no state entry either.
   answers,
+
+  /// The Orphans, Replies and Answers that mention it (PROTOCOL.md Section
+  /// 2.4): how someone learns they were named. In no state entry either.
+  mentions,
 }
 
 /// As [GetThread], for one of an address's lists.

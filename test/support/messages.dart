@@ -31,7 +31,8 @@ Uint8List _utf(String s) => Uint8List.fromList(s.codeUnits);
 /// alice unless `from` says otherwise. A distinct dummy signature gives each
 /// a distinct txid. A Reply's `reference` is any message of its thread: the
 /// reply names the thread, as replies do. A Flag's is its target.
-TxView txAt(TxKind kind, int? height, {String? text, Uint8List? from, Uint8List? to, TxView? reference}) {
+TxView txAt(TxKind kind, int? height,
+    {String? text, Uint8List? from, Uint8List? to, TxView? reference, List<Uint8List> mentions = const []}) {
   final sig = Uint8List(64)..buffer.asByteData().setUint32(0, ++_serial);
   final content = text == null ? null : saltedContent(_utf(text));
   final thread = reference?.tx.threadId;
@@ -46,6 +47,7 @@ TxView txAt(TxKind kind, int? height, {String? text, Uint8List? from, Uint8List?
     contentSize: content?.length ?? 0,
     reference: kind == TxKind.reply ? fromHex(thread!) : reference?.tx.hash,
     thread: kind == TxKind.flag && thread != null && thread != reference!.tx.id ? fromHex(thread) : null,
+    mentions: [for (final m in mentions) mentionOf(m)],
     signature: sig,
   );
   final pending = height == null ? PendingTx(tx, content, mine: false) : null;
@@ -54,8 +56,8 @@ TxView txAt(TxKind kind, int? height, {String? text, Uint8List? from, Uint8List?
 }
 
 /// A reply from `from` (bob unless given) in the thread of `message`.
-TxView replyTo(TxView message, int? height, {Uint8List? from, String text = 'reply'}) =>
-    txAt(TxKind.reply, height, text: text, from: from ?? bob, reference: message);
+TxView replyTo(TxView message, int? height, {Uint8List? from, String text = 'reply', List<Uint8List> mentions = const []}) =>
+    txAt(TxKind.reply, height, text: text, from: from ?? bob, reference: message, mentions: mentions);
 
 /// The index of these, given oldest first (`MessageIndex.build` takes them
 /// newest first, as the client has them).
@@ -157,6 +159,12 @@ class FakeChain extends MurmurClient {
 
   @override
   List<TxView> messagesBy(String address) => _index.messagesBy(address);
+
+  @override
+  String? addressOfMention(Uint8List mention, {Iterable<String> also = const []}) {
+    final start = toHex(mention);
+    return also.where((a) => a.startsWith(start)).firstOrNull ?? _index.authorStartingWith(start);
+  }
 
   @override
   bool selfFlagged(TxView v) => _index.isSelfFlagged(v);

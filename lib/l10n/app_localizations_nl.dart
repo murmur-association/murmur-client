@@ -398,6 +398,21 @@ class AppLocalizationsNl extends AppLocalizations {
   String get filterFlagsReceived => 'Ontvangen meldingen';
 
   @override
+  String get filterMentions => 'Vermeldingen';
+
+  @override
+  String get mentionsLabel => 'Vermeldt';
+
+  @override
+  String get mentionPublicPoint =>
+      '**Een vermelding is openbaar:** iedereen ziet wie je noemde.';
+
+  @override
+  String mentionsMax(int max) {
+    return 'Hoogstens $max vermeldingen per bericht';
+  }
+
+  @override
   String get balance => 'Saldo';
 
   @override

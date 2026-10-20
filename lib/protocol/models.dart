@@ -40,9 +40,18 @@ Uint8List saltedContent(List<int> message) {
 Uint8List messageOf(Uint8List content) =>
     content.length <= saltLength ? Uint8List(0) : Uint8List.sublistView(content, saltLength);
 
-/// The most a transaction's own bytes can be (PROTOCOL.md Section 2.3): what
-/// a fee is worked out against before the transaction exists.
-const txMaxOwnBytes = 200;
+/// The most a transaction's own bytes can be without mentions (PROTOCOL.md
+/// Section 2.3): what a fee is worked out against before the transaction
+/// exists. Each mention adds [mentionLength].
+const txMaxOwnBytes = 201;
+
+/// A mention is the first 8 bytes of an address; a message names at most 4
+/// (PROTOCOL.md Sections 2.1 and 2.4).
+const mentionLength = 8;
+const maxMentions = 4;
+
+/// The mention that names `address`: its first [mentionLength] bytes.
+Uint8List mentionOf(Uint8List address) => Uint8List.fromList(address.sublist(0, mentionLength));
 
 /// An Orphan's or a Name's amount is exactly this times its fee, and is
 /// burned: starting a thread costs 11 x the fee.
@@ -53,7 +62,7 @@ int orphanBurn(int fee) => fee * orphanBurnMultiple;
 /// The most a transaction carrying `contentSize` bytes of content can weigh:
 /// what its fee per byte is measured against before it is signed. A signed
 /// transaction knows its own [Transaction.weight], a little less.
-int txWeight(int contentSize) => txMaxOwnBytes + contentSize;
+int txWeight(int contentSize, {int mentions = 0}) => txMaxOwnBytes + mentionLength * mentions + contentSize;
 
 /// The index is the on-chain tag: Orphan = 0, Reply = 1, Raw = 2, Flag = 3,
 /// Name = 4.
@@ -94,6 +103,7 @@ class Transaction {
     this.reference,
     this.thread,
     this.answers,
+    this.mentions = const [],
     required this.signature,
   }) : amount = kind.startsThread ? orphanBurn(fee) : (kind == TxKind.flag ? 0 : amount);
 
@@ -133,6 +143,12 @@ class Transaction {
   /// earlier reply of the thread that starts so; `quotedReply`).
   final Uint8List? answers;
 
+  /// Of an Orphan or a Reply (an Answer too): who it names, each as the first
+  /// 8 bytes of an address, at most 4 and none twice. The chain carries
+  /// them and never reads them; they reach those named through the node's
+  /// index and the block filter (Section 2.4).
+  final List<Uint8List> mentions;
+
   final Uint8List signature;
 
   /// Everything but the signature (PROTOCOL.md Section 2.2): what is signed,
@@ -149,20 +165,35 @@ class Transaction {
     Uint8List? reference,
     Uint8List? thread,
     Uint8List? answers,
+    List<Uint8List> mentions = const [],
   }) {
     if (answers != null && (kind != TxKind.reply || answers.length != 4)) {
       throw ArgumentError('only a reply answers, with 4 bytes');
     }
+    if (mentions.isNotEmpty && kind != TxKind.orphan && kind != TxKind.reply) {
+      throw ArgumentError('only a thread or a reply mentions');
+    }
+    final problem = mentionsProblem(mentions);
+    if (problem != null) throw ArgumentError(problem);
     final w = ByteWriter()
       ..u8(answers == null ? kind.index : answerTag)
       ..bytes(pubkey)
       ..varint(nonce)
       ..varint(fee);
+    // Every Orphan, Reply and Answer ends with its mentions: a count, then each.
+    void writeMentions() {
+      w.u8(mentions.length);
+      for (final m in mentions) {
+        w.bytes(m);
+      }
+    }
+
     switch (kind) {
       case TxKind.orphan || TxKind.name:
         w
           ..bytes(messageHash!)
           ..varint(contentSize);
+        if (kind == TxKind.orphan) writeMentions();
       case TxKind.reply:
         w
           ..varint(amount)
@@ -170,6 +201,7 @@ class Transaction {
           ..varint(contentSize)
           ..bytes(reference!);
         if (answers != null) w.bytes(answers);
+        writeMentions();
       case TxKind.raw:
         w
           ..bytes(to!)
@@ -198,16 +230,28 @@ class Transaction {
     final fee = r.varint();
     var amount = 0, contentSize = 0;
     Uint8List? to, messageHash, reference, thread, answers;
+    var mentions = const <Uint8List>[];
+    List<Uint8List> readMentions() {
+      final count = r.u8();
+      if (count > maxMentions) throw FormatException('$count mentions exceeds $maxMentions');
+      final read = [for (var i = 0; i < count; i++) r.take(mentionLength)];
+      final problem = mentionsProblem(read);
+      if (problem != null) throw FormatException(problem);
+      return read;
+    }
+
     switch (kind) {
       case TxKind.orphan || TxKind.name:
         messageHash = r.hash32();
         contentSize = r.varint();
+        if (kind == TxKind.orphan) mentions = readMentions();
       case TxKind.reply:
         amount = r.varint();
         messageHash = r.hash32();
         contentSize = r.varint();
         reference = r.hash32();
         if (tag == answerTag) answers = r.take(4);
+        mentions = readMentions();
       case TxKind.raw:
         to = r.hash32();
         amount = r.varint();
@@ -230,6 +274,7 @@ class Transaction {
       reference: reference,
       thread: thread,
       answers: answers,
+      mentions: mentions,
       signature: r.take(64),
     );
   }
@@ -246,6 +291,7 @@ class Transaction {
     reference: reference,
     thread: thread,
     answers: answers,
+    mentions: mentions,
   );
 
   /// The transaction as it is sent, and as its id hashes it.
@@ -263,6 +309,9 @@ class Transaction {
 
   /// [answers] as the start of a txid in hex (8 characters), or null.
   late final String? answersHex = answers == null ? null : toHex(answers!);
+
+  /// Whether it names `address` among its [mentions].
+  bool mentionsAddress(Uint8List address) => mentions.any((m) => bytesEqual(m, address.sublist(0, mentionLength)));
 
   /// The thread this transaction is in, as the txid of its first message: a
   /// Reply's reference, a Flag's thread (its target when it names none), an
@@ -406,4 +455,18 @@ Uint8List merkleRoot(List<Uint8List> txHashes) {
     level = next;
   }
   return level.first;
+}
+
+/// Why `mentions` can't be a transaction's (PROTOCOL.md Section 2.2): more
+/// than [maxMentions], one that isn't [mentionLength] bytes, or the same one
+/// twice. Null when they can.
+String? mentionsProblem(List<Uint8List> mentions) {
+  if (mentions.length > maxMentions) return '${mentions.length} mentions exceeds $maxMentions';
+  for (var i = 0; i < mentions.length; i++) {
+    if (mentions[i].length != mentionLength) return 'a mention of ${mentions[i].length} bytes';
+    for (var j = 0; j < i; j++) {
+      if (bytesEqual(mentions[i], mentions[j])) return 'a mention given twice';
+    }
+  }
+  return null;
 }

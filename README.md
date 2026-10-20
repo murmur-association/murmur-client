@@ -1,6 +1,6 @@
 # Murmur client
 
-A Flutter light client for the Murmur chain, speaking **protocol 13** (networks `murmur-testnet-12` and `murmur-demo-12`). The node, the whitepaper and the protocol specification live in the [murmur repository](https://gitlab.com/murmur-association/murmur); section numbers below refer to its [PROTOCOL.md](https://gitlab.com/murmur-association/murmur/-/blob/main/PROTOCOL.md). With the client you can:
+A Flutter light client for the Murmur chain, speaking **protocol 14** (networks `murmur-testnet-13` and `murmur-demo-13`). The node, the whitepaper and the protocol specification live in the [murmur repository](https://gitlab.com/murmur-association/murmur); section numbers below refer to its [PROTOCOL.md](https://gitlab.com/murmur-association/murmur/-/blob/main/PROTOCOL.md). With the client you can:
 
 - read threads, newest activity first, each with its replies from the newest down, and see which reply an answer is for;
 - browse blocks, transactions and addresses, and search by height, txid, block hash or address;
@@ -14,7 +14,7 @@ A Flutter light client for the Murmur chain, speaking **protocol 13** (networks 
   - **Withdrawn messages:** flagging your own message withdraws it. Nobody else sees it listed any more, the app deletes its text from every device that has it (this one included) and never fetches it again, and nodes may stop keeping it and its replies. You still see a withdrawn thread in your list, faded and without its text, unless you hide flagged threads.
   - **New thread:** the button at the bottom starts one.
   - **Languages** are detected on the device from each thread's text. By default the list shows your device's languages, plus text too short to tell. The header counts what's hidden.
-- **Messages:** the wallet's own messages, newest first, following new blocks: threads it started, replies it sent or received, and flags it raised or received. Filter chips choose which; flags are off by default. Plain transfers aren't messages and live in the Wallet tab. A badge on the tab counts new replies to you. Each row shows its author's picture, which opens their page; what others wrote stays highlighted until you open it, and so do starred things with news in the Starred tab.
+- **Messages:** the wallet's own messages, newest first, following new blocks: threads it started, replies it sent or received, threads and replies that mention it, and flags it raised or received. Filter chips choose which; flags are off by default. Plain transfers aren't messages and live in the Wallet tab. A badge on the tab counts new replies to you. Each row shows its author's picture, which opens their page; what others wrote stays highlighted until you open it, and so do starred things with news in the Starred tab.
 - **A thread** shows its replies oldest first. The first visit opens at the top; later ones go to where you left off, and replies newer than that light up for a moment as they come into view. Further replies load as you scroll down, earlier ones with "Earlier replies".
 
 **People.**
@@ -35,6 +35,7 @@ A Flutter light client for the Murmur chain, speaking **protocol 13** (networks 
 - **Wallet:** balance, address, how the key is protected on this device, and the seed, then the history of token movements. A checkbox menu picks what the history shows: transfers sent and received (the default), what replies paid or earned, thread costs and flag fees. The **New transaction** button sends tokens.
 
 **Sending.** **Sign and send**, or Ctrl+Enter (⌘ Enter on Apple devices), first shows a summary of everything that will be signed: type, sender, recipient, the message in full, weight, fee, burn or amount, total, and what's left. Only after that does the app unlock the key.
+- **Mentions:** typing `@` in a thread or a reply suggests people the app knows; a message names up to four, each costing 8 bytes of fee. The people named learn of it in their Messages tab. A mention is public.
 - **Chain:** the network, height, next reward, burn pool and supply, a search box, and every block, newest first.
 
 Every list shows as many rows as fill the screen plus one, and ten more each time it's scrolled to the bottom, so it only ever builds what's on screen. Messages and Wallet find the wallet's transactions through block filters, so they fetch only the blocks that touch it. The filters are remembered.
@@ -111,7 +112,7 @@ Platform notes:
   The bridge binds to localhost only, always dials the one configured node, and accepts only pages served from localhost.
 - **Paths with an apostrophe** (such as `C:\Users\o'brien`) break `flutter test` and web builds, because Flutter pastes the path into generated Dart code. Work around it by mapping a drive letter: `subst M: "C:\Users\o'brien"`, then work from `M:\murmur-client` with `TEMP`/`TMP` set to `M:\AppData\Local\Temp`.
 
-**Which node a fresh install uses:** `127.0.0.1:7878` natively and `127.0.0.1:7880` (the bridge) on the web, until the user picks another. Builds for the public testnet (`murmur-testnet-12`) set their own default:
+**Which node a fresh install uses:** `127.0.0.1:7878` natively and `127.0.0.1:7880` (the bridge) on the web, until the user picks another. Builds for the public testnet (`murmur-testnet-13`) set their own default:
 
 ```
 # Web: the TLS proxy in front of node 1's WebSocket listener

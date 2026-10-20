@@ -402,6 +402,21 @@ class AppLocalizationsAr extends AppLocalizations {
   String get filterFlagsReceived => 'البلاغات المستلمة';
 
   @override
+  String get filterMentions => 'الإشارات';
+
+  @override
+  String get mentionsLabel => 'يشير إلى';
+
+  @override
+  String get mentionPublicPoint =>
+      '**الإشارة علنية:** يمكن لأي أحد أن يرى من ذكرت.';
+
+  @override
+  String mentionsMax(int max) {
+    return 'لا يزيد عدد الإشارات في الرسالة على $max';
+  }
+
+  @override
   String get balance => 'الرصيد';
 
   @override

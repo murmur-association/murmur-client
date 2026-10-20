@@ -994,7 +994,28 @@ class MurmurClient extends ChangeNotifier {
       t.fromAddress == address ||
       creditedBy(t) == address ||
       (t.kind == TxKind.flag && t.referenceId != null && authorOf(t.referenceId!) == address) ||
-      answersTo(t, address);
+      answersTo(t, address) ||
+      mentions(t, address);
+
+  /// Whether `tx` mentions `address` (PROTOCOL.md Section 2.4): one of its
+  /// mentions is the address's first 8 bytes. A mention in a message its
+  /// author withdrew is withdrawn with it.
+  bool mentions(Transaction tx, String address) {
+    if (tx.mentions.isEmpty || !tx.mentionsAddress(fromHex(address))) return false;
+    final view = lookupTx(tx.id);
+    return view == null || !selfFlagged(view);
+  }
+
+  /// The address a mention names, if this client knows one that starts so:
+  /// its own wallets' and the authors of the messages at hand. A mention
+  /// holds only 8 bytes, so one nobody here has written as is shown by them.
+  String? addressOfMention(Uint8List mention, {Iterable<String> also = const []}) {
+    final start = toHex(mention);
+    for (final address in also) {
+      if (address.startsWith(start)) return address;
+    }
+    return _messages.authorStartingWith(start);
+  }
 
   /// Whether `tx` answers a reply of `address` (an Answer, PROTOCOL.md
   /// Section 2.4): it names the thread of one of the address's replies, and
@@ -1015,14 +1036,15 @@ class MurmurClient extends ChangeNotifier {
   /// complete at once, at any chain age. With a node that keeps no index,
   /// every block touching it is found by its filter and fetched instead.
   ///
-  /// With `mentions`, what others did about its messages is read from the
-  /// index too: the flags against them, and the answers to its replies in
-  /// other people's threads. No state entry holds those: each is proven to
-  /// be on the chain, but not that the node gave them all, and a node
-  /// without an index gives none.
+  /// With `mentions`, what others did about it is read from the index too:
+  /// the flags against its messages, the answers to its replies in other
+  /// people's threads, and the messages that mention it. No state entry
+  /// holds those: each is proven to be on the chain, but not that the node
+  /// gave them all. A node without an index gives no flags or answers;
+  /// mentions are then found by their filter item.
   void watchAddress(String address, {bool mentions = false}) {
     if (mentions) {
-      for (final list in [AddressList.flagsAgainst, AddressList.answers]) {
+      for (final list in _othersLists) {
         _flagReads.putIfAbsent('$address:${list.index}', () {
           _wake();
           return _FlagRead(address, list);
@@ -1050,8 +1072,11 @@ class MurmurClient extends ChangeNotifier {
   final Map<String, _ListRead> _threadReads = {};
   final Map<String, _ListRead> _addressReads = {};
 
-  /// The flags against addresses' messages and the answers to their
-  /// replies being read, by `address:list`.
+  /// What others did about an address: the lists no state entry holds.
+  static const _othersLists = [AddressList.flagsAgainst, AddressList.answers, AddressList.mentions];
+
+  /// The flags against addresses' messages, the answers to their replies
+  /// and the messages that mention them being read, by `address:list`.
   final Map<String, _FlagRead> _flagReads = {};
 
   /// How many blocks pass before the newest of those are asked for again.
@@ -1333,9 +1358,9 @@ class MurmurClient extends ChangeNotifier {
       ...?_addressReads['$address:0']?.entries,
       ...?_addressReads['$address:1']?.entries,
     };
-    // What the node listed about its messages: the flags of a message it
-    // wrote, and the answers to a reply of its own.
-    for (final list in [AddressList.flagsAgainst, AddressList.answers]) {
+    // What the node listed about it: the flags of a message it wrote, the
+    // answers to a reply of its own, and the messages that mention it.
+    for (final list in _othersLists) {
       _flagReads['$address:${list.index}']?.entries.forEach((id, where) {
         final tx = lookupTx(id)?.tx;
         if (tx != null && _involves(tx, address)) at[id] = where;
@@ -3217,6 +3242,8 @@ class MurmurClient extends ChangeNotifier {
     if (gen != _generation) throw _Aborted();
     if (!page.available) {
       read.unavailable = true;
+      // Mentions are filter items too (Section 3.6): found that way instead.
+      if (read.list == AddressList.mentions) _watchItem(mentionItem(mentionOf(fromHex(read.address))), 1);
       return;
     }
     final end = page.start + page.entries.length;
@@ -3225,9 +3252,14 @@ class MurmurClient extends ChangeNotifier {
       read.total = null;
       return;
     }
-    final flags = read.list == AddressList.flagsAgainst;
-    if (page.entries.any((e) => flags ? e.tx.kind != TxKind.flag : e.tx.answers == null)) {
-      throw FormatException('the node listed something that is not ${flags ? 'a flag' : 'an answer'}');
+    final who = fromHex(read.address);
+    final fits = switch (read.list) {
+      AddressList.flagsAgainst => (Transaction t) => t.kind == TxKind.flag,
+      AddressList.answers => (Transaction t) => t.answers != null,
+      _ => (Transaction t) => t.mentionsAddress(who),
+    };
+    if (page.entries.any((e) => !fits(e.tx))) {
+      throw FormatException('the node listed something that is not in its ${read.list.name} list');
     }
     await _takeEntries(page.entries, read.entries, gen);
     if (back) {
@@ -3524,8 +3556,12 @@ class MurmurClient extends ChangeNotifier {
     required int fee,
     Uint8List? message,
     String? reference,
+    List<String> mentions = const [],
   }) {
     const malformed = TxProblem(TxProblemKind.malformed);
+    // Up to four, each once, and only in a thread or a reply.
+    if (mentions.isNotEmpty && kind != TxKind.orphan && kind != TxKind.reply) return malformed;
+    if (mentionsProblem([for (final m in mentions) mentionOf(fromHex(m))]) != null) return malformed;
     const checking = TxProblem(TxProblemKind.checkingBalance);
     // Below the network's least fee a transaction is invalid, not just slow.
     if (fee < (network?.minFee ?? minFee)) return const TxProblem(TxProblemKind.feeTooLow);
@@ -3576,6 +3612,7 @@ class MurmurClient extends ChangeNotifier {
   ///
   /// A Reply goes in the thread of the message `reference` names, and a
   /// Flag of a reply names that reply's thread: both are worked out here.
+  /// A thread or a reply names the addresses in `mentions` (at most 4).
   Future<Transaction> submit({
     required MurmurWallet wallet,
     required TxKind kind,
@@ -3584,6 +3621,7 @@ class MurmurClient extends ChangeNotifier {
     required int fee,
     Uint8List? message,
     String? reference,
+    List<String> mentions = const [],
   }) async {
     if (state != LinkState.live) {
       throw const TxProblem(TxProblemKind.notLive);
@@ -3595,7 +3633,8 @@ class MurmurClient extends ChangeNotifier {
         amount: amount,
         fee: fee,
         message: message,
-        reference: reference);
+        reference: reference,
+        mentions: mentions);
     if (problem != null) throw problem;
     final nonce = nextNonce(wallet.addressHex);
     if (nonce == null) throw const TxProblem(TxProblemKind.checkingBalance);
@@ -3623,6 +3662,7 @@ class MurmurClient extends ChangeNotifier {
       // A reply to a reply says which (an Answer): the start of its txid.
       // A reply to the thread's first message says nothing more.
       answers: kind == TxKind.reply && target!.kind == TxKind.reply ? Uint8List.sublistView(target.hash, 0, 4) : null,
+      mentions: [for (final m in mentions) mentionOf(fromHex(m))],
     );
     if (state != LinkState.live) throw const TxProblem(TxProblemKind.connectionLost);
     if (_txIndex.containsKey(tx.id) || _pending.containsKey(tx.id)) {

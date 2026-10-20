@@ -396,6 +396,21 @@ class AppLocalizationsPt extends AppLocalizations {
   String get filterFlagsReceived => 'Denúncias recebidas';
 
   @override
+  String get filterMentions => 'Menções';
+
+  @override
+  String get mentionsLabel => 'Menciona';
+
+  @override
+  String get mentionPublicPoint =>
+      '**Uma menção é pública:** qualquer pessoa pode ver quem nomeou.';
+
+  @override
+  String mentionsMax(int max) {
+    return 'No máximo $max menções por mensagem';
+  }
+
+  @override
   String get balance => 'Saldo';
 
   @override

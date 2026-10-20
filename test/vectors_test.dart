@@ -1,7 +1,7 @@
-// The node's test vectors for protocol 13: those PROTOCOL.md gives without a
-// chain (Sections 2.2, 3.1, 3.2, 3.6, 4 and 6), and `vectors/demo-12.txt`,
-// a nine-block chain on the demo network that the node's own tests rebuild
-// byte for byte (copied here as test/vectors/demo-12.txt). The chain is
+// The node's test vectors for protocol 14: those PROTOCOL.md gives without a
+// chain (Sections 2.2, 3.1, 3.2, 3.6, 4 and 6), and `vectors/demo-13.txt`,
+// a twelve-block chain on the demo network that the node's own tests rebuild
+// byte for byte (copied here as test/vectors/demo-13.txt). The chain is
 // rebuilt here from its transactions and nonces: every header's target,
 // commitments and hash, the state entries, a filter, and the node's answers
 // to GetThread and GetAddress with their proofs.
@@ -61,10 +61,11 @@ class _Vectors {
 void main() {
   test('genesis hashes match PROTOCOL.md Section 6', () {
     expect(NetworkInfo.whitepaper.genesisHeader().id,
-        '1910d5ee9865e593f0b4b4141f715f958163ec36bb76f039262cfc8c1feb71db');
-    expect(NetworkInfo.demo.genesisHeader().id, '3312c98658403c230452ed20da787b5cd1e43ae0d1b95dbf394487761d5ad68e');
-    expect(NetworkInfo.forGenesis(NetworkInfo.demo.genesisHeader().hash).id, 'murmur-demo-12');
+        'b0a1ba92bb7bde1c9a8e59818a7e2228eecb612f79c8969b7e0404d80defe558');
+    expect(NetworkInfo.demo.genesisHeader().id, 'b14081755ae79e77fcaed2c98c4183de12b64fa4b1881ae403858d27f5aa5110');
+    expect(NetworkInfo.forGenesis(NetworkInfo.demo.genesisHeader().hash).id, 'murmur-demo-13');
     expect(NetworkInfo.forGenesis(Uint8List(32)).known, isFalse);
+    expect(NetworkInfo.whitepaper.maxBlockBytes, 1000000);
   });
 
   group('numbers in as few bytes as they need (Section 2.2)', () {
@@ -132,22 +133,69 @@ void main() {
           contentSize: 21,
           reference: _filled(0xaa),
           answers: fromHex('3fa9c21e')),
+      // Mentions: the first 8 bytes of the addresses named.
+      await w.sign(
+          networkTag: tag,
+          kind: TxKind.orphan,
+          nonce: 7,
+          fee: fee,
+          messageHash: hash,
+          contentSize: 21,
+          mentions: [mentionOf(_filled(0x10))]),
+      await w.sign(
+          networkTag: tag,
+          kind: TxKind.reply,
+          nonce: 8,
+          fee: fee,
+          amount: 750000,
+          messageHash: hash,
+          contentSize: 21,
+          reference: _filled(0xaa),
+          mentions: [for (var b = 0x10; b <= 0x13; b++) mentionOf(_filled(b))]),
+      await w.sign(
+          networkTag: tag,
+          kind: TxKind.reply,
+          nonce: 9,
+          fee: fee,
+          amount: 750000,
+          messageHash: hash,
+          contentSize: 21,
+          reference: _filled(0xaa),
+          answers: fromHex('3fa9c21e'),
+          mentions: [mentionOf(_filled(0x10)), mentionOf(_filled(0x11))]),
     ];
-    expect([for (final tx in txs) tx.bytes.length], [134, 169, 137, 134, 166, 134, 173]);
+    expect([for (final tx in txs) tx.bytes.length], [135, 170, 137, 134, 166, 134, 174, 143, 202, 190]);
     expect([for (final tx in txs) tx.id], [
-      '199a39f5af78082d686760bf7e352f481e152374e1273ef3b5febe71ad94fc47',
-      '4d9839706d3537f8d9d2f7827e88b2504e8e7bae3c04994c2061b4d06ba0a29a',
-      '86ded0aeda2be59149239163ab69ec8939013543d25aad913ecb89237e141915',
-      '57afa15407a26cb1e6a6973812d3fd39a32d07ad381a53e327c14e0abe474910',
-      '267ba2ac8f2f3044630f33360cd977f3606fcf6c76cf74e855b77dad18188d50',
-      '45b2a019bdac4afe9238e0c7eb8ffeba413983408d79c392fdd4f7bf29401a88',
-      '9dc72fd28c22dff4d61fa380bf7ed7097a6a39270f10659d9852999e6117186c',
+      'fb9b81cbdce8f3545491789a1e3559068afafc736a555e21cbc4afe167d12dbb',
+      'cccbf83bdc7dd2c642a283400a1ac1a1b62a032c89d19b263ed6119166e96553',
+      '5e085298fe8f2db6ddbd0d24c270ce06ca57bd9ebc83077785a95db48d78d66c',
+      'b7e486bfaef82bfbd3d859455608eb5827c94b36ffd862dddaf95f27b56e4fe5',
+      '7a73bdc2e712d84704af641b3092d7fb2ba21e757493fb5487f15a745ae8adbe',
+      '9b2af0b9fd1a7e4707fcb3e0e4143da2b64dd8f153c6c3afb6127d4151b8c57e',
+      '997b9d398f9c71fc34aa7c5b8d774a75d5cca926587c820f14c5d8951eccffba',
+      '1028a5e5260fb79eb01a1a50dd4c62b87e29fd16e2574b8fc84c556ffa04b2d3',
+      '76aadc381a43c77560cad20ca23cb2c433bdd92b3084339278ee719ce5612504',
+      '61711436e5dde4a4a8947bfbe949236221f6027a2d2e316fb234ee4425089a85',
     ]);
     expect(
         toHex(txs[0].bytes),
         '00ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c00a0c21e06c343731700ca16797f96e987'
-        '180093e28b4c653e08efccb4f5fbb91313f56c15c6f40cd9dbef82d4c10b838faeef45b5c57c494119cd75bf3d5f75665cd9'
-        '0cc7410e6958148e328305f8406f833bdbee26382d672b2767344b475e3c7fbb5f0e');
+        '180093e28b4c653e08efccb4f5fbb91313f56c1500b9fdb8043e32b1b49c70c3a8d4dd0d5f4172891c707e31514f6e16051a'
+        'e41004e1c6fa99fa9e000822abb2223e525b028ca8e75432af7bae8acaa64b6817440d');
+    expect(
+        toHex(txs[8].bytes),
+        '01ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c08a0c21eb0e32d06c343731700ca16797f'
+        '96e987180093e28b4c653e08efccb4f5fbb91313f56c15aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+        'aaaaaaaaaa04101010101010101011111111111111111212121212121212131313131313131321900fdbbfb420af0baab749'
+        'c18aeb1d13fb2ca0de0de6691fcf01c9466fe6cd5ced2dab6b886135779a22e7839148fe0221506f0fee583f4156a5403f39'
+        '2e0f');
+    // A mention costs 8 bytes of weight; four, the heaviest transaction.
+    expect(txs[7].weight, txs[0].weight + 8);
+    expect(txs[8].weight, txs[1].weight + 32);
+    expect(txs[8].weight, lessThanOrEqualTo(txWeight(21, mentions: 4)));
+    expect(txs[8].mentionsAddress(_filled(0x12)), isTrue);
+    expect(txs[8].mentionsAddress(_filled(0x14)), isFalse);
+    expect(txs[9].answersHex, '3fa9c21e');
     // An Answer is a Reply on every count but its tag and its last 4 bytes.
     expect(txs[6].bytes.first, 5);
     expect(txs[6].kind, TxKind.reply);
@@ -163,7 +211,7 @@ void main() {
     expect(txs[3].amount, 0);
     expect([for (final tx in txs) tx.threadId], [
       txs[0].id, toHex(_filled(0xaa)), null, toHex(_filled(0xaa)), toHex(_filled(0xaa)), txs[5].id, //
-      toHex(_filled(0xaa)),
+      toHex(_filled(0xaa)), txs[7].id, toHex(_filled(0xaa)), toHex(_filled(0xaa)),
     ]);
     // Each survives the wire, and is the only reading of its bytes.
     for (final tx in txs) {
@@ -322,8 +370,8 @@ void main() {
     expect(bagged.data.length, 112);
   });
 
-  group('the demo chain of vectors/demo-12.txt', () {
-    final v = _Vectors(File('test/vectors/demo-12.txt').readAsStringSync());
+  group('the demo chain of vectors/demo-13.txt', () {
+    final v = _Vectors(File('test/vectors/demo-13.txt').readAsStringSync());
     const net = NetworkInfo.demo;
     final alice = fromHex(v.one(0, 'alice')), bob = fromHex(v.one(0, 'bob'));
 
@@ -349,7 +397,7 @@ void main() {
     final chain = <BlockHeader>[net.genesisHeader()];
     final blocks = <Block>[Block(chain.first, const [])];
     final history = HistoryPeaks();
-    for (var n = 1; n <= 11; n++) {
+    for (var n = 1; n <= 12; n++) {
       history.pushHeader(chain.last);
       final txs = txsOf(n);
       final time = 1000000 + 2 * n;
@@ -375,19 +423,19 @@ void main() {
       expect((await MurmurWallet.fromSeed(_filled(2))).address, bob);
       expect(toHex(net.genesisHeader().hash), v.one(0, 'genesis'));
       var seen = 0;
-      for (var n = 1; n <= 11; n++) {
+      for (var n = 1; n <= 12; n++) {
         for (final (name, value) in v.blocks[n]!) {
           if (!name.endsWith('.txid')) continue;
           expect(tx(v.one(n, name.substring(0, name.length - 5))).id, value, reason: name);
           seen++;
         }
       }
-      expect(seen, 16);
+      expect(seen, 18);
     });
 
     test('every block: target, merkle root, filter hash, history root, proof of work and hash', () {
       final peaks = HistoryPeaks();
-      for (var n = 1; n <= 11; n++) {
+      for (var n = 1; n <= 12; n++) {
         final h = chain[n];
         expect(toHex(h.target), v.one(n, 'target'), reason: 'target of block $n');
         expect(toHex(h.merkleRoot), v.one(n, 'merkle_root'), reason: 'merkle root of block $n');
@@ -543,7 +591,7 @@ void main() {
     test('a node\'s answers to GetThread, each page proven on its own against the thread\'s entry', () {
       final thread = blocks[3].transactions.single;
       final entry = ThreadEntry.parse(fromHex(
-          v.blocks[11]!.firstWhere((l) => l.$1.startsWith('state[thread]')).$2))!;
+          v.blocks[12]!.firstWhere((l) => l.$1.startsWith('state[thread]')).$2))!;
       for (final name in ['thread', 'thread_first', 'thread_middle']) {
         final bytes = fromHex(v.one(-1, '$name.answer'));
         final msg = decodeMessage(bytes) as Thread;
@@ -551,7 +599,7 @@ void main() {
         expect(msg.root, thread.hash);
         final page = msg.page;
         expect(page.available, isTrue);
-        expect(page.at, chain[11].hash);
+        expect(page.at, chain[12].hash);
         expect(page.total, int.parse(v.one(-1, '$name.total')));
         expect(page.start, int.parse(v.one(-1, '$name.start')));
         expect(page.entries.length, int.parse(v.one(-1, '$name.count')));
@@ -584,7 +632,7 @@ void main() {
 
     test('a node\'s answers to GetAddress: sent and credited proven, flags against as the node knows them', () {
       final account = AccountEntry.parse(fromHex(
-          v.blocks[11]!.firstWhere((l) => l.$1.startsWith('state[account alice]')).$2))!;
+          v.blocks[12]!.firstWhere((l) => l.$1.startsWith('state[account alice]')).$2))!;
       Address answer(String name, [Uint8List? of]) {
         final bytes = fromHex(v.one(-1, '$name.answer'));
         final msg = decodeMessage(bytes) as Address;
@@ -661,6 +709,65 @@ void main() {
         expect(reply.threadId, e.tx.threadId);
       }
     });
+
+    test('mentions: in the filter as 8 bytes and 24 zeros, and listed for whom they name (GetAddress, list 4)', () {
+      final carol = fromHex(v.one(0, 'carol'));
+      final [mention1, mention2] = blocks[12].transactions;
+      expect(mention1.kind, TxKind.orphan);
+      expect([for (final m in mention1.mentions) toHex(m)], [toHex(mentionOf(bob))]);
+      // Bob names alice, himself and two addresses nobody holds.
+      expect(mention2.kind, TxKind.reply);
+      expect(mention2.threadId, mention1.id);
+      expect([for (final m in mention2.mentions) toHex(m)],
+          [toHex(mentionOf(alice)), toHex(mentionOf(bob)), 'aa' * 8, 'bb' * 8]);
+      expect(mention1.mentionsAddress(bob) && !mention1.mentionsAddress(alice), isTrue);
+
+      final items = blockFilterItems(blocks[12].transactions);
+      expect({for (final i in items) toHex(i)}, v.all(12, 'filter.item').toSet());
+      expect(toHex(buildFilter(chain[11].hash, items)), v.one(12, 'filter'));
+      expect(filterMatchesAny(buildFilter(chain[11].hash, items), chain[11].hash, [mentionItem(mentionOf(bob))]), isTrue);
+
+      // The node lists each address's: bob twice, alice once, carol never.
+      for (final (name, who, expected) in [
+        ('bob', bob, [mention1.id, mention2.id]),
+        ('alice', alice, [mention2.id]),
+        ('carol', carol, <String>[]),
+      ]) {
+        final bytes = fromHex(v.one(-1, '$name.mentions.answer'));
+        final msg = decodeMessage(bytes) as Address;
+        expect(encodePayload(msg), bytes);
+        expect(msg.address, who);
+        expect(msg.list, AddressList.mentions);
+        expect(msg.page.total, int.parse(v.one(-1, '$name.mentions.total')));
+        expect(msg.page.peaks, isEmpty, reason: 'no state entry holds this list');
+        expectOnChain(msg.page);
+        expect([for (final e in msg.page.entries) e.tx.id], expected);
+        // Each proves itself: it names the address.
+        expect(msg.page.entries.every((e) => e.tx.mentionsAddress(who)), isTrue);
+      }
+    });
+
+    test('mentions that are not a transaction: five, or the same one twice', () {
+      final tx = blocks[12].transactions.last;
+      Uint8List withMentions(List<int> bytes) {
+        final b = tx.bytes;
+        // The mentions end the body, before the 64-byte signature.
+        final cut = b.length - 64 - (1 + 8 * tx.mentions.length);
+        return Uint8List.fromList([...b.sublist(0, cut), ...bytes, ...b.sublist(b.length - 64)]);
+      }
+
+      Transaction read(Uint8List bytes) {
+        final r = ByteReader(bytes);
+        final t = Transaction.read(r);
+        r.finish();
+        return t;
+      }
+
+      expect(read(withMentions([1, ...List.filled(8, 7)])).mentions.length, 1);
+      expect(() => read(withMentions([5, for (var i = 0; i < 5; i++) ...List.filled(8, i)])), throwsFormatException);
+      expect(() => read(withMentions([2, ...List.filled(8, 7), ...List.filled(8, 7)])), throwsFormatException);
+      expect(mentionsProblem([mentionOf(alice), mentionOf(alice)]), isNotNull);
+    });
   });
 
   test('the new messages have the node layout, with their limits', () {
@@ -672,11 +779,12 @@ void main() {
       GetThread(root, 12, 500),
       GetAddress(root, AddressList.flagsAgainst, 0, 0),
       GetAddress(root, AddressList.answers, 0, 500),
+      GetAddress(root, AddressList.mentions, 0, 500),
     ]) {
       expect(encodePayload(decodeMessage(encodePayload(m))), encodePayload(m));
     }
     expect(() => decodeMessage(encodePayload(GetThread(root, 0, 501))), throwsFormatException);
-    final bad = encodePayload(GetAddress(root, AddressList.sent, 0, 1))..[33] = 4;
+    final bad = encodePayload(GetAddress(root, AddressList.sent, 0, 1))..[33] = 5;
     expect(() => decodeMessage(bad), throwsFormatException);
     // A state value may be 96 bytes, no more.
     State state(int n) => State(root, true, [(root, StateProof(const [], ValueTerminal(Uint8List(n))))]);

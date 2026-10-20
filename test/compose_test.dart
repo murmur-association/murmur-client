@@ -53,6 +53,7 @@ class _FeeChain extends FakeChain {
     required int fee,
     Uint8List? message,
     String? reference,
+    List<String> mentions = const [],
   }) =>
       null;
 }

@@ -640,6 +640,38 @@ void main() {
       expect(c.lookupTx(thread.id)!.height, at);
     }, timeout: const Timeout(Duration(minutes: 5)));
 
+    test('a mention reaches the wallet it names: from the node\'s list, and from filters without an index', () async {
+      for (final index in [true, false]) {
+        final node = await short(mining: true, extra: index ? const [] : const ['--no-index']);
+        final writer = await node.connect(MurmurClient());
+        await until(writer, () => writer.availableTo(miner.addressHex) != null);
+        // A wallet that never sent anything is named in a thread.
+        final named = await MurmurWallet.generate();
+        final thread = await writer.submit(
+            wallet: miner,
+            kind: TxKind.orphan,
+            fee: minFee,
+            message: utf('hello @someone'),
+            mentions: [named.addressHex, toHex(Uint8List(32)..fillRange(0, 32, 0x42))]);
+        expect([for (final m in thread.mentions) toHex(m)], [named.addressHex.substring(0, 16), '42' * 8]);
+        await until(writer, what: 'the thread mined', () => mined(writer, thread));
+
+        // Its wallet, on another device, is told.
+        final me = named.addressHex;
+        final reader = await node.connect(MurmurClient());
+        reader.watchAddress(me, mentions: true);
+        await until(reader, what: 'the mention in the named wallet\'s history (index: $index)',
+            () => reader.activityOf(me).any((v) => v.tx.id == thread.id),
+            timeout: const Duration(minutes: 2));
+        final view = reader.activityOf(me).firstWhere((v) => v.tx.id == thread.id);
+        expect(reader.mentions(view.tx, me), isTrue);
+        expect(messageFiltersOf(view, me, reader), {MessageFilter.mentioned});
+        expect(walletFiltersOf(view, me, reader), isEmpty, reason: 'no tokens moved for it');
+        // Nobody else is: the writer's own history holds it as its thread.
+        expect(reader.mentions(view.tx, miner.addressHex), isFalse);
+      }
+    }, timeout: const Timeout(Duration(minutes: 6)));
+
     test('a node without the index: the same thread and history, through filters', () async {
       final node = await short(mining: true, extra: ['--no-index']);
       final writer = await node.connect(MurmurClient());

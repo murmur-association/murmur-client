@@ -78,6 +78,13 @@ class Preferences extends ChangeNotifier {
     final tag = prefs.getString('locale');
     locale = tag == null ? null : Locale(tag);
     messageFilters = _names(prefs.getStringList('message_filters'), MessageFilter.values) ?? messageFilters;
+    // Mentions came after filters were first saved: shown once for everyone,
+    // who can turn them off like any other.
+    if (prefs.getBool('mentions_filter_added') != true) {
+      messageFilters = {...messageFilters, MessageFilter.mentioned};
+      await prefs.setStringList('message_filters', [for (final f in messageFilters) f.name]);
+      await prefs.setBool('mentions_filter_added', true);
+    }
     walletFilters = _names(prefs.getStringList('wallet_filters'), WalletFilter.values) ?? walletFilters;
     await _loadOwnView(prefs);
     notifyListeners();

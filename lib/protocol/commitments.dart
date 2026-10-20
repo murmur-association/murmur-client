@@ -310,10 +310,10 @@ const filterM = 784931;
 final int _pSize = _pow2(filterP);
 
 /// The distinct items a block's filter holds: each transaction's sender, a
-/// Raw's `to`, a Reply's or a Flag's `reference`, and a Flag's `thread`. Not
-/// the content hash, and not who a Reply pays: every item is in the
-/// transactions themselves, so someone watching for replies to their
-/// threads watches for the threads' txids.
+/// Raw's `to`, a Reply's or a Flag's `reference`, a Flag's `thread`, and
+/// each mention as [mentionItem]. Not the content hash, and not who a Reply
+/// pays: every item is in the transactions themselves, so someone watching
+/// for replies to their threads watches for the threads' txids.
 List<Uint8List> blockFilterItems(List<Transaction> transactions) {
   final seen = <String, Uint8List>{};
   for (final tx in transactions) {
@@ -321,9 +321,18 @@ List<Uint8List> blockFilterItems(List<Transaction> transactions) {
     if (tx.to != null) seen.putIfAbsent(toHex(tx.to!), () => tx.to!);
     if (tx.reference != null) seen.putIfAbsent(toHex(tx.reference!), () => tx.reference!);
     if (tx.thread != null) seen.putIfAbsent(toHex(tx.thread!), () => tx.thread!);
+    for (final m in tx.mentions) {
+      final item = mentionItem(m);
+      seen.putIfAbsent(toHex(item), () => item);
+    }
   }
   return seen.values.toList();
 }
+
+/// A mention as a filter item (PROTOCOL.md Section 3.6): its 8 bytes, then
+/// 24 zeros, which no real address ends with. Someone watching for their
+/// mentions tests `mentionItem(mentionOf(address))`.
+Uint8List mentionItem(Uint8List mention) => Uint8List(32)..setRange(0, mentionLength, mention);
 
 /// `(u64be(H(prev_hash ‖ item)[0..8]) × F) >> 64`, with a 128-bit product.
 int _hashToRange(Uint8List prevHash, Uint8List item, int f) {

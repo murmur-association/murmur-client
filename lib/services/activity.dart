@@ -20,10 +20,13 @@ enum MessageFilter {
   flagsSent,
 
   /// Flags against its messages.
-  flagsReceived;
+  flagsReceived,
+
+  /// Threads and replies by others that mention it.
+  mentioned;
 
   /// Flags are off until the user turns them on.
-  static const defaults = {threads, sent, received};
+  static const defaults = {threads, sent, received, mentioned};
 }
 
 /// Wallet tab: token movements.
@@ -50,9 +53,13 @@ Set<MessageFilter> messageFiltersOf(TxView v, String me, MurmurClient client) {
   final tx = v.tx;
   final mine = tx.fromAddress == me;
   return switch (tx.kind) {
-    TxKind.orphan => {if (mine) MessageFilter.threads},
+    TxKind.orphan => {
+        if (mine) MessageFilter.threads,
+        if (!mine && client.mentions(tx, me)) MessageFilter.mentioned,
+      },
     TxKind.reply => {
         if (mine) MessageFilter.sent,
+        if (!mine && client.mentions(tx, me)) MessageFilter.mentioned,
         // In one of the wallet's threads, or an answer to one of its
         // replies in someone else's.
         if (client.creditedBy(tx) == me || (!mine && client.answersTo(tx, me))) MessageFilter.received,

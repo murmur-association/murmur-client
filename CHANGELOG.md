@@ -2,6 +2,13 @@
 
 Newest first. Each release is a `vX.Y.Z` tag matching `version` in `pubspec.yaml`; see [README](README.md#releases-and-deployment). Entries marked **Breaking** need action from users.
 
+## Unreleased
+
+**Breaking: a new network and protocol.** The app speaks protocol 14 and joins `murmur-testnet-13`; it no longer reaches `murmur-testnet-12`. Nothing carries over: wallets keep their keys, and start with nothing on the new chain. The desktop apps ship node release v0.14.0. No checkpoint while the network is under a day old.
+
+- **Added: mentions.** Type `@` in a thread or a reply to name someone the app knows: up to four per message, each costing 8 bytes of fee. They learn of it in Messages (a new "Mentions" filter, counted in the badge), and a message shows whom it mentions under its text. A mention is public, and the summary before signing says so.
+- **Changed: blocks hold at most 1 MB** on the new testnet, half of before.
+
 ## v0.7.1: checkpoint refresh (2026-10-19)
 
 No protocol or network change.

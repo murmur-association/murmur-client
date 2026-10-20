@@ -388,6 +388,20 @@ class AppLocalizationsZh extends AppLocalizations {
   String get filterFlagsReceived => '收到的举报';
 
   @override
+  String get filterMentions => '提及';
+
+  @override
+  String get mentionsLabel => '提及';
+
+  @override
+  String get mentionPublicPoint => '**提及是公开的：**任何人都能看到你提到了谁。';
+
+  @override
+  String mentionsMax(int max) {
+    return '每条消息最多提及$max人';
+  }
+
+  @override
   String get balance => '余额';
 
   @override

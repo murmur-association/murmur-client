@@ -640,6 +640,30 @@ abstract class AppLocalizations {
   /// **'Flags received'**
   String get filterFlagsReceived;
 
+  /// Messages tab filter chip: threads and replies by others that mention this wallet
+  ///
+  /// In en, this message translates to:
+  /// **'Mentions'**
+  String get filterMentions;
+
+  /// Before the people a message mentions: under the message field, in the summary before signing
+  ///
+  /// In en, this message translates to:
+  /// **'Mentions'**
+  String get mentionsLabel;
+
+  /// Explanation point where a mention is written: the chain shows publicly whom a message names
+  ///
+  /// In en, this message translates to:
+  /// **'**A mention is public:** anyone can see whom you named.'**
+  String get mentionPublicPoint;
+
+  /// Under the message field, when four people are mentioned already
+  ///
+  /// In en, this message translates to:
+  /// **'At most {max} mentions in a message'**
+  String mentionsMax(int max);
+
   /// No description provided for @balance.
   ///
   /// In en, this message translates to:

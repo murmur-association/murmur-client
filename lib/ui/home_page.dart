@@ -92,9 +92,10 @@ class _HomePageState extends State<HomePage> with RouteAware {
       if (v.confirmed && t <= seen) break; // newest first: the rest were seen
       final tx = v.tx;
       // Replies in the wallet's threads (those credit it), and answers to
-      // its replies in other people's.
-      if (tx.kind != TxKind.reply || tx.fromAddress == me) continue;
-      if (client.creditedBy(tx) != me && !client.answersTo(tx, me)) continue;
+      // its replies in other people's, and threads and replies that mention it.
+      if (tx.fromAddress == me) continue;
+      final replied = tx.kind == TxKind.reply && (client.creditedBy(tx) == me || client.answersTo(tx, me));
+      if (!replied && !client.mentions(tx, me)) continue;
       if (prefs.muted.contains(tx.fromAddress)) continue;
       newest = max(newest ?? 0, t);
       if (t > seen && ++count == 99) break;
