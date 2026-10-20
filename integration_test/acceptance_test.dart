@@ -148,9 +148,10 @@ void main() {
     await app.waitFor(find.text(l.inviteWaitingState), what: 'the card, waiting to be claimed');
 
     // One protection for the app: the cards' key is under the wallet's
-    // passphrase, or the wallet's own passkey, not a second one.
+    // passphrase, or the wallet's own passkey, not a second one (on an
+    // iPhone, each is under the device's lock).
     final wallet = (await WalletController.storedVault())!, cards = (await InviteStore.storedVault())!;
-    expect(wallet['protection'], acceptancePasskey ? 'passkey' : 'passphrase');
+    expect(wallet['protection'], acceptancePasskey ? 'passkey' : (acceptanceDeviceLock ? 'device' : 'passphrase'));
     expect(cards['protection'], wallet['protection']);
     if (acceptancePasskey) {
       expect(cards['credential'], wallet['credential'], reason: 'the same passkey');

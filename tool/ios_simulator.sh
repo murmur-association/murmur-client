@@ -5,8 +5,9 @@
 #
 # The newest iOS runtime Xcode has, and an iPhone that runtime says it
 # supports (not every iPhone Xcode knows runs every runtime). A fresh
-# simulator has no passcode and no Face ID enrolled, so the app's vault
-# takes a passphrase, as the tests' driver expects. Needs macOS with Xcode.
+# simulator has no passcode set, and its key store then asks nothing: the
+# app's vault keeps the wallet there, as on an iPhone, with nobody to answer
+# (the tests' driver expects it). Needs macOS with Xcode.
 set -euo pipefail
 
 read -r runtime device <<< "$(xcrun simctl list runtimes -j | python3 -c '

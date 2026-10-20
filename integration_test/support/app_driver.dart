@@ -10,6 +10,7 @@
 
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show defaultTargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -40,6 +41,12 @@ const acceptanceOwnNode = bool.fromEnvironment('ACCEPTANCE_OWN_NODE');
 /// which test_driver/integration_test.dart puts in place): the vault then
 /// uses a passkey, and never asks for a passphrase.
 const acceptancePasskey = bool.fromEnvironment('ACCEPTANCE_PASSKEY');
+
+/// Whether the app's vault uses the device's key store here, and its
+/// check passes by itself: an iPhone simulator, which has no passcode set,
+/// so the key store asks nothing (services/key_vault_io.dart). The vault
+/// then never asks for a passphrase either.
+bool get acceptanceDeviceLock => defaultTargetPlatform == TargetPlatform.iOS;
 
 /// The one passphrase of the app in these tests.
 const passphrase = 'correct horse battery';
@@ -230,8 +237,9 @@ class AppDriver {
   /// Chooses the app's passphrase, when a wallet (or the first cards) set
   /// it up.
   Future<void> choosePassphrase() async {
-    // A passkey is made instead, by the browser's own check.
-    if (acceptancePasskey) return;
+    // A passkey is made instead, by the browser's own check; or the
+    // device's key store keeps it.
+    if (acceptancePasskey || acceptanceDeviceLock) return;
     await waitFor(find.text(l.passphraseNewTitle), what: 'the dialog that chooses a passphrase');
     await type(l.passphraseField, passphrase);
     await type(l.passphraseRepeat, passphrase);
@@ -242,8 +250,9 @@ class AppDriver {
   /// Answers the one question an action asks, and checks it isn't asked a
   /// second time for the same action.
   Future<void> unlock() async {
-    // The passkey's check passes by itself, with nothing on screen.
-    if (acceptancePasskey) return;
+    // The passkey's or the device's check passes by itself, with nothing
+    // on screen.
+    if (acceptancePasskey || acceptanceDeviceLock) return;
     await waitFor(find.text(l.passphraseTitle), what: 'the passphrase to be asked');
     await type(l.passphraseField, passphrase);
     await press<FilledButton>(l.unlock);
