@@ -164,7 +164,8 @@ probe-android-emulator:
   - grep -cE 'vmx|svm' /proc/cpuinfo || echo 'no virtualisation flag in /proc/cpuinfo'
   # Libraries the emulator loads even without a window.
   - apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends libpulse0 libnss3 libgbm1 libxkbfile1 libxcomposite1 libxcursor1 libxdamage1 libxi6 libxtst6 >/dev/null || true
-  - yes | sdkmanager --licenses >/dev/null
+  # (yes ends by a broken pipe once sdkmanager has read enough: not a failure.)
+  - yes | sdkmanager --licenses >/dev/null || true
   - sdkmanager --install emulator platform-tools 'system-images;android-29;default;x86_64' >/dev/null
   - $ANDROID_HOME/emulator/emulator -version | head -1
   - echo no | avdmanager create avd -n probe -k 'system-images;android-29;default;x86_64' -d pixel_6
