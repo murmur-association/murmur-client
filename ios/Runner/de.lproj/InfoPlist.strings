@@ -1,0 +1,2 @@
+/* Generated from lib/l10n/app_de.arb by tool/ios_localizations.dart: edit those. */
+"NSFaceIDUsageDescription" = "Bestätige, dass du es bist, bevor der Schlüssel deiner Wallet verwendet oder angezeigt wird.";

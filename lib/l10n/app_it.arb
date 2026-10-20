@@ -471,5 +471,6 @@
   "notifyMention": "{name} ti ha menzionato",
   "notifyStarredReply": "{name} ha risposto in una discussione con la stella",
   "notifyStarredPerson": "Nuovo messaggio da {name}",
-  "notifyMore": "{count, plural, =1{Un altro messaggio nuovo} other{Altri {count} messaggi nuovi}}"
+  "notifyMore": "{count, plural, =1{Un altro messaggio nuovo} other{Altri {count} messaggi nuovi}}",
+  "faceIdReason": "Conferma che sei tu prima che la chiave del tuo portafoglio venga usata o mostrata."
 }

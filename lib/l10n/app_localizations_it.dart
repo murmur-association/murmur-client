@@ -1983,4 +1983,8 @@ class AppLocalizationsIt extends AppLocalizations {
     );
     return '$_temp0';
   }
+
+  @override
+  String get faceIdReason =>
+      'Conferma che sei tu prima che la chiave del tuo portafoglio venga usata o mostrata.';
 }

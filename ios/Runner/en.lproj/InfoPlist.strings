@@ -1,0 +1,2 @@
+/* Generated from lib/l10n/app_en.arb by tool/ios_localizations.dart: edit those. */
+"NSFaceIDUsageDescription" = "Confirm it's you before your wallet's key is used or shown.";

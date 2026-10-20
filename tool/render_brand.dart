@@ -1,4 +1,4 @@
-﻿// Renders the app icons from the logo (ui/brand.dart), plus a preview sheet
+// Renders the app icons from the logo (ui/brand.dart), plus a preview sheet
 // of every glyph, using Flutter's own renderer. Run from the project root:
 //
 //   flutter test tool/render_brand.dart
@@ -7,7 +7,8 @@
 // web/icons/Icon-maskable-{192,512}.png (full bleed, logo inside the maskable
 // safe zone), windows/runner/resources/app_icon.ico and
 // linux/runner/resources/app_icon.png (the badge, for the desktop apps),
-// ios/Runner/Assets.xcassets/AppIcon.appiconset (the iPhone's, opaque) and
+// ios/Runner/Assets.xcassets/AppIcon.appiconset (the iPhone's, opaque), its
+// launch screen's logo and background (LaunchImage, LaunchBackground) and
 // build/brand_preview.png.
 
 import 'dart:convert';
@@ -117,6 +118,42 @@ Future<void> _writeIosIcon(String set) async {
   }));
 }
 
+/// The iPhone's launch screen (ios/Runner/Base.lproj/LaunchScreen.storyboard):
+/// the copper logo, 120 points wide, on the background the app's first
+/// frame has, paper in light mode and ink in dark (a named colour with both).
+Future<void> _writeIosLaunch(String assets) async {
+  for (final scale in [1, 2, 3]) {
+    final size = 120 * scale;
+    final recorder = ui.PictureRecorder();
+    paintLogo(Canvas(recorder), Size(size.toDouble(), size.toDouble()), BrandColors.copper);
+    final name = scale == 1 ? 'LaunchImage.png' : 'LaunchImage@${scale}x.png';
+    await _writePng(await recorder.endRecording().toImage(size, size), '$assets/LaunchImage.imageset/$name');
+  }
+  Map<String, Object> colour(Color c) => {
+        'color-space': 'srgb',
+        'components': {
+          for (final (name, value) in [('red', c.r), ('green', c.g), ('blue', c.b)])
+            name: '0x${(value * 255).round().toRadixString(16).padLeft(2, '0').toUpperCase()}',
+          'alpha': '1.000',
+        },
+      };
+  File('$assets/LaunchBackground.colorset/Contents.json')
+    ..createSync(recursive: true)
+    ..writeAsStringSync(const JsonEncoder.withIndent('  ').convert({
+      'colors': [
+        {'idiom': 'universal', 'color': colour(BrandColors.paper)},
+        {
+          'idiom': 'universal',
+          'appearances': [
+            {'appearance': 'luminosity', 'value': 'dark'},
+          ],
+          'color': colour(BrandColors.ink),
+        },
+      ],
+      'info': {'author': 'xcode', 'version': 1},
+    }));
+}
+
 /// The badge at `size`, as an image.
 Future<ui.Image> _badge(int size) {
   final recorder = ui.PictureRecorder();
@@ -196,6 +233,7 @@ void main() {
       await _writeIco('windows/runner/resources/app_icon.ico', const [16, 24, 32, 48, 64, 256]);
       await _writePng(await _badge(256), 'linux/runner/resources/app_icon.png');
       await _writeIosIcon('ios/Runner/Assets.xcassets/AppIcon.appiconset');
+      await _writeIosLaunch('ios/Runner/Assets.xcassets');
     });
   });
 

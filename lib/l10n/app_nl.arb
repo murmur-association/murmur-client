@@ -471,5 +471,6 @@
   "notifyMention": "{name} noemde je",
   "notifyStarredReply": "{name} antwoordde in een draadje met een ster",
   "notifyStarredPerson": "Nieuw bericht van {name}",
-  "notifyMore": "{count, plural, =1{Nog 1 nieuw bericht} other{Nog {count} nieuwe berichten}}"
+  "notifyMore": "{count, plural, =1{Nog 1 nieuw bericht} other{Nog {count} nieuwe berichten}}",
+  "faceIdReason": "Bevestig dat jij het bent voordat de sleutel van je wallet wordt gebruikt of getoond."
 }

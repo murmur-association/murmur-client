@@ -471,5 +471,6 @@
   "notifyMention": "{name} 提到了你",
   "notifyStarredReply": "{name} 在加星标的话题中回复了",
   "notifyStarredPerson": "来自 {name} 的新消息",
-  "notifyMore": "{count, plural, other{另有 {count} 条新消息}}"
+  "notifyMore": "{count, plural, other{另有 {count} 条新消息}}",
+  "faceIdReason": "在使用或显示你的钱包密钥之前，请确认是你本人。"
 }

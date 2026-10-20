@@ -1973,4 +1973,8 @@ class AppLocalizationsPt extends AppLocalizations {
     );
     return '$_temp0';
   }
+
+  @override
+  String get faceIdReason =>
+      'Confirme que é você antes de a chave da sua carteira ser usada ou mostrada.';
 }

@@ -1961,4 +1961,8 @@ class AppLocalizationsEn extends AppLocalizations {
     );
     return '$_temp0';
   }
+
+  @override
+  String get faceIdReason =>
+      'Confirm it\'s you before your wallet\'s key is used or shown.';
 }

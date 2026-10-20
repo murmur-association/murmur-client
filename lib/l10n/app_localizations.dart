@@ -2943,6 +2943,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{count, plural, =1{1 more new message} other{{count} more new messages}}'**
   String notifyMore(int count);
+
+  /// iOS: why Face ID is asked for, shown by iOS the first time (Info.plist's NSFaceIDUsageDescription; tool/ios_localizations.dart copies it there)
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm it\'s you before your wallet\'s key is used or shown.'**
+  String get faceIdReason;
 }
 
 class _AppLocalizationsDelegate

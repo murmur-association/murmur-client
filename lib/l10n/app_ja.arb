@@ -471,5 +471,6 @@
   "notifyMention": "{name} さんがあなたをメンションしました",
   "notifyStarredReply": "{name} さんがスター付きのスレッドに返信しました",
   "notifyStarredPerson": "{name} さんから新しいメッセージ",
-  "notifyMore": "{count, plural, other{ほかに新しいメッセージが {count} 件}}"
+  "notifyMore": "{count, plural, other{ほかに新しいメッセージが {count} 件}}",
+  "faceIdReason": "ウォレットの鍵を使う前や表示する前に、本人であることを確認してください。"
 }

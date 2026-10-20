@@ -471,5 +471,6 @@
   "notifyMention": "{name} hat dich erwähnt",
   "notifyStarredReply": "{name} hat in einem markierten Thread geantwortet",
   "notifyStarredPerson": "Neue Nachricht von {name}",
-  "notifyMore": "{count, plural, =1{1 weitere neue Nachricht} other{{count} weitere neue Nachrichten}}"
+  "notifyMore": "{count, plural, =1{1 weitere neue Nachricht} other{{count} weitere neue Nachrichten}}",
+  "faceIdReason": "Bestätige, dass du es bist, bevor der Schlüssel deiner Wallet verwendet oder angezeigt wird."
 }

@@ -471,5 +471,6 @@
   "notifyMention": "أشار إليك {name}",
   "notifyStarredReply": "ردّ {name} في موضوع مميز بنجمة",
   "notifyStarredPerson": "رسالة جديدة من {name}",
-  "notifyMore": "{count, plural, =1{رسالة جديدة أخرى} =2{رسالتان جديدتان أخريان} few{{count} رسائل جديدة أخرى} many{{count} رسالة جديدة أخرى} other{{count} رسالة جديدة أخرى}}"
+  "notifyMore": "{count, plural, =1{رسالة جديدة أخرى} =2{رسالتان جديدتان أخريان} few{{count} رسائل جديدة أخرى} many{{count} رسالة جديدة أخرى} other{{count} رسالة جديدة أخرى}}",
+  "faceIdReason": "أكّد أنك أنت قبل استخدام مفتاح محفظتك أو عرضه."
 }

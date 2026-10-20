@@ -99,7 +99,7 @@ flutter run -d windows
 Platform notes:
 
 - **Android:** add `<uses-permission android:name="android.permission.INTERNET"/>` and `<uses-permission android:name="android.permission.USE_BIOMETRIC"/>` to `android/app/src/main/AndroidManifest.xml`. Make `MainActivity` extend `FlutterFragmentActivity`: the key store (`biometric_storage`) needs it. Notifications (`flutter_local_notifications`) need `compileSdk = 36` and core library desugaring in `android/app/build.gradle.kts`: `isCoreLibraryDesugaringEnabled = true` under `compileOptions`, and `coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")` under `dependencies`. From the emulator, the host machine's node is at `10.0.2.2`.
-- **iOS:** `ios/` is committed: bundle id `info.murmur.client`, the name Murmur, the icon (`tool/render_brand.dart`) and the Face ID reason. Builds for the simulator need nothing more; builds for iPhones need the Apple developer account's signing.
+- **iOS:** `ios/` is committed: bundle id `info.murmur.client`, the name Murmur, the icon and launch screen (`tool/render_brand.dart`) and the Face ID reason in every language (`tool/ios_localizations.dart`, from the ARB files). Builds for the simulator need nothing more; builds for iPhones need the Apple developer account's signing.
 - **macOS:** add `com.apple.security.network.client` = `true` to both `macos/Runner/*.entitlements` files.
 - **Linux:** secure storage needs `libsecret-1-dev` to build.
 - **Web:** browsers can't open raw TCP sockets, so the web build connects to a local WebSocket bridge (default `ws://127.0.0.1:7880`), and the bridge relays to the node:

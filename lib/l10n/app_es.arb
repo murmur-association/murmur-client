@@ -471,5 +471,6 @@
   "notifyMention": "{name} te mencionó",
   "notifyStarredReply": "{name} respondió en un hilo destacado",
   "notifyStarredPerson": "Nuevo mensaje de {name}",
-  "notifyMore": "{count, plural, =1{1 mensaje nuevo más} other{{count} mensajes nuevos más}}"
+  "notifyMore": "{count, plural, =1{1 mensaje nuevo más} other{{count} mensajes nuevos más}}",
+  "faceIdReason": "Confirma que eres tú antes de que se use o se muestre la clave de tu cartera."
 }

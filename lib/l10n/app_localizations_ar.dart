@@ -1997,4 +1997,7 @@ class AppLocalizationsAr extends AppLocalizations {
     );
     return '$_temp0';
   }
+
+  @override
+  String get faceIdReason => 'أكّد أنك أنت قبل استخدام مفتاح محفظتك أو عرضه.';
 }

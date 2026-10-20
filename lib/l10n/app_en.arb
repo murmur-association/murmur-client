@@ -688,5 +688,7 @@
   "notifyStarredPerson": "New message from {name}",
   "@notifyStarredPerson": {"description":"Notification title: a message by a starred person","placeholders":{"name":{"type":"String"}}},
   "notifyMore": "{count, plural, =1{1 more new message} other{{count} more new messages}}",
-  "@notifyMore": {"description":"Notification: how many more messages than the ones shown","placeholders":{"count":{"type":"int","format":"decimalPattern"}}}
+  "@notifyMore": {"description":"Notification: how many more messages than the ones shown","placeholders":{"count":{"type":"int","format":"decimalPattern"}}},
+  "faceIdReason": "Confirm it's you before your wallet's key is used or shown.",
+  "@faceIdReason": {"description":"iOS: why Face ID is asked for, shown by iOS the first time (Info.plist's NSFaceIDUsageDescription; tool/ios_localizations.dart copies it there)"}
 }

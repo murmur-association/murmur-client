@@ -1985,4 +1985,8 @@ class AppLocalizationsDe extends AppLocalizations {
     );
     return '$_temp0';
   }
+
+  @override
+  String get faceIdReason =>
+      'Bestätige, dass du es bist, bevor der Schlüssel deiner Wallet verwendet oder angezeigt wird.';
 }

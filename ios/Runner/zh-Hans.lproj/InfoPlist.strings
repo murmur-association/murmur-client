@@ -1,0 +1,2 @@
+/* Generated from lib/l10n/app_zh.arb by tool/ios_localizations.dart: edit those. */
+"NSFaceIDUsageDescription" = "在使用或显示你的钱包密钥之前，请确认是你本人。";

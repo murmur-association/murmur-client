@@ -1,0 +1,2 @@
+/* Generated from lib/l10n/app_it.arb by tool/ios_localizations.dart: edit those. */
+"NSFaceIDUsageDescription" = "Conferma che sei tu prima che la chiave del tuo portafoglio venga usata o mostrata.";

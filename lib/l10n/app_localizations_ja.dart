@@ -1906,4 +1906,7 @@ class AppLocalizationsJa extends AppLocalizations {
     );
     return '$_temp0';
   }
+
+  @override
+  String get faceIdReason => 'ウォレットの鍵を使う前や表示する前に、本人であることを確認してください。';
 }

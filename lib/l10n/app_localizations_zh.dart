@@ -1883,4 +1883,7 @@ class AppLocalizationsZh extends AppLocalizations {
     );
     return '$_temp0';
   }
+
+  @override
+  String get faceIdReason => '在使用或显示你的钱包密钥之前，请确认是你本人。';
 }

@@ -1,0 +1,2 @@
+/* Generated from lib/l10n/app_ja.arb by tool/ios_localizations.dart: edit those. */
+"NSFaceIDUsageDescription" = "ウォレットの鍵を使う前や表示する前に、本人であることを確認してください。";

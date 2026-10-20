@@ -1975,4 +1975,8 @@ class AppLocalizationsNl extends AppLocalizations {
     );
     return '$_temp0';
   }
+
+  @override
+  String get faceIdReason =>
+      'Bevestig dat jij het bent voordat de sleutel van je wallet wordt gebruikt of getoond.';
 }

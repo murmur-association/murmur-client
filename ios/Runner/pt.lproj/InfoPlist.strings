@@ -1,0 +1,2 @@
+/* Generated from lib/l10n/app_pt.arb by tool/ios_localizations.dart: edit those. */
+"NSFaceIDUsageDescription" = "Confirme que é você antes de a chave da sua carteira ser usada ou mostrada.";
