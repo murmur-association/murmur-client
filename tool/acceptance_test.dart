@@ -125,6 +125,8 @@ void main() {
       '--dart-define=ACCEPTANCE_SEED=${toHex(wallet.seed)}',
       if (desktop) ...['--dart-define=ACCEPTANCE_OWN_NODE=true', '--dart-define=MURMUR_LOCAL_NODE_SPEC=demo'],
       if (passkey) '--dart-define=ACCEPTANCE_PASSKEY=true',
+      // A machine without a desktop, which can't show notifications.
+      if (_env['ACCEPTANCE_NO_NOTIFICATIONS'] != null) '--dart-define=ACCEPTANCE_NO_NOTIFICATIONS=true',
     ];
     if (browser) {
       final driver = await _startWebDriver();

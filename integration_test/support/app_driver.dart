@@ -42,6 +42,12 @@ const acceptanceOwnNode = bool.fromEnvironment('ACCEPTANCE_OWN_NODE');
 /// uses a passkey, and never asks for a passphrase.
 const acceptancePasskey = bool.fromEnvironment('ACCEPTANCE_PASSKEY');
 
+/// Whether this machine can't show the system's notifications at all: a
+/// CI runner's service session has no desktop, and the Windows plugin's
+/// start-up ends the app there. The runner sets it from the environment's
+/// ACCEPTANCE_NO_NOTIFICATIONS.
+const acceptanceNoNotifications = bool.fromEnvironment('ACCEPTANCE_NO_NOTIFICATIONS');
+
 /// Whether the app's vault uses the device's key store here, and its
 /// check passes by itself: an iPhone simulator, which has no passcode set,
 /// so the key store asks nothing (services/key_vault_io.dart). The vault

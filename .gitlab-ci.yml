@@ -513,6 +513,10 @@ acceptance-windows:
     $release | ForEach-Object { Copy-Item $_.FullName build\node -Force }
     Write-Output "debug runtime beside the app: $(($debug + $ucrt).Name -join ', '); release runtime beside the node: $($release.Name -join ', ')"
   - dart run tool/desktop_smoke_test.dart --check-system $app
+  # The runner's service session has no desktop: the Windows notification
+  # plugin's start-up ended the app there (2026-10-20), so the notification
+  # test skips itself. On a desktop (by hand) it runs.
+  - $env:ACCEPTANCE_NO_NOTIFICATIONS = '1'
   - flutter test tool/acceptance_test.dart
   - if ($LASTEXITCODE -ne 0) { exit 1 }
 

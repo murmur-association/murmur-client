@@ -252,8 +252,14 @@ Future<void> startNotifications({
     final now = prefs.notifyTopics.isNotEmpty;
     if (now == on) return;
     on = now;
-    if (now) await notifier.init(openLabel: localizationsFor(prefs.locale).notifyOpen, open: openNotification);
-    await scheduleBackgroundChecks(now);
+    // The system's side may fail to start (a session with no desktop):
+    // the app goes on without it.
+    try {
+      if (now) await notifier.init(openLabel: localizationsFor(prefs.locale).notifyOpen, open: openNotification);
+      await scheduleBackgroundChecks(now);
+    } catch (e) {
+      debugPrint('notifications could not start: $e');
+    }
   }
 
   prefs.addListener(topicsChanged);
