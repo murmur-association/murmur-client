@@ -189,8 +189,8 @@ probe-ios-simulator:
   - sw_vers
   - xcodebuild -version
   - xcrun simctl list runtimes
-  # The newest iOS runtime, and the newest iPhone it says it supports (not
-  # every iPhone Xcode knows runs every runtime).
+  # The newest iOS runtime, and an iPhone it says it supports (not every
+  # iPhone Xcode knows runs every runtime).
   - |
     read -r runtime device <<< "$(xcrun simctl list runtimes -j | python3 -c '
     import json, sys
