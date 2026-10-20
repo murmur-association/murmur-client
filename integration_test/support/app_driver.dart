@@ -321,8 +321,15 @@ class AppDriver {
     bool mined(Transaction tx) => other.lookupTx(tx.id)?.confirmed ?? false;
     try {
       unawaited(other.connect(acceptanceNode.substring(0, colon), int.parse(acceptanceNode.substring(colon + 1))));
-      await waitUntil(() => other.state == LinkState.live && (other.availableTo(payer.addressHex) ?? 0) > 0,
-          what: "the other device to see the test's wallet");
+      // Proven at the tip: a fresh client's first proof can be from a block
+      // before the wallet's last transaction (sent from the app, which this
+      // device doesn't know of), and its nonce would then be one too few.
+      await waitUntil(
+          () =>
+              other.state == LinkState.live &&
+              other.account(payer.addressHex)?.height == other.height &&
+              (other.availableTo(payer.addressHex) ?? 0) > 0,
+          what: "the other device to see the test's wallet, proven at the tip");
       final fund = await other.submit(
           wallet: payer, kind: TxKind.raw, to: someone.address, amount: 5 * unitsPerToken, fee: minFee);
       try {
@@ -336,6 +343,10 @@ class AppDriver {
             'their balance ${other.availableTo(someone.addressHex)}, the other device at ${other.height} '
             '(${other.state.name}, error ${other.error})');
       }
+      // The thread itself, as a page opened on it has: a fresh client holds
+      // only recent blocks, and on a slow device the thread can be older.
+      other.requestTx(root);
+      await waitUntil(() => other.lookupTx(root)?.confirmed ?? false, what: 'the thread on the other device');
       final reply = await other.submit(
           wallet: someone,
           kind: TxKind.reply,
