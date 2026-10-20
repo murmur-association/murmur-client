@@ -37,6 +37,9 @@ final _device = _env['ACCEPTANCE_DEVICE'] ?? Platform.operatingSystem;
 const _browsers = {'chrome', 'chrome-passkey'};
 const _suite = 'integration_test/acceptance_test.dart';
 
+/// A device far slower than a desktop (ACCEPTANCE_SLOW): the suite waits longer.
+final _slow = _env['ACCEPTANCE_SLOW'] != null;
+
 /// A port nothing listens on now.
 Future<int> _freePort() async {
   final socket = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
@@ -127,6 +130,8 @@ void main() {
       if (passkey) '--dart-define=ACCEPTANCE_PASSKEY=true',
       // A machine without a desktop, which can't show notifications.
       if (_env['ACCEPTANCE_NO_NOTIFICATIONS'] != null) '--dart-define=ACCEPTANCE_NO_NOTIFICATIONS=true',
+      // A device far slower than a desktop (an emulator without KVM).
+      if (_slow) '--dart-define=ACCEPTANCE_SLOW=true',
     ];
     if (browser) {
       final driver = await _startWebDriver();
@@ -170,5 +175,5 @@ void main() {
     expect(await flutter.exitCode, 0, reason: 'the acceptance tests on $_device');
     // `flutter drive` can end with 0 after tests that failed.
     expect(said.where((line) => line.contains('Some tests failed') || line.contains('[E]')), isEmpty);
-  }, skip: nodeSkip, timeout: const Timeout(Duration(minutes: 30)));
+  }, skip: nodeSkip, timeout: Timeout(Duration(minutes: _slow ? 150 : 30)));
 }

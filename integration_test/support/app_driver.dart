@@ -48,6 +48,15 @@ const acceptancePasskey = bool.fromEnvironment('ACCEPTANCE_PASSKEY');
 /// ACCEPTANCE_NO_NOTIFICATIONS.
 const acceptanceNoNotifications = bool.fromEnvironment('ACCEPTANCE_NO_NOTIFICATIONS');
 
+/// Whether the device is much slower than a desktop: an emulator with no
+/// KVM, which emulates every instruction (CI's Android runner). A
+/// passphrase's 600,000 rounds of PBKDF2 then take minutes, so every wait
+/// is six times as long. The runner sets it from the environment's
+/// ACCEPTANCE_SLOW.
+const acceptanceSlow = bool.fromEnvironment('ACCEPTANCE_SLOW');
+
+Duration _scaled(Duration d) => acceptanceSlow ? d * 6 : d;
+
 /// Whether the app's vault uses the device's key store here, and its
 /// check passes by itself: an iPhone simulator, which has no passcode set,
 /// so the key store asks nothing (services/key_vault_io.dart). The vault
@@ -116,7 +125,7 @@ class AppDriver {
   /// does).
   Future<void> waitUntil(bool Function() done,
       {required String what, Duration timeout = const Duration(seconds: 90)}) async {
-    final deadline = DateTime.now().add(timeout);
+    final deadline = DateTime.now().add(_scaled(timeout));
     while (!done()) {
       if (DateTime.now().isAfter(deadline)) {
         fail('timed out waiting for $what (link ${client.state.name} at ${client.height}, error ${client.error})\n'
@@ -128,7 +137,7 @@ class AppDriver {
   }
 
   Future<void> waitFor(Finder finder, {required String what, Duration timeout = const Duration(seconds: 90)}) async {
-    final deadline = DateTime.now().add(timeout);
+    final deadline = DateTime.now().add(_scaled(timeout));
     while (finder.evaluate().isEmpty) {
       if (DateTime.now().isAfter(deadline)) fail('timed out waiting for $what\n${_onScreen()}');
       await tester.pump(const Duration(milliseconds: 100));

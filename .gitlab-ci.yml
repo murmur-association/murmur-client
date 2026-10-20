@@ -229,7 +229,7 @@ acceptance-android:
   stage: test
   tags:
   - saas-linux-large-amd64
-  timeout: 90m
+  timeout: 3h
   allow_failure: true
   rules:
   - if: $CI_PIPELINE_SOURCE == "schedule"
@@ -238,6 +238,9 @@ acceptance-android:
   - when: manual
   variables:
     MURMUR_REQUIRE_NODE: "1"
+    # Every instruction emulated: a passphrase's 600,000 rounds of PBKDF2
+    # take minutes, so the suite waits six times as long.
+    ACCEPTANCE_SLOW: "1"
   script:
   # Libraries the emulator loads even without a window, and JDK 17: the key
   # store plugin (biometric_storage) asks Gradle for a Java 17 toolchain,
