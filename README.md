@@ -85,10 +85,10 @@ A page opened with `?node=host:port` (for example `http://localhost:8080/?node=1
 
 ## Running
 
-The repo holds the Dart code (`lib/`, `test/`, `tool/`), the web shell (`web/`), the Windows and Linux apps' shells (`windows/`, `linux/`: shown as Murmur, with the app's icon) and `pubspec.yaml`, but not the other native platform folders. Generate those once:
+The repo holds the Dart code (`lib/`, `test/`, `tool/`), the web shell (`web/`), the Windows, Linux and iPhone apps' shells (`windows/`, `linux/`, `ios/`: shown as Murmur, with the app's icon) and `pubspec.yaml`, but not the other native platform folders. Generate those once:
 
 ```
-flutter create . --platforms=macos,android,ios --project-name murmur_client --org info.murmur
+flutter create . --platforms=android --project-name murmur_client --org info.murmur
 flutter pub get
 flutter test
 flutter run -d windows
@@ -99,7 +99,7 @@ flutter run -d windows
 Platform notes:
 
 - **Android:** add `<uses-permission android:name="android.permission.INTERNET"/>` and `<uses-permission android:name="android.permission.USE_BIOMETRIC"/>` to `android/app/src/main/AndroidManifest.xml`. Make `MainActivity` extend `FlutterFragmentActivity`: the key store (`biometric_storage`) needs it. Notifications (`flutter_local_notifications`) need `compileSdk = 36` and core library desugaring in `android/app/build.gradle.kts`: `isCoreLibraryDesugaringEnabled = true` under `compileOptions`, and `coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")` under `dependencies`. From the emulator, the host machine's node is at `10.0.2.2`.
-- **iOS:** add `NSFaceIDUsageDescription` ("Confirm it's you before your wallet seed is shown") to `ios/Runner/Info.plist`.
+- **iOS:** `ios/` is committed: bundle id `info.murmur.client`, the name Murmur, the icon (`tool/render_brand.dart`) and the Face ID reason. Builds for the simulator need nothing more; builds for iPhones need the Apple developer account's signing.
 - **macOS:** add `com.apple.security.network.client` = `true` to both `macos/Runner/*.entitlements` files.
 - **Linux:** secure storage needs `libsecret-1-dev` to build.
 - **Web:** browsers can't open raw TCP sockets, so the web build connects to a local WebSocket bridge (default `ws://127.0.0.1:7880`), and the bridge relays to the node:
@@ -246,7 +246,8 @@ For how the code works, the rules it keeps, recipes and known gaps, see [AGENTS.
 | `lib/ui/l10n.dart` | Language list, number and date formatting, wording of client errors |
 | `lib/ui/brand.dart` | Copper-on-ink palette and themes, and the logo (from `murmur-logo.svg` / `murmur-logo-badge.svg`) |
 | `lib/ui/glyphs.dart` | The app's icons, drawn in the logo's node-and-line style |
-| `tool/render_brand.dart` | `flutter test tool/render_brand.dart` regenerates the web icons from the logo and writes a glyph preview to `build/brand_preview.png` |
+| `tool/ios_simulator.sh` | Boots an iPhone simulator and prints its id, for the acceptance tests on a Mac |
+| `tool/render_brand.dart` | `flutter test tool/render_brand.dart` regenerates the web, desktop and iPhone icons from the logo and writes a glyph preview to `build/brand_preview.png` |
 | `test/protocol_test.dart` | Genesis hashes pinned in `consensus.rs`, RFC 8032 vector, wire round-trips |
 | `test/ui_test.dart` | Every language builds, digit grouping per locale, the paging rule |
 

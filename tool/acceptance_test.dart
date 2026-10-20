@@ -7,6 +7,7 @@
 //   ACCEPTANCE_DEVICE=chrome flutter test tool/acceptance_test.dart    # a browser, with a passphrase
 //   ACCEPTANCE_DEVICE=chrome-passkey flutter test tool/acceptance_test.dart   # a browser, with a passkey
 //   ACCEPTANCE_DEVICE=emulator-5554 flutter test tool/acceptance_test.dart   # an Android emulator
+//   ACCEPTANCE_DEVICE=$(tool/ios_simulator.sh) flutter test tool/acceptance_test.dart   # an iPhone simulator (macOS)
 //
 // A browser run uses the pinned "Chrome for Testing" and its chromedriver
 // (`dart run tool/fetch_test_browser.dart` downloads them): the driver is

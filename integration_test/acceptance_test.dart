@@ -1,6 +1,6 @@
 // What a user does with the app, start to finish, inside the built app and
 // against a real node on a demo chain: the same test on every flavour (a
-// browser, Android, Windows, Linux). Run it through its runner, which
+// browser, Android, iOS, Windows, Linux). Run it through its runner, which
 // builds the chain, starts the node and picks the device:
 //
 //   flutter test tool/acceptance_test.dart              # this desktop
@@ -233,7 +233,8 @@ void main() {
     // And off again.
     await app.switchOnNotifications(l.notifyReplies);
     expect(app.prefs.notifyTopics, isEmpty);
-  });
+    // Not where the app offers none (iOS, for now).
+  }, skip: !notificationsSupported);
 
   testWidgets("a desktop's own node: it runs beside the app, and mines on the graphics card or says why not",
       (tester) async {

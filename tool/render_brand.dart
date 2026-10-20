@@ -6,9 +6,11 @@
 // Writes web/favicon.png, web/icons/Icon-{192,512}.png (the rounded badge),
 // web/icons/Icon-maskable-{192,512}.png (full bleed, logo inside the maskable
 // safe zone), windows/runner/resources/app_icon.ico and
-// linux/runner/resources/app_icon.png (the badge, for the desktop apps) and
+// linux/runner/resources/app_icon.png (the badge, for the desktop apps),
+// ios/Runner/Assets.xcassets/AppIcon.appiconset (the iPhone's, opaque) and
 // build/brand_preview.png.
 
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
@@ -44,6 +46,75 @@ Future<void> _renderIcon(String path, int size, {required bool maskable}) async 
   }
   final image = await recorder.endRecording().toImage(size, size);
   await _writePng(image, path);
+}
+
+/// Writes `image` as a PNG without an alpha channel (colour type 2), as
+/// Apple requires of an app icon: Flutter's own encoder always writes one.
+Future<void> _writeOpaquePng(ui.Image image, String path) async {
+  final rgba = (await image.toByteData(format: ui.ImageByteFormat.rawRgba))!.buffer.asUint8List();
+  final w = image.width, h = image.height;
+  // Each row: filter type 0, then its pixels' red, green and blue.
+  final raw = Uint8List(h * (1 + w * 3));
+  for (var y = 0, o = 0; y < h; y++) {
+    raw[o++] = 0;
+    for (var x = 0; x < w; x++) {
+      final i = (y * w + x) * 4;
+      raw[o++] = rgba[i];
+      raw[o++] = rgba[i + 1];
+      raw[o++] = rgba[i + 2];
+    }
+  }
+  final out = BytesBuilder();
+  void chunk(String type, List<int> data) {
+    final typed = [...type.codeUnits, ...data];
+    out
+      ..add(_u32(data.length))
+      ..add(typed)
+      ..add(_u32(_crc32(typed)));
+  }
+
+  out.add(const [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  chunk('IHDR', [..._u32(w), ..._u32(h), 8, 2, 0, 0, 0]);
+  chunk('IDAT', ZLibCodec(level: 9).encode(raw));
+  chunk('IEND', const []);
+  File(path)
+    ..createSync(recursive: true)
+    ..writeAsBytesSync(out.takeBytes());
+}
+
+List<int> _u32(int v) => [(v >> 24) & 0xff, (v >> 16) & 0xff, (v >> 8) & 0xff, v & 0xff];
+
+int _crc32(List<int> bytes) {
+  var c = 0xffffffff;
+  for (final b in bytes) {
+    c ^= b;
+    for (var k = 0; k < 8; k++) {
+      c = (c & 1) != 0 ? 0xedb88320 ^ (c >> 1) : c >> 1;
+    }
+  }
+  return c ^ 0xffffffff;
+}
+
+/// The iPhone's app icon: one 1024-pixel image that Xcode scales (a
+/// single-size icon set), full bleed on the app's ink, which iOS rounds
+/// itself; opaque, as Apple requires. Any other images in the set go.
+Future<void> _writeIosIcon(String set) async {
+  const size = 1024, s = 1024.0, logo = s * 0.6;
+  final recorder = ui.PictureRecorder();
+  final canvas = Canvas(recorder);
+  canvas.drawRect(Offset.zero & const Size(s, s), Paint()..color = BrandColors.ink);
+  canvas.translate((s - logo) / 2, (s - logo) / 2 - s * 0.02);
+  paintLogo(canvas, const Size(logo, logo), BrandColors.copper);
+  for (final f in Directory(set).listSync().whereType<File>()) {
+    if (f.path.endsWith('.png')) f.deleteSync();
+  }
+  await _writeOpaquePng(await recorder.endRecording().toImage(size, size), '$set/AppIcon-1024.png');
+  File('$set/Contents.json').writeAsStringSync(const JsonEncoder.withIndent('  ').convert({
+    'images': [
+      {'filename': 'AppIcon-1024.png', 'idiom': 'universal', 'platform': 'ios', 'size': '1024x1024'},
+    ],
+    'info': {'author': 'xcode', 'version': 1},
+  }));
 }
 
 /// The badge at `size`, as an image.
@@ -124,6 +195,7 @@ void main() {
       await _renderIcon('web/icons/Icon-maskable-512.png', 512, maskable: true);
       await _writeIco('windows/runner/resources/app_icon.ico', const [16, 24, 32, 48, 64, 256]);
       await _writePng(await _badge(256), 'linux/runner/resources/app_icon.png');
+      await _writeIosIcon('ios/Runner/Assets.xcassets/AppIcon.appiconset');
     });
   });
 

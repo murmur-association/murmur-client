@@ -176,56 +176,44 @@ probe-android-emulator:
   - adb shell getprop ro.build.version.release
   - adb emu kill || true
 
-# iOS: a simulator on the macOS runners, and a Flutter test inside an app on
-# it, as the acceptance tests would run (Flutter's own in-app tests need no
-# UI automation, which these headless runners don't offer).
-probe-ios-simulator:
-  extends: .probe
+# The acceptance tests in an iPhone simulator, on GitLab's macOS runner (the
+# trial of 2026-10-20 found a simulator there, and a Flutter app's tests
+# running in it), against a node of their own: the node's macOS build. It
+# costs macOS minutes, so it runs by itself on the default branch and on
+# tags, and by hand elsewhere. New, so allowed to fail until it has run
+# green.
+acceptance-ios:
+  stage: test
   image: macos-26-xcode-26
   tags:
   - saas-macos-medium-m1
   timeout: 60m
+  allow_failure: true
+  rules:
+  - if: $CI_PIPELINE_SOURCE == "schedule"
+    when: never
+  - if: $CI_COMMIT_TAG || $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  - when: manual
+  variables:
+    MURMUR_REQUIRE_NODE: "1"
+    PUB_CACHE: "$CI_PROJECT_DIR/.pub-cache"
+  cache:
+  - key: flutter-sdk-macos-$FLUTTER_VERSION
+    paths:
+    - .flutter-sdk-macos/
   script:
-  - sw_vers
-  - xcodebuild -version
-  - xcrun simctl list runtimes
-  # The newest iOS runtime, and an iPhone it says it supports (not every
-  # iPhone Xcode knows runs every runtime).
   - |
-    read -r runtime device <<< "$(xcrun simctl list runtimes -j | python3 -c '
-    import json, sys
-    ios = [r for r in json.load(sys.stdin)["runtimes"] if r["platform"] == "iOS" and r["isAvailable"]][-1]
-    phones = [d["identifier"] for d in ios["supportedDeviceTypes"] if d["productFamily"] == "iPhone"]
-    print(ios["identifier"], phones[-1])')"
-  - echo "runtime $runtime, device type $device"
-  - udid=$(xcrun simctl create probe "$device" "$runtime")
-  - xcrun simctl boot "$udid"
-  - xcrun simctl bootstatus "$udid" -b
-  - git clone --depth 1 --branch "$FLUTTER_VERSION" https://github.com/flutter/flutter.git "$HOME/flutter"
-  - export PATH="$HOME/flutter/bin:$PATH"
-  - flutter create --platforms=ios --project-name probe "$HOME/probe"
-  - cd "$HOME/probe"
-  - flutter pub add 'dev:integration_test:{"sdk":"flutter"}'
-  - mkdir -p integration_test
-  - |
-    cat > integration_test/probe_test.dart <<'EOF'
-    import 'package:flutter/material.dart';
-    import 'package:flutter_test/flutter_test.dart';
-    import 'package:integration_test/integration_test.dart';
-    import 'package:probe/main.dart' as app;
-
-    void main() {
-      IntegrationTestWidgetsFlutterBinding.ensureInitialized();
-      testWidgets('an app runs on the simulator, and a test drives it', (tester) async {
-        app.main();
-        await tester.pumpAndSettle();
-        await tester.tap(find.byIcon(Icons.add));
-        await tester.pumpAndSettle();
-        expect(find.text('1'), findsOneWidget);
-      });
-    }
-    EOF
-  - flutter test integration_test/probe_test.dart -d "$udid"
+    if [ "$(cat .flutter-sdk-macos/.ci-version 2>/dev/null)" != "$FLUTTER_VERSION" ]; then
+      rm -rf .flutter-sdk-macos
+      git clone --depth 1 --branch "$FLUTTER_VERSION" https://github.com/flutter/flutter.git .flutter-sdk-macos
+      echo "$FLUTTER_VERSION" > .flutter-sdk-macos/.ci-version
+    fi
+  - export PATH="$CI_PROJECT_DIR/.flutter-sdk-macos/bin:$PATH"
+  - flutter --version
+  - flutter pub get
+  - dart run tool/bundle_node.dart --for-tests
+  - export ACCEPTANCE_DEVICE=$(tool/ios_simulator.sh)
+  - flutter test tool/acceptance_test.dart
 
 build-web:
   extends:
