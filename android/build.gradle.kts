@@ -19,11 +19,14 @@ subprojects {
 // plugin (biometric_storage 5) asks for 31, while the androidx.biometric it
 // uses needs 33 or later. Compiling against a newer SDK changes nothing on
 // the devices it runs on (minSdk and targetSdk decide that).
+// (finalizeDsl: after the plugin's own settings, before they're used; later
+// than that, Gradle refuses the change.)
 subprojects {
     plugins.withId("com.android.library") {
-        afterEvaluate {
-            val android = extensions.getByType<com.android.build.gradle.LibraryExtension>()
-            if ((android.compileSdk ?: 0) < 36) android.compileSdk = 36
+        extensions.configure<com.android.build.api.variant.LibraryAndroidComponentsExtension> {
+            finalizeDsl { android ->
+                if ((android.compileSdk ?: 0) < 36) android.compileSdk = 36
+            }
         }
     }
 }
