@@ -40,6 +40,8 @@ dev_dependencies:
     sdk: flutter
   # The stand-in notification server of a Linux test session (tool/notification_server.dart).
   dbus: ^0.8.0
+  # Reading .gitlab-ci.yml in test/ci_config_test.dart.
+  yaml: ^3.1.4
 
 flutter:
   uses-material-design: true
