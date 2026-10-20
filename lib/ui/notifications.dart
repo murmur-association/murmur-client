@@ -129,21 +129,35 @@ class NewsNotifications {
     var shown = 0;
     if (show) {
       for (final n in news.take(maxShown)) {
-        await _show(l, n);
-        shown++;
+        if (await _tried(() => _show(l, n))) shown++;
       }
       if (news.length > maxShown) {
-        await notifier.show(
-          id: moreId,
-          title: l.appTitle,
-          body: l.notifyMore(news.length - maxShown),
-          payload: '',
-          channel: l.notifyChannel,
-        );
+        await _tried(() => notifier.show(
+              id: moreId,
+              title: l.appTitle,
+              body: l.notifyMore(news.length - maxShown),
+              payload: '',
+              channel: l.notifyChannel,
+            ));
       }
     }
+    // Told, shown or not: a system that refused once isn't asked again for
+    // the same news at every check.
     await prefs.setNotified([for (final n in news) n.txid], until);
     return shown;
+  }
+
+  /// Whether the system took the notification `show` gives it. A system
+  /// may refuse (notifications switched off for the app, no desktop to show
+  /// them on): the app goes on all the same.
+  static Future<bool> _tried(Future<void> Function() show) async {
+    try {
+      await show();
+      return true;
+    } catch (e) {
+      debugPrint('the system refused a notification: $e');
+      return false;
+    }
   }
 
   Future<void> _show(AppLocalizations l, News n) {

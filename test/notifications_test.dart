@@ -211,6 +211,15 @@ void main() {
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
     });
 
+    test('a system that refuses shows nothing, and the app goes on', () async {
+      notifier.refuse = true;
+      final reply = replyTo(thread, 20);
+      chain.add([reply]);
+      expect(await news.check(l), 0);
+      expect(notifier.shown, isEmpty);
+      expect(prefs.notifiedIds, [reply.tx.id], reason: 'not asked again at every check');
+    });
+
     test('a block older than the last one told is still looked at', () async {
       chain.add([replyTo(thread, 40)]);
       await news.check(l);

@@ -148,33 +148,73 @@ acceptance:
   - when: manual
   allow_failure: true
 
-# Android: an emulator needs the processor's virtualisation (KVM) inside the
-# job's machine, which GitLab's documentation doesn't promise. If it's
-# there, an emulator is booted, and the time it takes is the answer.
+# Android: GitLab's hosted Linux runner has no KVM (the trial of 2026-10-20
+# found no virtualisation flag and no /dev/kvm). This measures what an
+# emulator without acceleration costs there: how long an Android 10 image
+# without Google's apps takes to boot, then a minimal Flutter app's test on
+# it, as the iOS trial ran one. The times in its log decide whether a
+# nightly Android job on GitLab is realistic.
 probe-android-emulator:
   extends: .probe
   image: ghcr.io/cirruslabs/flutter:3.44.0
   tags:
   - saas-linux-large-amd64
-  timeout: 40m
+  timeout: 2h
   script:
   - grep -cE 'vmx|svm' /proc/cpuinfo || echo 'no virtualisation flag in /proc/cpuinfo'
-  - ls -l /dev/kvm || true
-  - |
-    test -r /dev/kvm && test -w /dev/kvm || { echo 'NO KVM: an Android emulator cannot run on this runner'; exit 1; }
   # Libraries the emulator loads even without a window.
   - apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends libpulse0 libnss3 libgbm1 libxkbfile1 libxcomposite1 libxcursor1 libxdamage1 libxi6 libxtst6 >/dev/null || true
   - yes | sdkmanager --licenses >/dev/null
-  - sdkmanager --install emulator 'system-images;android-35;google_apis;x86_64' >/dev/null
-  - echo no | avdmanager create avd -n probe -k 'system-images;android-35;google_apis;x86_64' -d pixel_6
+  - sdkmanager --install emulator platform-tools 'system-images;android-29;default;x86_64' >/dev/null
+  - $ANDROID_HOME/emulator/emulator -version | head -1
+  - echo no | avdmanager create avd -n probe -k 'system-images;android-29;default;x86_64' -d pixel_6
   - start=$(date +%s)
-  - $ANDROID_HOME/emulator/emulator -avd probe -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect -accel on &
-  - adb wait-for-device
-  - timeout 900 sh -c 'until [ "$(adb shell getprop sys.boot_completed | tr -d "\r")" = 1 ]; do sleep 5; done'
   - |
-    echo "KVM there: the emulator booted in $(( $(date +%s) - start )) s"
+    $ANDROID_HOME/emulator/emulator -avd probe -accel off -no-window -no-audio -no-boot-anim -no-snapshot \
+      -gpu swiftshader_indirect -cores 4 -memory 4096 > emulator.log 2>&1 &
+  - sleep 30
+  - |
+    if ! pgrep -f 'emulator.*-avd probe' >/dev/null; then
+      echo 'THE EMULATOR WOULD NOT RUN WITHOUT ACCELERATION'; cat emulator.log; exit 1
+    fi
+  - timeout 1800 adb wait-for-device
+  - |
+    timeout 3600 sh -c 'until [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d "\r")" = 1 ]; do sleep 15; done'
+  - |
+    echo "BOOT without acceleration: $(( $(date +%s) - start )) s"
   - adb shell getprop ro.build.version.release
-  - adb emu kill || true
+  - flutter create --platforms=android --project-name probe "$HOME/probe"
+  - cd "$HOME/probe"
+  - flutter pub add 'dev:integration_test:{"sdk":"flutter"}'
+  - mkdir -p integration_test
+  - |
+    cat > integration_test/probe_test.dart <<'DART'
+    import 'package:flutter/material.dart';
+    import 'package:flutter_test/flutter_test.dart';
+    import 'package:integration_test/integration_test.dart';
+    import 'package:probe/main.dart' as app;
+
+    void main() {
+      IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+      testWidgets('an app runs on the emulator, and a test drives it', (tester) async {
+        app.main();
+        await tester.pumpAndSettle();
+        await tester.tap(find.byIcon(Icons.add));
+        await tester.pumpAndSettle();
+        expect(find.text('1'), findsOneWidget);
+      });
+    }
+    DART
+  - built=$(date +%s)
+  - flutter build apk --debug
+  - |
+    echo "APK build: $(( $(date +%s) - built )) s"
+  - tested=$(date +%s)
+  - flutter test integration_test/probe_test.dart -d emulator-5554
+  - |
+    echo "APP TEST on the emulator without acceleration: $(( $(date +%s) - tested )) s"
+  after_script:
+  - tail -n 40 emulator.log || true
 
 # The acceptance tests in an iPhone simulator, on GitLab's macOS runner (the
 # trial of 2026-10-20 found a simulator there, and a Flutter app's tests
@@ -369,25 +409,16 @@ build-web-testnet:
     - build/web/
     expire_in: 1 week
 
-# The Windows app for the testnet, as a zip to unpack and run: the app
-# (shown as Murmur, murmur_client.exe), the pinned node beside it
-# (tool/bundle_node.dart), the Visual C++ runtime and the notices
-# (tool/package_desktop.dart), after tool/desktop_smoke_test.dart has tried it.
-# On GitLab's Windows runner, like the node's own Windows build. Allowed to
-# fail: it must never hold back the page's release. A failure shows as a
-# warning on the pipeline, and that release then has no Windows download
-# (its link on the release page leads nowhere).
-build-windows:
-  extends: .on-release-tag
-  stage: build
+# GitLab's Windows runner, ready to build the app: the pinned Flutter SDK
+# (cloned and cached, as on Linux) and Visual Studio's ATL.
+.flutter-windows:
   tags:
   - saas-windows-medium-amd64
-  allow_failure: true
   cache:
   - key: flutter-sdk-windows-$FLUTTER_VERSION
     paths:
     - .flutter-sdk-windows/
-  script:
+  before_script:
   - |
     if ((Get-Content .flutter-sdk-windows/.ci-version -ErrorAction SilentlyContinue) -ne $env:FLUTTER_VERSION) {
       Remove-Item -Recurse -Force .flutter-sdk-windows -ErrorAction SilentlyContinue
@@ -409,9 +440,66 @@ build-windows:
       # 3010 means done, restart wanted: not needed to compile.
       if ($p.ExitCode -ne 0 -and $p.ExitCode -ne 3010) { exit 1 }
     }
-  # What the runner has to build with, for when this job fails.
+  # What the runner has to build with, for when a job fails.
   - flutter doctor -v
   - flutter pub get
+
+# The acceptance tests in the Windows app, on GitLab's Windows runner,
+# against a node of their own. The runner is a server system without a
+# graphics card or the Visual C++ runtime (see build-windows), so the debug
+# app the tests build gets, beside it, the software graphics the smoke test
+# uses and Visual Studio's debug runtime, and the node gets the release
+# runtime. The app keeps its settings in memory here (app_driver.dart), so
+# Windows' own storage isn't needed. It costs Windows minutes: by itself on
+# the default branch and on tags, by hand elsewhere. New, so allowed to
+# fail until it has run green.
+acceptance-windows:
+  extends: .flutter-windows
+  stage: test
+  timeout: 60m
+  allow_failure: true
+  rules:
+  - if: $CI_PIPELINE_SOURCE == "schedule"
+    when: never
+  - if: $CI_COMMIT_TAG || $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  - when: manual
+  variables:
+    MURMUR_REQUIRE_NODE: "1"
+  script:
+  - dart run tool/bundle_node.dart --for-tests
+  # The debug build first, so its folder is there to put things beside the
+  # app; the tests' own build fills the same folder.
+  - flutter build windows --debug
+  - $app = "build\windows\x64\runner\Debug"
+  - powershell -NoProfile -ExecutionPolicy Bypass -File tool\fetch_test_graphics.ps1 -Into $app
+  - if ($LASTEXITCODE -ne 0) { exit 1 }
+  - |
+    $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -property installationPath
+    $debug = Get-ChildItem "$vs\VC\Redist\MSVC\*\debug_nonredist\x64\Microsoft.VC14*.DebugCRT\*.dll" | Sort-Object FullName
+    $ucrt = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\ucrt\ucrtbased.dll" | Sort-Object FullName | Select-Object -Last 1
+    $release = Get-ChildItem "$vs\VC\Redist\MSVC\*\x64\Microsoft.VC14*.CRT\*.dll" | Sort-Object FullName
+    $debug + $ucrt | ForEach-Object { Copy-Item $_.FullName $app -Force }
+    $release | ForEach-Object { Copy-Item $_.FullName build\node -Force }
+    Write-Output "debug runtime beside the app: $(($debug + $ucrt).Name -join ', '); release runtime beside the node: $($release.Name -join ', ')"
+  - dart run tool/desktop_smoke_test.dart --check-system $app
+  - flutter test tool/acceptance_test.dart
+  - if ($LASTEXITCODE -ne 0) { exit 1 }
+
+# The Windows app for the testnet, as a zip to unpack and run: the app
+# (shown as Murmur, murmur_client.exe), the pinned node beside it
+# (tool/bundle_node.dart), the Visual C++ runtime and the notices
+# (tool/package_desktop.dart), after tool/desktop_smoke_test.dart has tried it.
+# On GitLab's Windows runner, like the node's own Windows build. Allowed to
+# fail: it must never hold back the page's release. A failure shows as a
+# warning on the pipeline, and that release then has no Windows download
+# (its link on the release page leads nowhere).
+build-windows:
+  extends:
+  - .on-release-tag
+  - .flutter-windows
+  stage: build
+  allow_failure: true
+  script:
   # First a build whose own node stays off the public network, to try: its
   # node starts and stops with it, a node left by a killed app is replaced,
   # and a wallet is saved through Windows' own secure storage. The runner's

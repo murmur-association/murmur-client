@@ -7,6 +7,9 @@ class RecordingNotifier implements Notifier {
   RecordingNotifier({this.grant = true});
 
   bool grant;
+
+  /// Whether showing fails, as a system with nowhere to show it does.
+  bool refuse = false;
   final shown = <({int id, String title, String body, String payload})>[];
   var asked = 0;
 
@@ -27,8 +30,10 @@ class RecordingNotifier implements Notifier {
     required String payload,
     required String channel,
     int? when,
-  }) async =>
-      shown.add((id: id, title: title, body: body, payload: payload));
+  }) async {
+    if (refuse) throw StateError('no notifications here');
+    shown.add((id: id, title: title, body: body, payload: payload));
+  }
 
   @override
   Future<String?> launchPayload() async => null;
