@@ -239,8 +239,10 @@ acceptance-android:
   variables:
     MURMUR_REQUIRE_NODE: "1"
   script:
-  # Libraries the emulator loads even without a window.
-  - apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends libpulse0 libnss3 libgbm1 libxkbfile1 libxcomposite1 libxcursor1 libxdamage1 libxi6 libxtst6 >/dev/null
+  # Libraries the emulator loads even without a window, and JDK 17: the key
+  # store plugin (biometric_storage) asks Gradle for a Java 17 toolchain,
+  # which the image doesn't have (the first run's build stopped there).
+  - apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends libpulse0 libnss3 libgbm1 libxkbfile1 libxcomposite1 libxcursor1 libxdamage1 libxi6 libxtst6 openjdk-17-jdk-headless >/dev/null
   - dart run tool/bundle_node.dart --for-tests
   - export ACCEPTANCE_DEVICE=$(tool/android_emulator.sh)
   - flutter test tool/acceptance_test.dart
