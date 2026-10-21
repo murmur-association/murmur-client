@@ -8,7 +8,9 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:murmur_client/crypto/wallet.dart' show WalletId;
+import 'package:murmur_client/protocol/alias.dart';
 import 'package:murmur_client/protocol/models.dart';
+import 'package:murmur_client/protocol/profile.dart';
 import 'package:murmur_client/protocol/wire.dart';
 import 'package:murmur_client/services/fees.dart';
 import 'package:murmur_client/services/node_client.dart';
@@ -44,6 +46,9 @@ class _FeeChain extends FakeChain {
   @override
   int? availableTo(String address) => 100 * unitsPerToken;
 
+  /// The message the page last checked before its summary.
+  Uint8List? checked;
+
   @override
   TxProblem? checkTransaction({
     required String fromAddress,
@@ -54,8 +59,10 @@ class _FeeChain extends FakeChain {
     Uint8List? message,
     String? reference,
     List<String> mentions = const [],
-  }) =>
-      null;
+  }) {
+    checked = message;
+    return null;
+  }
 }
 
 void main() {
@@ -134,5 +141,38 @@ void main() {
     expect(find.textContaining('Above the suggested fee'), findsOneWidget);
     await tester.tap(find.text(l.cancel));
     await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('a public name with a picture is sent as a profile, and without one as an alias', (tester) async {
+    final picture = ProfilePicture([for (var i = 0; i < 16; i++) i * 0x111111],
+        Uint8List.fromList([for (var i = 0; i < 1024; i++) i % 16]));
+    for (final withPicture in [true, false]) {
+      final chain = _FeeChain(const []);
+      tester.view.physicalSize = const Size(900, 1600);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(AppScope(
+        client: chain,
+        wallets: WalletController()..wallet = WalletId(alice, Uint8List(32)),
+        prefs: Preferences(),
+        child: MaterialApp(
+          theme: lightTheme,
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: ComposePage(alias: 'bob', picture: withPicture ? picture : null),
+        ),
+      ));
+      await tester.pump();
+      await tester.pump();
+      final l = tester.element(find.byType(ComposePage)).l10n;
+      expect(find.text(withPicture ? l.profileSetTo('bob') : l.aliasSetTo('bob')), findsOneWidget);
+      // The page shows the picture being published, not the one published now.
+      expect(tester.widget<PicturePreview>(find.byType(PicturePreview)).picture, withPicture ? picture : isNull);
+      await tester.tap(find.widgetWithText(FilledButton, l.signAndSend));
+      await tester.pumpAndSettle();
+      expect(chain.checked, withPicture ? profileMessage('bob', picture) : aliasMessage('bob'));
+      await tester.tap(find.text(l.cancel));
+      await tester.pumpWidget(const SizedBox());
+    }
   });
 }

@@ -46,6 +46,7 @@ import '../protocol/consensus.dart';
 import '../protocol/header_chain.dart';
 import '../protocol/models.dart';
 import '../protocol/network.dart';
+import '../protocol/profile.dart';
 import '../protocol/wire.dart';
 import 'aliases.dart';
 import 'chain_cache.dart';
@@ -1560,6 +1561,27 @@ class MurmurClient extends ChangeNotifier {
   /// content no node serves any more: there is nothing older to fall back
   /// on, so a replaced name never shows.
   String? publishedAlias(String address) {
+    final content = _nameContentOf(address)?.$2;
+    return content == null ? null : nameIn(content);
+  }
+
+  /// The picture `address` published with its name (a profile, Section
+  /// 7.8), proven as [publishedAlias] is. Null for none, or none known yet.
+  /// The same object while the address's Name is the same, so views can
+  /// keep what they draw from it.
+  ProfilePicture? publishedPicture(String address) {
+    final (key, content) = _nameContentOf(address) ?? (null, null);
+    if (key == null || content!.length != profileContentSize) return null;
+    return _pictures[key] ??= pictureIn(content);
+  }
+
+  /// Pictures read from Name content, by the content's hash.
+  final Map<String, ProfilePicture?> _pictures = {};
+
+  /// The content of `address`'s latest Name, with its hash in hex, proven
+  /// against the state and checked against that hash; null until both are
+  /// at hand, or when no node serves it. Watches the address's Name entry.
+  (String, Uint8List)? _nameContentOf(String address) {
     final p = _watchKey(nameKey(fromHex(address)), slow: true);
     final hash = p?.value;
     if (hash == null || hash.length != 32) return null;
@@ -1573,7 +1595,7 @@ class MurmurClient extends ChangeNotifier {
       }
       return null;
     }
-    return nameIn(content);
+    return (key, content);
   }
 
   /// Name messages to fetch by hash alone (the state names them, not a
@@ -3485,10 +3507,11 @@ class MurmurClient extends ChangeNotifier {
       if (!wanted.containsKey(key) || _contents.containsKey(key) || _withdrawnContent.contains(key)) continue;
       final tx = wanted[key];
       // Only what we asked for, and only valid content: its hash, and its
-      // length (a name's is fixed; a message's is its transaction's).
+      // length (a name's is an alias's or a profile's; a message's is its
+      // transaction's).
       final valid = tx != null
           ? tx.isContent(item.content)
-          : item.content.length == protocol_alias.aliasContentSize && toHex(sha256Bytes(item.content)) == key;
+          : isNameContentSize(item.content.length) && toHex(sha256Bytes(item.content)) == key;
       if (!valid) continue;
       _contents[key] = item.content;
       _unsavedContents[key] = item.content;

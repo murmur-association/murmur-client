@@ -24,6 +24,35 @@ Future<T?> showAppDialog<T>({
       builder: (context) => ConfirmOnEnter(child: Builder(builder: builder)),
     );
 
+/// A text field's controller that lives as long as the dialog holding it:
+/// disposed when the dialog's route is gone, not when [showAppDialog]
+/// returns, since the closing animation still builds the field (a
+/// controller disposed then failed the acceptance tests).
+class WithTextController extends StatefulWidget {
+  const WithTextController({super.key, this.text = '', required this.builder});
+
+  /// What the field starts with.
+  final String text;
+
+  final Widget Function(BuildContext context, TextEditingController controller) builder;
+
+  @override
+  State<WithTextController> createState() => _WithTextControllerState();
+}
+
+class _WithTextControllerState extends State<WithTextController> {
+  late final _controller = TextEditingController(text: widget.text);
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.builder(context, _controller);
+}
+
 /// Presses the [FilledButton] below it when Enter is pressed, while its
 /// route is the one on top. See [showAppDialog].
 class ConfirmOnEnter extends StatefulWidget {

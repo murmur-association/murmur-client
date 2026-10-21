@@ -1661,6 +1661,14 @@ class AppLocalizationsNl extends AppLocalizations {
   String get aliasCleared => 'Openbare naam gewist';
 
   @override
+  String profileSetTo(String name) {
+    return 'Openbare naam en afbeelding: $name';
+  }
+
+  @override
+  String get profilePictureOnly => 'Openbare afbeelding, zonder naam';
+
+  @override
   String get nonTextMessage => '(geen tekst: gegevens voor een app-conventie)';
 
   @override
@@ -1779,6 +1787,38 @@ class AppLocalizationsNl extends AppLocalizations {
 
   @override
   String get publicNameClear => '**Laat leeg** om hem te wissen.';
+
+  @override
+  String get publicNamePicture => 'Afbeelding';
+
+  @override
+  String get pictureFromPhotos => 'Uit foto’s';
+
+  @override
+  String get pictureFromFiles => 'Uit bestanden';
+
+  @override
+  String get pictureChoose => 'Kies een afbeelding';
+
+  @override
+  String get pictureRemove => 'Afbeelding verwijderen';
+
+  @override
+  String pictureTooLarge(String size) {
+    return 'Dat bestand is te groot: kies er een onder $size MB.';
+  }
+
+  @override
+  String get pictureUnreadable =>
+      'Dat bestand kan niet als afbeelding worden gelezen.';
+
+  @override
+  String get picturePoint =>
+      '**32 × 32 pixels, 16 kleuren**, in plaats van het teken van je adres.';
+
+  @override
+  String get pictureCost =>
+      '**Ongeveer drie keer zo duur** met een afbeelding.';
 
   @override
   String get passkeyNoPrfTitle =>

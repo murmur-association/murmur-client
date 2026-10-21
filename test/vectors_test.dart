@@ -1,6 +1,6 @@
 // The node's test vectors for protocol 14: those PROTOCOL.md gives without a
 // chain (Sections 2.2, 3.1, 3.2, 3.6, 4 and 6), and `vectors/demo-14.txt`,
-// a twelve-block chain on the demo network that the node's own tests rebuild
+// a thirteen-block chain on the demo network that the node's own tests rebuild
 // byte for byte (copied here as test/vectors/demo-14.txt). The chain is
 // rebuilt here from its transactions and nonces: every header's target,
 // commitments and hash, the state entries, a filter, and the node's answers
@@ -17,6 +17,7 @@ import 'package:murmur_client/protocol/commitments.dart';
 import 'package:murmur_client/protocol/consensus.dart';
 import 'package:murmur_client/protocol/models.dart';
 import 'package:murmur_client/protocol/network.dart';
+import 'package:murmur_client/protocol/profile.dart';
 import 'package:murmur_client/protocol/quote.dart';
 import 'package:murmur_client/protocol/wire.dart';
 
@@ -412,7 +413,7 @@ void main() {
     final chain = <BlockHeader>[net.genesisHeader()];
     final blocks = <Block>[Block(chain.first, const [])];
     final history = HistoryPeaks();
-    for (var n = 1; n <= 12; n++) {
+    for (var n = 1; v.blocks.containsKey(n); n++) {
       history.pushHeader(chain.last);
       final txs = txsOf(n);
       final time = 1000000 + 2 * n;
@@ -438,19 +439,19 @@ void main() {
       expect((await MurmurWallet.fromSeed(_filled(2))).address, bob);
       expect(toHex(net.genesisHeader().hash), v.one(0, 'genesis'));
       var seen = 0;
-      for (var n = 1; n <= 12; n++) {
+      for (var n = 1; v.blocks.containsKey(n); n++) {
         for (final (name, value) in v.blocks[n]!) {
           if (!name.endsWith('.txid')) continue;
           expect(tx(v.one(n, name.substring(0, name.length - 5))).id, value, reason: name);
           seen++;
         }
       }
-      expect(seen, 18);
+      expect(seen, 19);
     });
 
     test('every block: target, merkle root, filter hash, history root, proof of work and hash', () {
       final peaks = HistoryPeaks();
-      for (var n = 1; n <= 12; n++) {
+      for (var n = 1; v.blocks.containsKey(n); n++) {
         final h = chain[n];
         expect(toHex(h.target), v.one(n, 'target'), reason: 'target of block $n');
         expect(toHex(h.merkleRoot), v.one(n, 'merkle_root'), reason: 'merkle root of block $n');
@@ -530,6 +531,16 @@ void main() {
       expect(ofName.events, 1);
       expect(ofName.eventsRoot, listRoot([blocks[8].transactions[1].hash]));
       expect(toHex(threadKey(blocks[7].transactions.single.hash)), keyOf(7, 'thread of name1'));
+
+      // Block 13: bob's name is a profile, Section 7.8's example, after a
+      // salt of 0x20s.
+      final picture = ProfilePicture(
+        [for (var i = 0; i < 16; i++) (17 * i) * 0x10000 + (255 - 17 * i) * 0x100 + (53 * i) % 256],
+        Uint8List.fromList([for (var y = 0; y < 32; y++) for (var x = 0; x < 32; x++) (x + y) % 16]),
+      );
+      final profile = sha256Bytes(Uint8List.fromList([..._filled(0x20, 16), ...profileMessage('bob', picture)]));
+      expect(blocks[13].transactions.single.messageHash, profile);
+      expect(entry(13, 'name bob'), toHex(profile));
 
       expect(AccountEntry.parse(Uint8List(16)), isNull);
       expect(ThreadEntry.parse(Uint8List(88)), isNull);
@@ -614,7 +625,7 @@ void main() {
         expect(msg.root, thread.hash);
         final page = msg.page;
         expect(page.available, isTrue);
-        expect(page.at, chain[12].hash);
+        expect(page.at, chain.last.hash);
         expect(page.total, int.parse(v.one(-1, '$name.total')));
         expect(page.start, int.parse(v.one(-1, '$name.start')));
         expect(page.entries.length, int.parse(v.one(-1, '$name.count')));

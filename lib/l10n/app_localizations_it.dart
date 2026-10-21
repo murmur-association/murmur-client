@@ -1668,6 +1668,14 @@ class AppLocalizationsIt extends AppLocalizations {
   String get aliasCleared => 'Nome pubblico tolto';
 
   @override
+  String profileSetTo(String name) {
+    return 'Nome pubblico e immagine: $name';
+  }
+
+  @override
+  String get profilePictureOnly => 'Immagine pubblica, senza nome';
+
+  @override
   String get nonTextMessage =>
       '(non è testo: dati di una convenzione delle app)';
 
@@ -1787,6 +1795,37 @@ class AppLocalizationsIt extends AppLocalizations {
 
   @override
   String get publicNameClear => '**Lascialo vuoto** per toglierlo.';
+
+  @override
+  String get publicNamePicture => 'Immagine';
+
+  @override
+  String get pictureFromPhotos => 'Dalle foto';
+
+  @override
+  String get pictureFromFiles => 'Dai file';
+
+  @override
+  String get pictureChoose => 'Scegli un’immagine';
+
+  @override
+  String get pictureRemove => 'Togli l’immagine';
+
+  @override
+  String pictureTooLarge(String size) {
+    return 'Il file è troppo grande: scegline uno sotto $size MB.';
+  }
+
+  @override
+  String get pictureUnreadable =>
+      'Questo file non si può leggere come immagine.';
+
+  @override
+  String get picturePoint =>
+      '**32 × 32 pixel, 16 colori**, al posto del segno del tuo indirizzo.';
+
+  @override
+  String get pictureCost => '**Circa tre volte il costo** con un’immagine.';
 
   @override
   String get passkeyNoPrfTitle =>

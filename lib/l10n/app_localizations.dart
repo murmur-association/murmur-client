@@ -2488,6 +2488,18 @@ abstract class AppLocalizations {
   /// **'Public name cleared'**
   String get aliasCleared;
 
+  /// A Name carrying a profile: a public name and a picture (PROTOCOL.md 7.8)
+  ///
+  /// In en, this message translates to:
+  /// **'Public name and picture: {name}'**
+  String profileSetTo(String name);
+
+  /// A Name carrying a profile whose name is empty: a picture alone (PROTOCOL.md 7.8)
+  ///
+  /// In en, this message translates to:
+  /// **'Public picture, without a name'**
+  String get profilePictureOnly;
+
   /// Aliases (PROTOCOL.md 7.8) and non-text messages (2.4)
   ///
   /// In en, this message translates to:
@@ -2655,6 +2667,60 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'**Leave it empty** to clear it.'**
   String get publicNameClear;
+
+  /// The Public name dialog's picture section (a profile, PROTOCOL.md 7.8)
+  ///
+  /// In en, this message translates to:
+  /// **'Picture'**
+  String get publicNamePicture;
+
+  /// Button: choose a profile picture from the phone's photo library
+  ///
+  /// In en, this message translates to:
+  /// **'From photos'**
+  String get pictureFromPhotos;
+
+  /// Button: choose a profile picture from the phone's files
+  ///
+  /// In en, this message translates to:
+  /// **'From files'**
+  String get pictureFromFiles;
+
+  /// Button: choose a profile picture from a file (desktop, browser)
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a picture'**
+  String get pictureChoose;
+
+  /// Button: publish the name without a picture
+  ///
+  /// In en, this message translates to:
+  /// **'Remove picture'**
+  String get pictureRemove;
+
+  /// A picked picture file is too large
+  ///
+  /// In en, this message translates to:
+  /// **'That file is too large: choose one under {size} MB.'**
+  String pictureTooLarge(String size);
+
+  /// A picked file isn't an image the app can decode
+  ///
+  /// In en, this message translates to:
+  /// **'That file can\'t be read as a picture.'**
+  String get pictureUnreadable;
+
+  /// Words between ** show in bold copper (Emphasized); keep the markers around the key words
+  ///
+  /// In en, this message translates to:
+  /// **'**32 × 32 pixels, 16 colours**, shown instead of your address\'s mark.'**
+  String get picturePoint;
+
+  /// Words between ** show in bold copper (Emphasized); keep the markers around the key words
+  ///
+  /// In en, this message translates to:
+  /// **'**About three times the cost** with a picture.'**
+  String get pictureCost;
 
   /// Browser: the chosen passkey manager lacks WebAuthn PRF. Words between ** show in bold copper
   ///

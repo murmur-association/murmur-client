@@ -65,17 +65,24 @@ String? aliasOf(Uint8List message) {
   for (var i = 0; i < aliasPrefix.length; i++) {
     if (message[i] != aliasPrefix[i]) return null;
   }
-  var end = aliasPrefix.length;
-  while (end < message.length && message[end] != 0) {
+  return paddedName(Uint8List.sublistView(message, aliasPrefix.length));
+}
+
+/// The name in `field`: UTF-8 up to the first 0x00, then only 0x00 bytes,
+/// by the rules of [aliasProblem]. Null if it breaks any of them. An alias
+/// and a profile (`protocol/profile.dart`) hold their names so.
+String? paddedName(Uint8List field) {
+  var end = 0;
+  while (end < field.length && field[end] != 0) {
     end++;
   }
   // Only padding after the name.
-  for (var i = end; i < message.length; i++) {
-    if (message[i] != 0) return null;
+  for (var i = end; i < field.length; i++) {
+    if (field[i] != 0) return null;
   }
   final String name;
   try {
-    name = utf8.decode(Uint8List.sublistView(message, aliasPrefix.length, end));
+    name = utf8.decode(Uint8List.sublistView(field, 0, end));
   } on FormatException {
     return null;
   }

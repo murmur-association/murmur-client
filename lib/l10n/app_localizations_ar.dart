@@ -1683,6 +1683,14 @@ class AppLocalizationsAr extends AppLocalizations {
   String get aliasCleared => 'أُزيل الاسم العام';
 
   @override
+  String profileSetTo(String name) {
+    return 'الاسم العام والصورة: $name';
+  }
+
+  @override
+  String get profilePictureOnly => 'صورة عامة، بلا اسم';
+
+  @override
   String get nonTextMessage => '(ليس نصًا: بيانات لاصطلاح بين التطبيقات)';
 
   @override
@@ -1799,6 +1807,36 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get publicNameClear => '**اتركه فارغًا** لإزالته.';
+
+  @override
+  String get publicNamePicture => 'الصورة';
+
+  @override
+  String get pictureFromPhotos => 'من الصور';
+
+  @override
+  String get pictureFromFiles => 'من الملفات';
+
+  @override
+  String get pictureChoose => 'اختر صورة';
+
+  @override
+  String get pictureRemove => 'إزالة الصورة';
+
+  @override
+  String pictureTooLarge(String size) {
+    return 'الملف كبير جدًا: اختر ملفًا أصغر من $size ميغابايت.';
+  }
+
+  @override
+  String get pictureUnreadable => 'لا يمكن قراءة هذا الملف كصورة.';
+
+  @override
+  String get picturePoint =>
+      '**32 × 32 بكسل، 16 لونًا**، تظهر بدل علامة عنوانك.';
+
+  @override
+  String get pictureCost => '**نحو ثلاثة أضعاف التكلفة** مع صورة.';
 
   @override
   String get passkeyNoPrfTitle =>

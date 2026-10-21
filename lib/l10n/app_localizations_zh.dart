@@ -1595,6 +1595,14 @@ class AppLocalizationsZh extends AppLocalizations {
   String get aliasCleared => '已清除公开名字';
 
   @override
+  String profileSetTo(String name) {
+    return '公开名字和图片：$name';
+  }
+
+  @override
+  String get profilePictureOnly => '公开图片（无名字）';
+
+  @override
   String get nonTextMessage => '（不是文字：应用约定的数据）';
 
   @override
@@ -1703,6 +1711,35 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get publicNameClear => '**留空**即可清除。';
+
+  @override
+  String get publicNamePicture => '图片';
+
+  @override
+  String get pictureFromPhotos => '从相册';
+
+  @override
+  String get pictureFromFiles => '从文件';
+
+  @override
+  String get pictureChoose => '选择图片';
+
+  @override
+  String get pictureRemove => '移除图片';
+
+  @override
+  String pictureTooLarge(String size) {
+    return '文件太大：请选择小于 $size MB 的文件。';
+  }
+
+  @override
+  String get pictureUnreadable => '无法将此文件读取为图片。';
+
+  @override
+  String get picturePoint => '**32 × 32 像素、16 种颜色**，代替你地址的标记显示。';
+
+  @override
+  String get pictureCost => '带图片时**费用约为三倍**。';
 
   @override
   String get passkeyNoPrfTitle => '这个通行密钥管理器无法保护钱包';

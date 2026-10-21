@@ -16,6 +16,7 @@ import 'package:murmur_client/services/activity.dart';
 import 'package:murmur_client/protocol/invite.dart';
 import 'package:murmur_client/protocol/models.dart';
 import 'package:murmur_client/protocol/network.dart';
+import 'package:murmur_client/protocol/profile.dart';
 import 'package:murmur_client/services/invitations.dart';
 import 'package:murmur_client/services/node_client.dart';
 import 'package:murmur_client/services/starred.dart';
@@ -739,6 +740,21 @@ void main() {
 
       await c.submit(wallet: miner, kind: TxKind.name, fee: minFee, message: aliasMessage('robert'));
       await until(c, what: 'the new name', () => c.publishedAlias(me) == 'robert');
+      expect(c.publishedPicture(me), isNull, reason: 'an alias has no picture');
+
+      // A profile (Section 7.8): the name and a picture, read by another
+      // device from the state and the content alone; an alias after it
+      // takes the picture away.
+      final picture = ProfilePicture([for (var i = 0; i < 16; i++) i * 0x0f0f0f],
+          Uint8List.fromList([for (var y = 0; y < 32; y++) for (var x = 0; x < 32; x++) (x ~/ 2 + y) % 16]));
+      await c.submit(wallet: miner, kind: TxKind.name, fee: minFee, message: profileMessage('bob', picture));
+      await until(reader, what: 'the profile elsewhere',
+          () => reader.publishedAlias(me) == 'bob' && reader.publishedPicture(me) != null);
+      expect(reader.publishedPicture(me)!.pixels, picture.pixels);
+      expect(identical(reader.publishedPicture(me), reader.publishedPicture(me)), isTrue,
+          reason: 'one object per Name, for the views to keep what they draw');
+      await c.submit(wallet: miner, kind: TxKind.name, fee: minFee, message: aliasMessage('robert'));
+      await until(c, what: 'the picture gone', () => c.publishedAlias(me) == 'robert' && c.publishedPicture(me) == null);
       await c.submit(wallet: miner, kind: TxKind.name, fee: minFee, message: aliasMessage(''));
       await until(c, what: 'the name cleared', () => c.publishedAlias(me) == null && c.pendingDebitOf(me) == 0,
           timeout: const Duration(minutes: 2));

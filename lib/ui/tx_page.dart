@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../protocol/alias.dart';
 import '../protocol/bytes.dart';
 import '../protocol/models.dart';
 import '../services/node_client.dart';
@@ -38,7 +37,7 @@ class TxPage extends StatelessWidget {
       // A public name (PROTOCOL.md Section 7.8) is an Orphan underneath,
       // but no thread: called what it is, and not starred.
       final content = client.liveContent(view);
-      final isAlias = tx.kind == TxKind.name && content != null && aliasOf(messageOf(content)) != null;
+      final isAlias = tx.kind == TxKind.name && content != null && isNameMessage(content);
       final kind = isAlias ? l.publicName : kindLabel(context, tx.kind);
       final canAct = wallets.wallet != null && isMessage;
       final alreadyFlagged = canAct && client.hasFlagged(wallets.wallet!.addressHex, tx.id);

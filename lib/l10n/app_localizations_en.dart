@@ -1650,6 +1650,14 @@ class AppLocalizationsEn extends AppLocalizations {
   String get aliasCleared => 'Public name cleared';
 
   @override
+  String profileSetTo(String name) {
+    return 'Public name and picture: $name';
+  }
+
+  @override
+  String get profilePictureOnly => 'Public picture, without a name';
+
+  @override
   String get nonTextMessage => '(not text: data for an app convention)';
 
   @override
@@ -1766,6 +1774,36 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get publicNameClear => '**Leave it empty** to clear it.';
+
+  @override
+  String get publicNamePicture => 'Picture';
+
+  @override
+  String get pictureFromPhotos => 'From photos';
+
+  @override
+  String get pictureFromFiles => 'From files';
+
+  @override
+  String get pictureChoose => 'Choose a picture';
+
+  @override
+  String get pictureRemove => 'Remove picture';
+
+  @override
+  String pictureTooLarge(String size) {
+    return 'That file is too large: choose one under $size MB.';
+  }
+
+  @override
+  String get pictureUnreadable => 'That file can\'t be read as a picture.';
+
+  @override
+  String get picturePoint =>
+      '**32 × 32 pixels, 16 colours**, shown instead of your address\'s mark.';
+
+  @override
+  String get pictureCost => '**About three times the cost** with a picture.';
 
   @override
   String get passkeyNoPrfTitle =>

@@ -121,10 +121,9 @@ class _ClaimPageState extends State<ClaimPage> {
 /// Asks for an invitation code (or link) and opens it.
 Future<void> enterInvitation(BuildContext context) async {
   final l = context.l10n;
-  final controller = TextEditingController();
   final code = await showAppDialog<String>(
     context: context,
-    builder: (context) => AlertDialog(
+    builder: (context) => WithTextController(builder: (context, controller) => AlertDialog(
       scrollable: true,
       title: Text(l.haveInvitation),
       content: TextField(
@@ -138,9 +137,8 @@ Future<void> enterInvitation(BuildContext context) async {
         TextButton(onPressed: () => Navigator.pop(context), child: Text(l.cancel)),
         FilledButton(onPressed: () => Navigator.pop(context, controller.text), child: Text(l.claim)),
       ],
-    ),
+    )),
   );
-  controller.dispose();
   if (code == null || code.trim().isEmpty || !context.mounted) return;
   if (Invite.parse(code) == null) {
     showSnack(context, l.claimInvalid);

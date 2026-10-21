@@ -18,6 +18,7 @@ import 'package:murmur_client/protocol/models.dart';
 import 'package:murmur_client/services/local_node.dart';
 import 'package:murmur_client/services/news.dart' show NotifyTopic;
 import 'package:murmur_client/services/notifier.dart';
+import 'package:murmur_client/services/picture.dart';
 import 'package:murmur_client/services/storage.dart';
 import 'package:murmur_client/ui/common.dart' show AvatarLink, shortHex;
 import 'package:murmur_client/ui/invitations_page.dart';
@@ -41,8 +42,9 @@ void main() {
   final threadText = 'Acceptance thread $stamp';
   final replyText = 'Acceptance reply $stamp';
   final answerText = 'Acceptance answer $stamp';
+  final publicName = 'Tester ${stamp % 10000}';
 
-  testWidgets('a wallet from its seed, a thread, a reply to it, and an invitation card', (tester) async {
+  testWidgets('a wallet from its seed, a thread, a reply to it, an invitation card, and a public name with a picture', (tester) async {
     freshDevice();
     final app = AppDriver(tester);
     await app.start();
@@ -158,9 +160,23 @@ void main() {
       expect(cards['salt'], isNot(wallet['salt']), reason: 'a key of its own from it');
     }
     expect(app.asksPassphrase, isFalse);
+
+    // A public name with a picture (a profile): once mined and proven, the
+    // picture made of the chosen file replaces the wallet's mark.
+    final file = await samplePictureFile();
+    await app.setPublicName(publicName, file);
+    await app.waitUntil(
+        () => app.client.publishedAlias(me) == publicName && app.client.publishedPicture(me) != null,
+        what: 'the profile, mined and proven',
+        timeout: const Duration(minutes: 3));
+    expect(app.client.publishedPicture(me)!.pixels, (await pictureFromImage(file))!.pixels,
+        reason: 'what was published is the chosen file, shrunk as the dialog showed it');
+    await app.backHome();
+    await app.openTab(l.tabWallet);
+    await app.waitUntil(() => app.showsPicture(me), what: "the wallet's picture in place of its mark");
   });
 
-  testWidgets('after a restart: the wallet, the thread with its reply, and the card are all there',
+  testWidgets('after a restart: the wallet, the thread with its reply, the card and the picture are all there',
       (tester) async {
     // What the device held when the first test ended, and nothing more.
     final app = AppDriver(tester);
@@ -174,6 +190,16 @@ void main() {
     await app.waitUntil(() => app.wallets.wallet != null, what: 'the wallet to be found');
     await app.waitFor(find.text(app.wallets.wallet!.addressHex), what: "the wallet's address");
     expect(find.text(l.importSeed), findsNothing);
+
+    // The profile, read again from the chain: the picture in place of the
+    // mark, and kept when the name is edited again, so a new name alone
+    // wouldn't drop it.
+    final me = app.wallets.wallet!.addressHex;
+    await app.waitUntil(() => app.showsPicture(me), what: "the wallet's picture, read again from the chain");
+    await app.press<TextButton>(l.publicNameSet);
+    await app.waitFor(find.text(l.pictureRemove), what: 'the published picture, kept in the dialog');
+    expect(app.fieldText(l.publicNameField), publicName);
+    await app.press<TextButton>(l.cancel);
 
     await app.press<OutlinedButton>(l.invitations);
     await app.waitFor(find.byType(InvitationsPage), what: 'the invitations');

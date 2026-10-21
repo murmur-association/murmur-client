@@ -1609,6 +1609,14 @@ class AppLocalizationsJa extends AppLocalizations {
   String get aliasCleared => '公開名を消去しました';
 
   @override
+  String profileSetTo(String name) {
+    return '公開名と画像：$name';
+  }
+
+  @override
+  String get profilePictureOnly => '公開画像（名前なし）';
+
+  @override
   String get nonTextMessage => '（テキストではありません：アプリ規約のデータ）';
 
   @override
@@ -1720,6 +1728,35 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get publicNameClear => '**空欄にすると**消去します。';
+
+  @override
+  String get publicNamePicture => '画像';
+
+  @override
+  String get pictureFromPhotos => '写真から';
+
+  @override
+  String get pictureFromFiles => 'ファイルから';
+
+  @override
+  String get pictureChoose => '画像を選ぶ';
+
+  @override
+  String get pictureRemove => '画像を外す';
+
+  @override
+  String pictureTooLarge(String size) {
+    return 'ファイルが大きすぎます。$size MB 未満のものを選んでください。';
+  }
+
+  @override
+  String get pictureUnreadable => 'このファイルは画像として読めません。';
+
+  @override
+  String get picturePoint => '**32 × 32 ピクセル・16 色**で、アドレスのマークの代わりに表示されます。';
+
+  @override
+  String get pictureCost => '画像付きは**約 3 倍の費用**です。';
 
   @override
   String get passkeyNoPrfTitle => 'このパスキー管理アプリではウォレットを保護できません';

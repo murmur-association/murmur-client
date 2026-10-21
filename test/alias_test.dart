@@ -8,6 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:murmur_client/protocol/alias.dart';
 import 'package:murmur_client/protocol/bytes.dart';
 import 'package:murmur_client/protocol/models.dart';
+import 'package:murmur_client/protocol/profile.dart';
 import 'package:murmur_client/services/aliases.dart';
 
 /// A Name's content carrying `message`, salted.
@@ -59,5 +60,22 @@ void main() {
     expect(nameIn(_content(Uint8List(aliasMessageLength)..fillRange(0, aliasMessageLength, 0x61))), isNull);
     expect(nameIn(_content(Uint8List.fromList(utf8.encode('bob')))), isNull);
     expect(nameIn(Uint8List(aliasContentSize)), isNull);
+  });
+
+  test("a profile's name and picture; an alias has no picture", () {
+    final picture = ProfilePicture(
+        [for (var i = 0; i < 16; i++) i * 0x111111], Uint8List.fromList([for (var i = 0; i < 1024; i++) i % 16]));
+    final content = _content(profileMessage('bob', picture));
+    expect(content.length, profileContentSize);
+    expect(nameIn(content), 'bob');
+    expect(pictureIn(content)!.pixels, picture.pixels);
+    // A picture without a name: no name, but the picture.
+    final pictureOnly = _content(profileMessage('', picture));
+    expect(nameIn(pictureOnly), isNull);
+    expect(pictureIn(pictureOnly), isNotNull);
+    expect(pictureIn(_content(aliasMessage('bob'))), isNull);
+    expect(pictureIn(Uint8List(profileContentSize)), isNull, reason: 'the length alone is not a profile');
+    expect(isNameContentSize(aliasContentSize) && isNameContentSize(profileContentSize), isTrue);
+    expect(isNameContentSize(profileContentSize - 1), isFalse);
   });
 }

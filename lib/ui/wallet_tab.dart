@@ -4,8 +4,10 @@ import 'package:flutter/material.dart';
 
 import '../protocol/alias.dart';
 import '../protocol/bytes.dart';
+import '../protocol/profile.dart';
 import '../services/activity.dart';
 import '../services/node_client.dart';
+import '../services/picture.dart';
 import '../services/storage.dart';
 import 'brand.dart';
 import 'claim_page.dart';
@@ -15,6 +17,7 @@ import 'seed.dart';
 import 'unlock.dart';
 import 'invitations_page.dart';
 import 'paged_list.dart';
+import 'picture_picker.dart';
 import 'glyphs.dart';
 
 class WalletTab extends StatelessWidget {
@@ -152,16 +155,39 @@ class _PublicName extends StatelessWidget {
   final MurmurClient client;
   final String address;
 
-  /// Asks for the name, checked as every client checks it, then sends it
-  /// through the usual compose page (fee, summary, unlock).
+  /// Asks for the name, checked as every client checks it, and a picture
+  /// (Section 7.8: a profile), then sends them through the usual compose
+  /// page (fee, summary, unlock). The picture published now is kept unless
+  /// the user removes it: a name sent alone would drop it.
   Future<void> _edit(BuildContext context, String? current) async {
     final l = context.l10n;
-    final controller = TextEditingController(text: current ?? '');
     final formKey = GlobalKey<FormState>();
-    final name = await showAppDialog<String>(
+    var picture = client.publishedPicture(address);
+    String? problem;
+    var reading = false;
+    final chosen = await showAppDialog<(String, ProfilePicture?)>(
       context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setState) => AlertDialog(
+      builder: (context) => WithTextController(
+          text: current ?? '', builder: (context, controller) => StatefulBuilder(builder: (context, setState) {
+        // Reads a picked image into a picture, or says why it can't.
+        Future<void> choose(PictureSource source) async {
+          final picked = await pickPicture(source);
+          if (picked == null || !context.mounted) return;
+          setState(() => (reading, problem) = (true, null));
+          final made = picked.bytes == null ? null : await pictureFromImage(picked.bytes!);
+          if (!context.mounted) return;
+          setState(() {
+            reading = false;
+            if (made != null) picture = made;
+            problem = switch (picked.problem) {
+              PictureProblem.tooLarge => l.pictureTooLarge(formatCount(context, maxPictureFileBytes ~/ 1000000)),
+              _ when made == null => l.pictureUnreadable,
+              _ => null,
+            };
+          });
+        }
+
+        return AlertDialog(
           scrollable: true,
           title: Text(l.publicName),
           content: SizedBox(
@@ -192,14 +218,45 @@ class _PublicName extends StatelessWidget {
                   Padding(
                     padding: const EdgeInsets.only(top: 8),
                     child: Row(children: [
-                      AddressAvatar(address, size: 28),
+                      PicturePreview(address, picture, size: 28),
                       const SizedBox(width: 10),
                       Expanded(child: Emphasized(l.publicNameShownAs(publicNameOf(controller.text, address)))),
                     ]),
                   ),
+                const SizedBox(height: 16),
+                Text(l.publicNamePicture, style: Theme.of(context).textTheme.labelLarge),
+                const SizedBox(height: 8),
+                Row(children: [
+                  PicturePreview(address, picture, size: 72),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: reading
+                        ? const Align(alignment: AlignmentDirectional.centerStart, child: CircularProgressIndicator())
+                        : Wrap(spacing: 8, runSpacing: 8, children: [
+                            for (final (source, label) in hasPhotoLibrary
+                                ? [(PictureSource.photos, l.pictureFromPhotos), (PictureSource.files, l.pictureFromFiles)]
+                                : [(PictureSource.files, l.pictureChoose)])
+                              OutlinedButton(onPressed: () => choose(source), child: Text(label)),
+                            if (picture != null)
+                              TextButton(
+                                  onPressed: () => setState(() => (picture, problem) = (null, null)),
+                                  child: Text(l.pictureRemove)),
+                          ]),
+                  ),
+                ]),
+                if (problem != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Text(problem!,
+                        style: TextStyle(color: Theme.of(context).colorScheme.error)),
+                  ),
                 const SizedBox(height: 12),
                 InfoPoint(Glyph.warning, l.publicNameNotUnique, style: Theme.of(context).textTheme.bodySmall),
                 InfoPoint(Glyph.burn, l.publicNameCost, style: Theme.of(context).textTheme.bodySmall),
+                if (picture != null) ...[
+                  InfoPoint(Glyph.edit, l.picturePoint, style: Theme.of(context).textTheme.bodySmall),
+                  InfoPoint(Glyph.fee, l.pictureCost, style: Theme.of(context).textTheme.bodySmall),
+                ],
                 InfoPoint(Glyph.blocks, l.publicNameRemovable, style: Theme.of(context).textTheme.bodySmall),
                 InfoPoint(Glyph.edit, l.publicNameClear, style: Theme.of(context).textTheme.bodySmall),
               ]),
@@ -209,17 +266,18 @@ class _PublicName extends StatelessWidget {
             TextButton(onPressed: () => Navigator.pop(context), child: Text(l.cancel)),
             FilledButton(
               onPressed: () {
-                if (formKey.currentState!.validate()) Navigator.pop(context, controller.text);
+                if (formKey.currentState!.validate()) Navigator.pop(context, (controller.text, picture));
               },
               child: Text(l.publicNameSet),
             ),
           ],
-        ),
-      ),
+        );
+      })),
     );
-    controller.dispose();
-    if (name == null || !context.mounted) return;
-    await Navigator.of(context).push(MaterialPageRoute(builder: (_) => ComposePage(alias: name)));
+    if (chosen == null || !context.mounted) return;
+    final (name, chosenPicture) = chosen;
+    await Navigator.of(context)
+        .push(MaterialPageRoute(builder: (_) => ComposePage(alias: name, picture: chosenPicture)));
   }
 
   @override

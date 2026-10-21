@@ -6,6 +6,7 @@ Newest first. Each release is a `vX.Y.Z` tag matching `version` in `pubspec.yaml
 
 - **Added: notifications on iPhones and Macs**, as on Android: the iPhone app also checks while closed, when iOS lets it. (Neither app is published yet.)
 - **Added: a Mac app**, with its own node as on Windows and Linux. (Not published yet: it needs signing.)
+- **Added: profile pictures.** Wallet → Public name now takes a picture too: from your photos or files on a phone, from a file elsewhere. It's shown at 32 × 32 pixels in 16 colours, wherever the app would draw your address's mark; with a picture, a name costs about three times as much. A muted person keeps the mark.
 
 ## v0.8.0: murmur-testnet-14, mentions, notifications, Starred in two lists (2026-10-21)
 

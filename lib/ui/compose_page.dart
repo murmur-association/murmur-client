@@ -5,6 +5,7 @@ import '../crypto/wallet.dart' show WalletId;
 import '../protocol/alias.dart';
 import '../protocol/bytes.dart';
 import '../protocol/models.dart';
+import '../protocol/profile.dart';
 import '../services/node_client.dart';
 import 'brand.dart';
 import 'common.dart';
@@ -21,12 +22,12 @@ import 'glyphs.dart';
 /// name their target by txid; a reply goes in that message's thread and
 /// pays the thread's author, whoever it answers (PROTOCOL.md Section 2.4).
 /// With `alias` it sets the wallet's public name (a Name, Section 7.8; empty
-/// clears it).
+/// clears it), with `picture` beside it as a profile.
 ///
 /// Ctrl+Enter (Cmd+Enter on Apple devices) sends, like the button. Either
 /// way a summary of everything signed comes first, as the last confirmation.
 class ComposePage extends StatefulWidget {
-  const ComposePage({super.key, this.kind = TxKind.orphan, this.to, this.flagTarget, this.replyTo, this.alias});
+  const ComposePage({super.key, this.kind = TxKind.orphan, this.to, this.flagTarget, this.replyTo, this.alias, this.picture});
 
   final TxKind kind;
   final String? to;
@@ -35,6 +36,10 @@ class ComposePage extends StatefulWidget {
 
   /// The alias to publish; already checked (`aliasProblem`).
   final String? alias;
+
+  /// The picture to publish with [alias] (a profile, Section 7.8); without
+  /// one the name is sent alone, as an alias.
+  final ProfilePicture? picture;
 
   @override
   State<ComposePage> createState() => _ComposePageState();
@@ -154,7 +159,9 @@ class _ComposePageState extends State<ComposePage> {
 
   Uint8List? _messageBytes() {
     if (_kind == TxKind.flag || _kind == TxKind.raw) return null;
-    if (widget.alias != null) return aliasMessage(widget.alias!);
+    if (widget.alias != null) {
+      return widget.picture == null ? aliasMessage(widget.alias!) : profileMessage(widget.alias!, widget.picture!);
+    }
     return MurmurClient.encodeText(_message.text);
   }
 
@@ -162,7 +169,9 @@ class _ComposePageState extends State<ComposePage> {
   String _messageShown(BuildContext context) {
     final alias = widget.alias;
     if (alias == null) return _message.text;
-    return alias.isEmpty ? context.l10n.aliasCleared : context.l10n.aliasSetTo(alias);
+    final l = context.l10n;
+    if (widget.picture != null) return alias.isEmpty ? l.profilePictureOnly : l.profileSetTo(alias);
+    return alias.isEmpty ? l.aliasCleared : l.aliasSetTo(alias);
   }
 
   /// What this transaction will weigh at most: its own bytes plus its
@@ -352,7 +361,7 @@ class _ComposePageState extends State<ComposePage> {
             else if (widget.alias != null)
               Card(
                 child: ListTile(
-                  leading: AddressAvatar(wallet.addressHex),
+                  leading: PicturePreview(wallet.addressHex, widget.picture),
                   title: Text(_messageShown(context)),
                   subtitle: widget.alias!.isEmpty
                       ? null

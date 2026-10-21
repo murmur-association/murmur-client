@@ -1,15 +1,19 @@
-// How addresses appear: a picture drawn from the address itself, and a name.
+// How addresses appear: a picture and a name.
 // The name is, in order (PROTOCOL.md Section 7.8):
 // - the one the user gave it on this device, never sent anywhere;
 // - the alias the address published, always with the start of the address,
 //   since anyone can publish any alias;
 // - its short hex.
-// The picture is the same on every device, since it comes only from the
-// address.
+// The picture is the one the address published with its name (a profile,
+// Section 7.8), or else a mark drawn from the address itself, the same on
+// every device. Never both: a published picture replaces the mark.
+
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 
 import '../protocol/bytes.dart';
+import '../protocol/profile.dart';
 import '../services/node_client.dart';
 import '../services/storage.dart';
 import 'common.dart';
@@ -47,20 +51,81 @@ class AddressAvatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bytes = tryParseHash32(address);
+    final scope = AppScope.of(context);
+    // A published picture stands in for the mark, never beside it (Section
+    // 7.8); a muted author's isn't shown.
+    final picture =
+        bytes == null || scope.prefs.muted.contains(address) ? null : scope.client.publishedPicture(address);
     return Semantics(
       label: nameOf(context, address),
       image: true,
-      child: SizedBox.square(
-        dimension: size,
-        child: bytes == null
-            ? null
-            : CustomPaint(
-                painter: AddressMarkPainter(bytes,
-                    dark: Theme.of(context).brightness == Brightness.dark,
-                    surface: Theme.of(context).colorScheme.surface)),
-      ),
+      child: PicturePreview(address, picture, size: size),
     );
   }
+}
+
+/// What `address` shows with `picture` published (null: its mark), whatever
+/// it published: a choice seen before it's sent.
+class PicturePreview extends StatelessWidget {
+  const PicturePreview(this.address, this.picture, {super.key, this.size = 40});
+
+  final String address;
+  final ProfilePicture? picture;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final bytes = tryParseHash32(address);
+    return SizedBox.square(
+      dimension: size,
+      child: bytes == null
+          ? null
+          : CustomPaint(
+              painter: picture != null
+                  ? ProfilePicturePainter(picture!)
+                  : AddressMarkPainter(bytes,
+                      dark: Theme.of(context).brightness == Brightness.dark,
+                      surface: Theme.of(context).colorScheme.surface)),
+    );
+  }
+}
+
+/// The 32 x 32 images drawn from pictures, kept with the picture (the
+/// client keeps one object per Name).
+final _pictureImages = Expando<ui.Image>('profile picture');
+
+/// Draws a published picture (PROTOCOL.md Section 7.8) in the address
+/// mark's tile shape, scaled to the canvas: sharp pixels when large, smoothed
+/// when small, where a pixel is about one of the screen's.
+class ProfilePicturePainter extends CustomPainter {
+  ProfilePicturePainter(this.picture);
+
+  final ProfilePicture picture;
+
+  ui.Image _image() => _pictureImages[picture] ??= () {
+        final recorder = ui.PictureRecorder();
+        final canvas = Canvas(recorder);
+        for (var y = 0; y < profileSide; y++) {
+          for (var x = 0; x < profileSide; x++) {
+            canvas.drawRect(Rect.fromLTWH(x.toDouble(), y.toDouble(), 1, 1),
+                Paint()..color = Color(0xFF000000 + picture.rgbAt(x, y)));
+          }
+        }
+        return recorder.endRecording().toImageSync(profileSide, profileSide);
+      }();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Offset.zero & size;
+    canvas.save();
+    canvas.clipRRect(RRect.fromRectAndRadius(rect, Radius.circular(size.width * 0.22)));
+    canvas.drawImageRect(_image(), const Rect.fromLTWH(0, 0, profileSide * 1.0, profileSide * 1.0), rect,
+        Paint()..filterQuality = size.width >= 64 ? FilterQuality.none : FilterQuality.medium);
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(ProfilePicturePainter oldDelegate) => oldDelegate.picture != picture;
 }
 
 /// Hue and saturation of the warm colours (the copper family) and the cool
@@ -267,10 +332,11 @@ class AddressMarkPainter extends CustomPainter {
 Future<void> editAlias(BuildContext context, String address) async {
   final l = context.l10n;
   final prefs = AppScope.of(context).prefs;
-  final controller = TextEditingController(text: prefs.aliases[address] ?? '');
   final name = await showAppDialog<String>(
     context: context,
-    builder: (context) => AlertDialog(
+    builder: (context) => WithTextController(
+        text: prefs.aliases[address] ?? '',
+        builder: (context, controller) => AlertDialog(
       scrollable: true,
       title: Text(l.aliasTitle),
       content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -288,8 +354,7 @@ Future<void> editAlias(BuildContext context, String address) async {
         TextButton(onPressed: () => Navigator.pop(context), child: Text(l.cancel)),
         FilledButton(onPressed: () => Navigator.pop(context, controller.text), child: Text(l.save)),
       ],
-    ),
+    )),
   );
-  controller.dispose();
   if (name != null) await prefs.setAlias(address, name);
 }

@@ -9,6 +9,8 @@
 // wallet_storage_test.dart's subject.)
 
 import 'dart:async';
+import 'dart:typed_data';
+import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart' show TargetPlatform, defaultTargetPlatform;
 import 'package:flutter/material.dart';
@@ -25,6 +27,8 @@ import 'package:murmur_client/services/notifier.dart';
 import 'package:murmur_client/services/storage.dart';
 import 'package:murmur_client/ui/common.dart';
 import 'package:murmur_client/ui/home_page.dart';
+import 'package:murmur_client/ui/people.dart' show ProfilePicturePainter;
+import 'package:murmur_client/ui/picture_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'acceptance_protocol.dart';
@@ -404,6 +408,50 @@ class AppDriver {
     }
   }
 
+  /// Whether every picture of `address` on screen is its published one,
+  /// with no mark beside it, and there is one.
+  bool showsPicture(String address) {
+    final avatars = find.byWidgetPredicate((w) => w is AddressAvatar && w.address == address);
+    final painters = [
+      for (final e in find.descendant(of: avatars, matching: find.byType(CustomPaint)).evaluate())
+        (e.widget as CustomPaint).painter,
+    ];
+    return painters.isNotEmpty && painters.every((p) => p is ProfilePicturePainter);
+  }
+
+  /// Sets the wallet's public name with a picture (a profile, PROTOCOL.md
+  /// Section 7.8), from the Wallet tab: the name typed, `file` chosen where
+  /// a user would choose it (the system's chooser stands aside: no test can
+  /// work it), then the summary and the passphrase.
+  Future<void> setPublicName(String name, Uint8List file) async {
+    await backHome();
+    await openTab(l.tabWallet);
+    await press<TextButton>(l.publicNameSet);
+    await waitFor(find.text(l.publicNameField), what: 'the public name dialog');
+    await type(l.publicNameField, name);
+    final asked = <PictureSource>[];
+    pickPictureOverride = (source) async {
+      asked.add(source);
+      return (bytes: file, problem: null);
+    };
+    try {
+      // A phone offers its photos and its files; elsewhere, a file.
+      await press<OutlinedButton>(hasPhotoLibrary ? l.pictureFromPhotos : l.pictureChoose);
+      await waitUntil(() => find.text(l.pictureRemove).evaluate().isNotEmpty, what: 'the picture to be read');
+    } finally {
+      pickPictureOverride = null;
+    }
+    expect(asked, [hasPhotoLibrary ? PictureSource.photos : PictureSource.files]);
+    expect(find.byWidgetPredicate((w) => w is InfoPoint && w.text == l.pictureCost), findsOneWidget,
+        reason: 'what a picture costs, said before sending');
+    await press<FilledButton>(l.publicNameSet);
+    await waitFor(find.text(l.profileSetTo(name)), what: 'the profile on the compose page');
+    await press<FilledButton>(l.signAndSend);
+    await waitFor(find.text(l.confirmSendTitle), what: 'the summary before signing');
+    await press<FilledButton>(l.signAndSend);
+    await unlock();
+  }
+
   /// Writes `text` on the compose page that's open, and signs and sends it:
   /// the form, the summary, then the passphrase.
   Future<void> writeAndSend(String text) async {
@@ -413,4 +461,19 @@ class AppDriver {
     await press<FilledButton>(l.signAndSend);
     await unlock();
   }
+}
+
+/// An image file a user might pick for their picture: a wide PNG (a sky, a
+/// sun, a hill), of which the picture takes the middle.
+Future<Uint8List> samplePictureFile() async {
+  const size = Size(240, 160);
+  final recorder = ui.PictureRecorder();
+  Canvas(recorder)
+    ..drawRect(Offset.zero & size,
+        Paint()..shader = const LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter,
+            colors: [Color(0xFF2B2D6E), Color(0xFFF2B35E)]).createShader(Offset.zero & size))
+    ..drawCircle(const Offset(130, 70), 26, Paint()..color = const Color(0xFFFFE3A3))
+    ..drawOval(const Rect.fromLTWH(-40, 110, 320, 120), Paint()..color = const Color(0xFF3A2E3F));
+  final image = await recorder.endRecording().toImage(size.width.toInt(), size.height.toInt());
+  return (await image.toByteData(format: ui.ImageByteFormat.png))!.buffer.asUint8List();
 }

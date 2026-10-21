@@ -3,11 +3,14 @@
 // language builds, that numbers use the locale's grouping, and that the
 // paged list fills the screen plus one row and grows by ten at the bottom.
 
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:murmur_client/crypto/wallet.dart';
 import 'package:murmur_client/protocol/models.dart';
 import 'package:murmur_client/protocol/network.dart';
+import 'package:murmur_client/protocol/profile.dart';
 import 'package:murmur_client/services/activity.dart';
 import 'package:murmur_client/services/node_client.dart';
 import 'package:murmur_client/services/storage.dart';
@@ -17,6 +20,7 @@ import 'package:murmur_client/ui/common.dart';
 import 'package:murmur_client/ui/invitations_page.dart';
 import 'package:murmur_client/ui/messages_tab.dart';
 import 'package:murmur_client/ui/paged_list.dart';
+import 'package:murmur_client/ui/people.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
@@ -217,6 +221,32 @@ void main() {
     expect(firstLine(''), '');
   });
 
+  testWidgets('a published picture replaces the address mark, never beside it; a muted author keeps the mark',
+      (tester) async {
+    final withPicture = 'ab' * 32, without = 'cd' * 32, muted = 'ef' * 32;
+    final picture = ProfilePicture([for (var i = 0; i < 16; i++) i * 0x111111], Uint8List(1024));
+    final prefs = Preferences();
+    await prefs.setMuted(muted, true);
+    await tester.pumpWidget(AppScope(
+      client: _PictureClient({withPicture: picture, muted: picture}),
+      wallets: WalletController(),
+      prefs: prefs,
+      child: MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Row(children: [for (final a in [withPicture, without, muted]) AddressAvatar(a)]),
+      ),
+    ));
+    CustomPainter? painterOf(int i) => tester
+        .widget<CustomPaint>(find.descendant(of: find.byType(AddressAvatar).at(i), matching: find.byType(CustomPaint)))
+        .painter;
+    expect(painterOf(0), isA<ProfilePicturePainter>());
+    expect(painterOf(1), isA<AddressMarkPainter>());
+    expect(painterOf(2), isA<AddressMarkPainter>());
+    expect(find.byType(CustomPaint).evaluate().where((e) => (e.widget as CustomPaint).painter != null).length, 3,
+        reason: 'one picture per address, nothing drawn over it');
+  });
+
   testWidgets('cancelling a card funded by another wallet asks where its tokens go', (tester) async {
     final records = [InviteRecord(address: 'cd' * 32, amount: 5, serial: 1, batch: 1, funder: 'ab' * 32)];
     ReturnTo? to;
@@ -310,4 +340,14 @@ void main() {
     expect(MessageFilter.defaults.contains(MessageFilter.flagsReceived), isFalse);
     expect(WalletFilter.defaults, {WalletFilter.transfersSent, WalletFilter.transfersReceived});
   });
+}
+
+/// A client that knows the pictures some addresses published, as if proven.
+class _PictureClient extends MurmurClient {
+  _PictureClient(this.pictures);
+
+  final Map<String, ProfilePicture> pictures;
+
+  @override
+  ProfilePicture? publishedPicture(String address) => pictures[address];
 }

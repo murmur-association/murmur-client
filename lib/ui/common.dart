@@ -10,6 +10,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../protocol/alias.dart';
 import '../protocol/models.dart';
+import '../protocol/profile.dart';
 import '../protocol/quote.dart';
 import '../services/chain_cache.dart';
 import '../services/local_node.dart';
@@ -28,7 +29,7 @@ import 'share.dart';
 
 export 'dialogs.dart';
 export 'l10n.dart';
-export 'people.dart' show nameOf, publicNameOf, AddressAvatar, editAlias;
+export 'people.dart' show nameOf, publicNameOf, AddressAvatar, PicturePreview, editAlias;
 export 'share.dart' show ShareButton, showQr;
 
 /// Makes the client, the wallet and the preferences available to every page.
@@ -169,7 +170,17 @@ String? messageTextIn(AppLocalizations l, Uint8List? content, {bool reply = fals
     return reply ? quotesIn(text).body : text;
   }
   final alias = aliasOf(message);
-  return alias == null ? l.nonTextMessage : (alias.isEmpty ? l.aliasCleared : l.aliasSetTo(alias));
+  if (alias != null) return alias.isEmpty ? l.aliasCleared : l.aliasSetTo(alias);
+  final profile = profileOf(message);
+  if (profile != null) return profile.name.isEmpty ? l.profilePictureOnly : l.profileSetTo(profile.name);
+  return l.nonTextMessage;
+}
+
+/// Whether `content` is a public name: an alias or a profile (PROTOCOL.md
+/// Section 7.8).
+bool isNameMessage(Uint8List content) {
+  final message = messageOf(content);
+  return aliasOf(message) != null || profileOf(message) != null;
 }
 
 /// A message's text, read live from the client, or a note that it isn't at
