@@ -4,6 +4,11 @@ Newest first. Each release is a `vX.Y.Z` tag matching `version` in `pubspec.yaml
 
 ## Unreleased
 
+## v0.9.0: profile pictures, the first testnet-14 checkpoint (2026-10-21)
+
+No protocol or network change: profiles are a convention between clients (PROTOCOL.md Section 7.8), and nodes carry them like any message.
+
+- **Added: the first checkpoint of `murmur-testnet-14`**, block 500: a first session no longer checks every header from genesis before lists show.
 - **Added: notifications on iPhones and Macs**, as on Android: the iPhone app also checks while closed, when iOS lets it. (Neither app is published yet.)
 - **Added: a Mac app**, with its own node as on Windows and Linux. (Not published yet: it needs signing.)
 - **Added: profile pictures.** Wallet → Public name now takes a picture too: from your photos or files on a phone, from a file elsewhere. It's shown at 32 × 32 pixels in 16 colours, wherever the app would draw your address's mark; with a picture, a name costs about three times as much. A muted person keeps the mark.
