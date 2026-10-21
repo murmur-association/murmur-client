@@ -364,32 +364,44 @@ class AppDriver {
     bool mined(Transaction tx) => other.lookupTx(tx.id)?.confirmed ?? false;
     try {
       unawaited(other.connect(acceptanceNode.substring(0, colon), int.parse(acceptanceNode.substring(colon + 1))));
-      // Proven at the tip: a fresh client's first proof can be from a block
-      // before the wallet's last transaction (sent from the app, which this
-      // device doesn't know of), and its nonce would then be one too few.
-      // Nor may the app have one still waiting to be mined: no other device
-      // can see it, and the two would carry the same nonce.
-      await waitUntil(
-          () =>
-              other.state == LinkState.live &&
-              other.account(payer.addressHex)?.height == other.height &&
-              client.nextNonce(payer.addressHex) == client.account(payer.addressHex)?.nonce &&
-              other.account(payer.addressHex)?.nonce == client.account(payer.addressHex)?.nonce &&
-              (other.availableTo(payer.addressHex) ?? 0) > 0,
-          what: "the other device to see the test's wallet, proven at the tip, with nothing of the app's pending");
-      final fund = await other.submit(
-          wallet: payer, kind: TxKind.raw, to: someone.address, amount: 5 * unitsPerToken, fee: minFee);
-      try {
-        await waitUntil(() => mined(fund) && (other.availableTo(someone.addressHex) ?? 0) > 0,
-            what: 'their wallet to be funded', timeout: const Duration(minutes: 3));
-      } on TestFailure catch (e) {
-        // What the other device knew, to tell a refused transaction from a
-        // slow chain.
-        fail('${e.message}\nthe funding ${fund.id}, nonce ${fund.nonce}: the node says ${other.statusOf(fund.id)}, '
-            'mined ${mined(fund)}; the payer\'s proven nonce ${other.account(payer.addressHex)?.nonce}, '
-            'their balance ${other.availableTo(someone.addressHex)}, the other device at ${other.height} '
-            '(${other.state.name}, error ${other.error})');
+      // Paid again if another of the wallet's transactions takes the
+      // funding's nonce: one no device here knows of can still be waiting to
+      // be mined (the card funded before the app restarted), and the proven
+      // nonce counts only what is mined.
+      for (var attempt = 1;; attempt++) {
+        // Proven at the tip: a fresh client's first proof can be from a
+        // block before the wallet's last transaction (sent from the app,
+        // which this device doesn't know of), and its nonce would then be one
+        // too few.
+        await waitUntil(
+            () =>
+                other.state == LinkState.live &&
+                other.account(payer.addressHex)?.height == other.height &&
+                (other.availableTo(payer.addressHex) ?? 0) > 0,
+            what: "the other device to see the test's wallet, proven at the tip");
+        final fund = await other.submit(
+            wallet: payer, kind: TxKind.raw, to: someone.address, amount: 5 * unitsPerToken, fee: minFee);
+        bool passed() => (other.account(payer.addressHex)?.nonce ?? 0) > fund.nonce;
+        try {
+          await waitUntil(() => mined(fund) || passed(), what: 'their funding to be mined', timeout: const Duration(minutes: 3));
+          // Mined, though perhaps not looked up yet; or another took its nonce.
+          await waitUntil(() => mined(fund), what: 'their funding to be mined', timeout: const Duration(seconds: 30));
+          break;
+        } on TestFailure catch (e) {
+          if (passed() && attempt < 3) {
+            debugPrint('the funding (nonce ${fund.nonce}) was replaced by another of the wallet\'s transactions: paid again');
+            continue;
+          }
+          // What the other device knew, to tell a refused transaction from a
+          // slow chain.
+          fail('${e.message}\nthe funding ${fund.id}, nonce ${fund.nonce}, attempt $attempt: '
+              'the node says ${other.statusOf(fund.id)?.code.name}, mined ${mined(fund)}; '
+              'the payer\'s proven nonce ${other.account(payer.addressHex)?.nonce}, '
+              'the other device at ${other.height} (${other.state.name}, error ${other.error})');
+        }
       }
+      await waitUntil(() => (other.availableTo(someone.addressHex) ?? 0) > 0,
+          what: 'their wallet to be funded', timeout: const Duration(minutes: 3));
       // The thread itself, as a page opened on it has: a fresh client holds
       // only recent blocks, and on a slow device the thread can be older.
       other.requestTx(root);

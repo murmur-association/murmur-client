@@ -7,6 +7,8 @@
 // touched when the system asks for it, and the app's WorkManager job is
 // found and run.
 
+// ignore_for_file: avoid_print
+
 import 'dart:async';
 import 'dart:io';
 
@@ -108,17 +110,22 @@ class AndroidSystem {
   // ---- the device's setup -------------------------------------------------------
 
   /// Sets a screen lock and enrolls finger 1, through Settings' own screens;
-  /// true once the system says a fingerprint is enrolled.
-  Future<bool> enrollFingerprint({Duration timeout = const Duration(minutes: 10)}) async {
+  /// true once the system says a fingerprint is enrolled. Given long: an
+  /// emulator without KVM takes many seconds a screen.
+  Future<bool> enrollFingerprint({Duration timeout = const Duration(minutes: 25)}) async {
     await _shell('locksettings set-pin $pin');
     await _shell('am start -a android.settings.FINGERPRINT_ENROLL');
     final deadline = DateTime.now().add(timeout);
+    // What Settings showed, for a failure's report: the last few screens.
+    final seen = <String>[];
     while (DateTime.now().isBefore(deadline)) {
       if (await fingerprintEnrolled()) {
         await _shell('input keyevent KEYCODE_HOME');
         return true;
       }
       final now = await screen();
+      final texts = [for (final n in now) if (n.attributes['text'] case final t? when t.isNotEmpty) t].join(' | ');
+      if (seen.isEmpty || seen.last != texts) seen.add(texts);
       // The PIN, when Settings asks for it again.
       if (find(now, ids: const ['password_entry', 'lockPassword']) != null) {
         await _shell('input text $pin && input keyevent KEYCODE_ENTER');
@@ -130,6 +137,12 @@ class AndroidSystem {
       }
       await Future<void>.delayed(const Duration(seconds: 2));
     }
+    // Back as it was: a PIN without a fingerprint leaves a lock screen, and
+    // a key store asking for the PIN, that nobody answers.
+    print('android: no fingerprint enrolled; Settings last showed:\n'
+        '${seen.skip(seen.length > 5 ? seen.length - 5 : 0).map((t) => '  $t').join('\n')}');
+    await _shell('locksettings clear --old $pin');
+    await _shell('input keyevent KEYCODE_HOME');
     return false;
   }
 
