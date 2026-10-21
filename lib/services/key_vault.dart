@@ -30,6 +30,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:cryptography/cryptography.dart';
+import 'package:flutter/foundation.dart' show visibleForTesting;
 
 import '../protocol/bytes.dart';
 import 'key_vault_io.dart' if (dart.library.js_interop) 'key_vault_web.dart' as impl;
@@ -85,6 +86,12 @@ enum VaultSlot {
 /// is under a passphrase or a passkey, this one goes under the same: the
 /// passphrase is asked for (not a new one) and must open that record, or
 /// the same passkey is asked. Throws [VaultLocked] otherwise.
+/// Whether the device's key store may keep a seed. The acceptance tests
+/// switch it off on a Mac, whose key store asks for the login password in a
+/// system dialog nobody answers on a CI runner.
+@visibleForTesting
+bool deviceKeyStoreAllowed = true;
+
 Future<Map<String, String>> sealSeed(Uint8List seed, VaultPrompts prompts,
     {required String reason,
     VaultSlot slot = VaultSlot.wallet,
@@ -96,7 +103,9 @@ Future<Map<String, String>> sealSeed(Uint8List seed, VaultPrompts prompts,
     case 'passkey':
       return impl.sealWithSamePasskey(seed, alongside!, reason);
   }
-  final seal = device ?? (Uint8List seed, String reason) => impl.sealWithDevice(seed, reason, slot);
+  final seal = device ??
+      (Uint8List seed, String reason) async =>
+          deviceKeyStoreAllowed ? impl.sealWithDevice(seed, reason, slot) : null;
   while (true) {
     try {
       return await seal(seed, reason) ?? await sealWithPassphrase(seed, prompts);

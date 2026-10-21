@@ -2,6 +2,11 @@
 
 Newest first. Each release is a `vX.Y.Z` tag matching `version` in `pubspec.yaml`; see [README](README.md#releases-and-deployment). Entries marked **Breaking** need action from users.
 
+## Unreleased
+
+- **Added: notifications on iPhones and Macs**, as on Android: the iPhone app also checks while closed, when iOS lets it. (Neither app is published yet.)
+- **Added: a Mac app**, with its own node as on Windows and Linux. (Not published yet: it needs signing.)
+
 ## v0.8.0: murmur-testnet-14, mentions, notifications, Starred in two lists (2026-10-21)
 
 **Breaking: a new network and protocol.** The app speaks protocol 15 and joins `murmur-testnet-14`; it no longer reaches `murmur-testnet-12` (nor `murmur-testnet-13`, which no release of the app joined). Nothing carries over: wallets keep their keys, and start with nothing on the new chain. The desktop apps ship node release v0.15.0. No checkpoint while the network is under a day old.

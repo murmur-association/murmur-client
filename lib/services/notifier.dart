@@ -1,8 +1,8 @@
 // The system's notifications, raised by the app itself on this device
 // (flutter_local_notifications): nothing goes through a push service, so
 // no third party learns what the user follows (AGENTS.md rule 2). Android
-// also checks while the app is closed (ui/notifications.dart); elsewhere
-// notifications come only while the app is open.
+// and iOS also check while the app is closed (ui/notifications.dart);
+// elsewhere notifications come only while the app is open.
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -32,17 +32,15 @@ abstract class Notifier {
   Future<String?> launchPayload();
 }
 
-/// Whether this platform gets notifications: Android, Windows, Linux and
-/// browsers. Not iOS or macOS (no background checks there, and an app open
-/// on screen needs none).
-bool get notificationsSupported =>
-    kIsWeb ||
-    defaultTargetPlatform == TargetPlatform.android ||
-    defaultTargetPlatform == TargetPlatform.windows ||
-    defaultTargetPlatform == TargetPlatform.linux;
+/// Whether this platform checks for news while the app is closed: Android
+/// (WorkManager) and iOS (background app refresh, when iOS decides).
+bool get backgroundChecks =>
+    !kIsWeb && (defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.iOS);
 
-/// Whether this platform checks for news while the app is closed (Android).
-bool get backgroundChecks => !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
+/// Whether this is an Apple platform, whose notification centre the app
+/// reaches through the same settings on iOS and macOS.
+bool get _darwin =>
+    !kIsWeb && (defaultTargetPlatform == TargetPlatform.iOS || defaultTargetPlatform == TargetPlatform.macOS);
 
 /// The system's own notifications.
 class SystemNotifier implements Notifier {
@@ -57,6 +55,20 @@ class SystemNotifier implements Notifier {
   /// can't read it back from the system itself.
   @visibleForTesting
   static void Function(({int id, String title, String body, String payload}) shown)? onShown;
+
+  /// Asks Apple's notification centre for quiet ("provisional") permission,
+  /// which needs no answer: for the acceptance tests in a simulator, where
+  /// nobody can answer the system's question.
+  @visibleForTesting
+  static bool quietPermission = false;
+
+  /// Apple's settings: nothing asked at start; the user switches a topic on
+  /// first ([requestPermission]).
+  static const _darwinSettings = DarwinInitializationSettings(
+    requestAlertPermission: false,
+    requestSoundPermission: false,
+    requestBadgePermission: false,
+  );
 
   @override
   Future<void> init({required String openLabel, void Function(String payload)? open}) async {
@@ -75,6 +87,8 @@ class SystemNotifier implements Notifier {
           guid: '6f3c2a51-9d84-4e0b-b7a2-5c1e8f04d3a9',
         ),
         web: const WebInitializationSettings(),
+        iOS: _darwinSettings,
+        macOS: _darwinSettings,
       ),
       onDidReceiveNotificationResponse: (response) {
         final payload = response.payload;
@@ -95,8 +109,19 @@ class SystemNotifier implements Notifier {
       final android = _plugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
       return await android?.requestNotificationsPermission() ?? await android?.areNotificationsEnabled() ?? false;
     }
-    // The desktops ask nothing: the user turns an app's notifications off
-    // in the system's settings.
+    if (_darwin) {
+      final quiet = quietPermission;
+      return await (defaultTargetPlatform == TargetPlatform.iOS
+              ? _plugin
+                  .resolvePlatformSpecificImplementation<IOSFlutterLocalNotificationsPlugin>()
+                  ?.requestPermissions(alert: true, sound: true, provisional: quiet)
+              : _plugin
+                  .resolvePlatformSpecificImplementation<MacOSFlutterLocalNotificationsPlugin>()
+                  ?.requestPermissions(alert: true, sound: true, provisional: quiet)) ??
+          false;
+    }
+    // Windows and Linux ask nothing: the user turns an app's notifications
+    // off in the system's settings.
     return true;
   }
 
@@ -125,6 +150,9 @@ class SystemNotifier implements Notifier {
             when: when == null ? null : when * 1000,
           ),
           linux: const LinuxNotificationDetails(category: LinuxNotificationCategory.imReceived),
+          // One thread in the notification centre for all of them.
+          iOS: const DarwinNotificationDetails(threadIdentifier: _channelId),
+          macOS: const DarwinNotificationDetails(threadIdentifier: _channelId),
         ),
       );
     onShown?.call((id: id, title: title, body: body, payload: payload));

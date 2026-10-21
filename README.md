@@ -85,7 +85,7 @@ A page opened with `?node=host:port` (for example `http://localhost:8080/?node=1
 
 ## Running
 
-The repo holds the Dart code (`lib/`, `test/`, `tool/`), the web shell (`web/`), the Windows, Linux, Android and iPhone apps' shells (`windows/`, `linux/`, `android/`, `ios/`: shown as Murmur, with the app's icon) and `pubspec.yaml`. (Not macOS's: the desktop client for macOS is out of scope.) To start:
+The repo holds the Dart code (`lib/`, `test/`, `tool/`), the web shell (`web/`), the Windows, Linux, Mac, Android and iPhone apps' shells (`windows/`, `linux/`, `macos/`, `android/`, `ios/`: shown as Murmur, with the app's icon) and `pubspec.yaml`. To start:
 
 ```
 flutter pub get
@@ -96,8 +96,8 @@ flutter run -d windows
 Platform notes:
 
 - **Android:** `android/` is committed: application id `info.murmur.client`, the name Murmur, the icons and launch screen (`tool/render_brand.dart`), the internet and biometric permissions, `MainActivity` as a `FlutterFragmentActivity` (the key store, `biometric_storage`, needs it), and what notifications need (compile SDK 36, Android 7 at least, core library desugaring). Building needs JDK 17 installed (the key store plugin asks Gradle for a Java 17 toolchain, whatever JDK runs Gradle). Release builds are signed with the debug keys until an Android release is published. From the emulator, the host machine's node is at `10.0.2.2`; `tool/android_emulator.sh` boots one for the acceptance tests.
-- **iOS:** `ios/` is committed: bundle id `info.murmur.client`, the name Murmur, the icon and launch screen (`tool/render_brand.dart`) and the Face ID reason in every language (`tool/ios_localizations.dart`, from the ARB files). Builds for the simulator need nothing more; builds for iPhones need the Apple developer account's signing.
-- **macOS:** add `com.apple.security.network.client` = `true` to both `macos/Runner/*.entitlements` files.
+- **iOS:** notifications as on Android, with a background check iOS runs when it decides (background app refresh). `ios/` is committed: bundle id `info.murmur.client`, the name Murmur, the icon and launch screen (`tool/render_brand.dart`) and the Face ID reason in every language (`tool/ios_localizations.dart`, from the ARB files). Builds for the simulator need nothing more; builds for iPhones need the Apple developer account's signing.
+- **macOS:** `macos/` is committed: bundle id `info.murmur.client`, the name Murmur, the icon (`tool/render_brand.dart`). It has no App Sandbox: the app runs its own node as a child process, which the sandbox would keep from its data folder and its port. Builds for others need the Apple developer account's signing and notarisation.
 - **Linux:** secure storage needs `libsecret-1-dev` to build.
 - **Web:** browsers can't open raw TCP sockets, so the web build connects to a local WebSocket bridge (default `ws://127.0.0.1:7880`), and the bridge relays to the node:
 

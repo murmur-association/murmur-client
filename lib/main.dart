@@ -39,12 +39,10 @@ Future<void> main() async {
       return AppExitResponse.exit;
     });
   }
-  // Notifications the app raises itself, where the platform has them.
-  final notifier = notificationsSupported ? SystemNotifier() : null;
+  // Notifications the app raises itself.
+  final notifier = SystemNotifier();
   runApp(MurmurApp(client: client, wallets: wallets, prefs: prefs, localNode: localNode, notifier: notifier));
-  if (notifier != null) {
-    await startNotifications(client: client, prefs: prefs, wallets: wallets, notifier: notifier);
-  }
+  await startNotifications(client: client, prefs: prefs, wallets: wallets, notifier: notifier);
 }
 
 class MurmurApp extends StatelessWidget {

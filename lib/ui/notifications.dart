@@ -28,6 +28,10 @@ import 'notifications_background.dart';
 import 'people.dart';
 import 'thread_page.dart';
 
+/// What a background check for news writes to the log as it starts: the
+/// acceptance tests look for it after asking Android to run the job.
+const backgroundCheckLog = 'murmur: background news check';
+
 /// The app's navigator, so a tapped notification can open its thread.
 final appNavigator = GlobalKey<NavigatorState>();
 

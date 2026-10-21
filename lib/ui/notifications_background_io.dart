@@ -78,6 +78,7 @@ Future<void> scheduleBackgroundChecks(bool on) async {
 @pragma('vm:entry-point')
 void newsTask() {
   Workmanager().executeTask((task, input) async {
+    debugPrint(backgroundCheckLog);
     try {
       await checkNewsInBackground();
     } catch (e) {

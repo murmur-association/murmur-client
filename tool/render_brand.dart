@@ -9,7 +9,8 @@
 // linux/runner/resources/app_icon.png (the badge, for the desktop apps),
 // ios/Runner/Assets.xcassets/AppIcon.appiconset (the iPhone's, opaque), its
 // launch screen's logo and background (LaunchImage, LaunchBackground), the
-// Android app's icons, launch logo and colours (android/app/src/main/res) and
+// Android app's icons, launch logo and colours (android/app/src/main/res), the
+// Mac's icon (macos/Runner/Assets.xcassets/AppIcon.appiconset) and
 // build/brand_preview.png.
 
 import 'dart:convert';
@@ -280,6 +281,10 @@ void main() {
       await _writeIosIcon('ios/Runner/Assets.xcassets/AppIcon.appiconset');
       await _writeIosLaunch('ios/Runner/Assets.xcassets');
       await _writeAndroid('android/app/src/main/res');
+      // The Mac's icon: the badge, at each size its icon set lists.
+      for (final size in const [16, 32, 64, 128, 256, 512, 1024]) {
+        await _writePng(await _badge(size), 'macos/Runner/Assets.xcassets/AppIcon.appiconset/app_icon_$size.png');
+      }
     });
   });
 
