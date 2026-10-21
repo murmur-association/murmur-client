@@ -25,11 +25,15 @@ typedef _Archive = ({String url, String sha256, List<String> unpack});
 
 /// A pinned browser and its WebDriver, for this system.
 class TestBrowser {
-  const TestBrowser._(this.name, this.version, this._browser, this._driver, this._archives);
+  const TestBrowser._(this.name, this.version, this._browser, this._driver, this._archives, [this._settings = const {}]);
 
   final String name, version;
   final String _browser, _driver;
   final List<_Archive> _archives;
+
+  /// Files written into the unpacked browser, by path: its settings for
+  /// the tests.
+  final Map<String, String> _settings;
 
   Directory get dir => Directory('build/test-browser/$name');
   File get browser => File('${dir.path}/$_browser').absolute;
@@ -45,7 +49,7 @@ class TestBrowser {
 
   /// Downloads, checks and unpacks it, unless it's there.
   Future<void> fetch() async {
-    if (ready) return;
+    if (ready) return _writeSettings();
     if (dir.existsSync()) dir.deleteSync(recursive: true);
     dir.createSync(recursive: true);
     final http = HttpClient();
@@ -67,7 +71,16 @@ class TestBrowser {
     } finally {
       http.close();
     }
+    _writeSettings();
     _fetched.writeAsStringSync(version);
+  }
+
+  void _writeSettings() {
+    for (final MapEntry(key: path, value: content) in _settings.entries) {
+      File('${dir.path}/$path')
+        ..parent.createSync(recursive: true)
+        ..writeAsStringSync(content);
+    }
   }
 }
 
@@ -111,7 +124,12 @@ TestBrowser get _firefox {
       sha256: 'e815130ea95983e162ae91843b48d3a3ce991735635fce83a647afde21e09f7e',
       unpack: ['tar', '-xzf'],
     ),
-  ]);
+  ], {
+    // Notifications allowed from the start: Firefox asks only from a real
+    // user's gesture, which a test's tap isn't, and geckodriver can't grant
+    // them (WebDriver's Set Permission is Chrome's).
+    'firefox/defaults/pref/acceptance.js': 'pref("permissions.default.desktop-notification", 1);\n',
+  });
 }
 
 /// The browser named `name` (chrome or firefox).

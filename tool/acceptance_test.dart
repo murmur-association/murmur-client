@@ -73,17 +73,24 @@ Future<Process> _startWebDriver() async {
       }(),
   };
   final driver = await Process.start(program, args);
-  unawaited(driver.stdout.drain<void>());
-  unawaited(driver.stderr.drain<void>());
-  final deadline = DateTime.now().add(const Duration(seconds: 20));
+  // Kept for a failure's report: a driver that won't start says why.
+  final said = StringBuffer();
+  for (final stream in [driver.stdout, driver.stderr]) {
+    stream.transform(const Utf8Decoder(allowMalformed: true)).listen(said.write);
+  }
+  final deadline = DateTime.now().add(const Duration(seconds: 30));
   while (true) {
-    try {
-      (await Socket.connect(InternetAddress.loopbackIPv4, 4444)).destroy();
-      return driver;
-    } on SocketException {
-      if (DateTime.now().isAfter(deadline)) fail('$program did not listen on port 4444');
-      await Future<void>.delayed(const Duration(milliseconds: 200));
+    // Either loopback: safaridriver listens on IPv6's.
+    for (final loopback in [InternetAddress.loopbackIPv4, InternetAddress.loopbackIPv6]) {
+      try {
+        (await Socket.connect(loopback, 4444)).destroy();
+        return driver;
+      } on SocketException {
+        // Not there yet, or not on this one.
+      }
     }
+    if (DateTime.now().isAfter(deadline)) fail('$program did not listen on port 4444; it said: $said');
+    await Future<void>.delayed(const Duration(milliseconds: 200));
   }
 }
 

@@ -117,6 +117,14 @@ class AppDriver {
     // A Mac's key store asks for the login password in a dialog the test
     // can't answer: a passphrase instead, as on Windows and Linux.
     if (defaultTargetPlatform == TargetPlatform.macOS) deviceKeyStoreAllowed = false;
+    // A window the system never showed has no size (a Mac runner with no
+    // one at its screen: "Failed to foreground app"), and every tap then
+    // lands outside it. The app is laid out at a laptop's size instead.
+    if (tester.view.physicalSize.isEmpty) {
+      tester.view.physicalSize = const Size(1280, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+    }
     await app.main();
     await waitFor(find.byType(HomePage), what: 'the home page');
     await waitUntil(() => client.state == LinkState.live, what: 'the app to follow the chain');

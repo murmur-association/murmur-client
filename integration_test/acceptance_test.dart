@@ -21,7 +21,7 @@ import 'package:murmur_client/services/notifier.dart';
 import 'package:murmur_client/services/storage.dart';
 import 'package:murmur_client/ui/common.dart' show AvatarLink, shortHex;
 import 'package:murmur_client/ui/invitations_page.dart';
-import 'package:murmur_client/ui/notifications.dart' show openNotification, payloadTarget;
+import 'package:murmur_client/ui/notifications.dart' show NewsNotifications, openNotification, payloadTarget;
 import 'package:murmur_client/ui/thread_page.dart';
 import 'package:murmur_client/ui/threads_tab.dart';
 
@@ -206,8 +206,13 @@ void main() {
     app.goAway();
     final text = 'Notified reply $stamp';
     final (someone, reply) = await app.someoneReplies(root, text);
-    await app.waitUntil(() => told.any((n) => n.body == text),
-        what: 'the notification of their reply', timeout: const Duration(minutes: 2));
+    try {
+      await app.waitUntil(() => told.any((n) => n.body == text),
+          what: 'the notification of their reply', timeout: const Duration(minutes: 2));
+    } on TestFailure catch (e) {
+      // Why, if the system refused it: the app's own log isn't at hand.
+      fail('${e.message}\nthe system last refused a notification with: ${NewsNotifications.lastRefusal}');
+    }
     final shown = told.singleWhere((n) => n.body == text);
     expect(shown.title, l.notifyReply(shortHex(someone)));
     expect(payloadTarget(shown.payload), (root: root, txid: reply.id));

@@ -160,9 +160,15 @@ class NewsNotifications {
       return true;
     } catch (e) {
       debugPrint('the system refused a notification: $e');
+      lastRefusal = e;
       return false;
     }
   }
+
+  /// What the system answered when it last refused a notification: the
+  /// acceptance tests report it, where the app's log isn't at hand.
+  @visibleForTesting
+  static Object? lastRefusal;
 
   Future<void> _show(AppLocalizations l, News n) {
     final name = nameFor(prefs, client, n.from);
