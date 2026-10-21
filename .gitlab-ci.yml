@@ -234,25 +234,29 @@ acceptance:
   script:
   - flutter test tool/acceptance_test.dart
 
-# Safari, on GitLab's macOS runner: it and safaridriver come with macOS, and
-# safaridriver needs enabling once.
+# Safari, by hand only, on a Mac runner with someone logged in to its
+# desktop: safaridriver drives Safari in that session, and GitLab's hosted
+# Macs have none (the console belongs to root, and safaridriver ends at once
+# with 1, saying nothing; tried 2026-10-21). Safari and safaridriver come
+# with macOS; safaridriver needs enabling once.
 "acceptance: [safari]":
   extends:
   - .flutter-macos
   - .acceptance-costly
+  rules:
+  - if: $CI_PIPELINE_SOURCE == "schedule"
+    when: never
+  - when: manual
   timeout: 60m
   variables:
     ACCEPTANCE_DEVICE: safari
   script:
+  - |
+    if [ "$(stat -f%Su /dev/console)" != "$(whoami)" ]; then
+      echo "Nobody is logged in to this Mac's desktop as $(whoami) (the console belongs to $(stat -f%Su /dev/console)): Safari can't run here."
+      exit 1
+    fi
   - sudo safaridriver --enable
-  # Started here, in the logged-in user's desktop session, and not by the
-  # runner: the job runs over SSH, outside that session, and from there
-  # safaridriver ends at once with 1, saying nothing. The runner takes the
-  # one listening.
-  - echo "console user $(stat -f%Su /dev/console), job user $(whoami)"
-  - sudo launchctl asuser "$(id -u)" sudo -u "$(whoami)" safaridriver -p 4444 > /tmp/safaridriver.log 2>&1 &
-  - for i in $(seq 30); do curl -sf http://localhost:4444/status && break; sleep 1; done
-  - curl -sf http://localhost:4444/status || { cat /tmp/safaridriver.log; exit 1; }
   - flutter test tool/acceptance_test.dart
 
 build-web:
