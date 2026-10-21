@@ -114,7 +114,10 @@ test:
 # tool/acceptance_test.dart: here the Linux app (with its own node, and
 # mining on a graphics card this runner doesn't have), and a browser (the
 # pinned Chrome for Testing) with a passphrase and again with a passkey.
-# Windows and Android run the same file where there's a machine for them. New, so allowed to fail until it has run green here:
+# Windows, iOS and Android run it too, in jobs of their own below (named
+# "acceptance: [windows]" and so on, so the pipeline shows all of them as one
+# group); those cost more, so they run by themselves on the default branch
+# and tags, by hand elsewhere. New, so allowed to fail until it has run green here:
 # it must not stop the scheduled release before then.
 acceptance:
   extends:
@@ -136,95 +139,14 @@ acceptance:
   # browser is none the worse for it.
   - tool/linux_session.sh flutter test tool/acceptance_test.dart
 
-# Trials of what GitLab's hosted runners offer, before the phones'
-# acceptance tests rely on them. Started by hand (they cost compute
-# minutes), never in a scheduled pipeline, and allowed to fail: their log
-# is the answer.
-.probe:
-  stage: test
-  rules:
-  - if: $CI_PIPELINE_SOURCE == "schedule"
-    when: never
-  - when: manual
-  allow_failure: true
-
-# Android: GitLab's hosted Linux runner has no KVM (the trial of 2026-10-20
-# found no virtualisation flag and no /dev/kvm). This measures what an
-# emulator without acceleration costs there: how long an Android 10 image
-# without Google's apps takes to boot, then a minimal Flutter app's test on
-# it, as the iOS trial ran one. The times in its log decide whether a
-# nightly Android job on GitLab is realistic.
-probe-android-emulator:
-  extends: .probe
-  image: ghcr.io/cirruslabs/flutter:3.44.0
-  tags:
-  - saas-linux-large-amd64
-  timeout: 2h
-  script:
-  - grep -cE 'vmx|svm' /proc/cpuinfo || echo 'no virtualisation flag in /proc/cpuinfo'
-  # Libraries the emulator loads even without a window.
-  - apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends libpulse0 libnss3 libgbm1 libxkbfile1 libxcomposite1 libxcursor1 libxdamage1 libxi6 libxtst6 >/dev/null || true
-  # (yes ends by a broken pipe once sdkmanager has read enough: not a failure.)
-  - yes | sdkmanager --licenses >/dev/null || true
-  - sdkmanager --install emulator platform-tools 'system-images;android-29;default;x86_64' >/dev/null
-  - $ANDROID_HOME/emulator/emulator -version | head -1
-  - echo no | avdmanager create avd -n probe -k 'system-images;android-29;default;x86_64' -d pixel_6
-  - start=$(date +%s)
-  - |
-    $ANDROID_HOME/emulator/emulator -avd probe -accel off -no-window -no-audio -no-boot-anim -no-snapshot \
-      -gpu swiftshader_indirect -cores 4 -memory 4096 > emulator.log 2>&1 &
-  - sleep 30
-  - |
-    if ! pgrep -f 'emulator.*-avd probe' >/dev/null; then
-      echo 'THE EMULATOR WOULD NOT RUN WITHOUT ACCELERATION'; cat emulator.log; exit 1
-    fi
-  - timeout 1800 adb wait-for-device
-  - |
-    timeout 3600 sh -c 'until [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d "\r")" = 1 ]; do sleep 15; done'
-  - |
-    echo "BOOT without acceleration: $(( $(date +%s) - start )) s"
-  - adb shell getprop ro.build.version.release
-  - flutter create --platforms=android --project-name probe "$HOME/probe"
-  - cd "$HOME/probe"
-  - flutter pub add 'dev:integration_test:{"sdk":"flutter"}'
-  - mkdir -p integration_test
-  - |
-    cat > integration_test/probe_test.dart <<'DART'
-    import 'package:flutter/material.dart';
-    import 'package:flutter_test/flutter_test.dart';
-    import 'package:integration_test/integration_test.dart';
-    import 'package:probe/main.dart' as app;
-
-    void main() {
-      IntegrationTestWidgetsFlutterBinding.ensureInitialized();
-      testWidgets('an app runs on the emulator, and a test drives it', (tester) async {
-        app.main();
-        await tester.pumpAndSettle();
-        await tester.tap(find.byIcon(Icons.add));
-        await tester.pumpAndSettle();
-        expect(find.text('1'), findsOneWidget);
-      });
-    }
-    DART
-  - built=$(date +%s)
-  - flutter build apk --debug
-  - |
-    echo "APK build: $(( $(date +%s) - built )) s"
-  - tested=$(date +%s)
-  - flutter test integration_test/probe_test.dart -d emulator-5554
-  - |
-    echo "APP TEST on the emulator without acceleration: $(( $(date +%s) - tested )) s"
-  after_script:
-  - tail -n 40 emulator.log || true
-
 # The acceptance tests in an Android emulator, on GitLab's hosted Linux
 # runner, against a node of their own. The runner has no KVM, so the
-# emulator emulates the processor (probe-android-emulator measured it: a
-# boot in about three minutes, a small app's test in two and a half), and
-# the suite is slower than elsewhere. Like iOS: by itself on the default
+# emulator emulates the processor (measured 2026-10-20: a boot in about
+# three minutes, the whole job about 50), and the suite is slower than
+# elsewhere. Like iOS: by itself on the default
 # branch and on tags, by hand elsewhere. New, so allowed to fail until it
 # has run green.
-acceptance-android:
+"acceptance: [android]":
   extends: .flutter
   stage: test
   tags:
@@ -258,7 +180,7 @@ acceptance-android:
 # costs macOS minutes, so it runs by itself on the default branch and on
 # tags, and by hand elsewhere. New, so allowed to fail until it has run
 # green.
-acceptance-ios:
+"acceptance: [ios]":
   stage: test
   image: macos-26-xcode-26
   tags:
@@ -489,7 +411,7 @@ build-web-testnet:
 # Windows' own storage isn't needed. It costs Windows minutes: by itself on
 # the default branch and on tags, by hand elsewhere. New, so allowed to
 # fail until it has run green.
-acceptance-windows:
+"acceptance: [windows]":
   extends: .flutter-windows
   stage: test
   timeout: 60m
