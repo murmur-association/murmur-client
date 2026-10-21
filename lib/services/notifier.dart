@@ -160,6 +160,9 @@ class SystemNotifier implements Notifier {
 
   @override
   Future<String?> launchPayload() async {
+    // Linux's plugin has none, and throws when asked: a click there reaches
+    // only a running app.
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.linux) return null;
     final details = await _plugin.getNotificationAppLaunchDetails();
     return details?.didNotificationLaunchApp == true ? details?.notificationResponse?.payload : null;
   }

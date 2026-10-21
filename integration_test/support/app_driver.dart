@@ -363,12 +363,16 @@ class AppDriver {
       // Proven at the tip: a fresh client's first proof can be from a block
       // before the wallet's last transaction (sent from the app, which this
       // device doesn't know of), and its nonce would then be one too few.
+      // Nor may the app have one still waiting to be mined: no other device
+      // can see it, and the two would carry the same nonce.
       await waitUntil(
           () =>
               other.state == LinkState.live &&
               other.account(payer.addressHex)?.height == other.height &&
+              client.nextNonce(payer.addressHex) == client.account(payer.addressHex)?.nonce &&
+              other.account(payer.addressHex)?.nonce == client.account(payer.addressHex)?.nonce &&
               (other.availableTo(payer.addressHex) ?? 0) > 0,
-          what: "the other device to see the test's wallet, proven at the tip");
+          what: "the other device to see the test's wallet, proven at the tip, with nothing of the app's pending");
       final fund = await other.submit(
           wallet: payer, kind: TxKind.raw, to: someone.address, amount: 5 * unitsPerToken, fee: minFee);
       try {

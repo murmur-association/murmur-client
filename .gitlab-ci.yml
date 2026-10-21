@@ -220,12 +220,17 @@ acceptance:
   - flutter test tool/acceptance_test.dart
 
 # The Mac app, on GitLab's macOS runner, with its own node (the node's macOS
-# build) as on Windows and Linux.
+# build) as on Windows and Linux. The job runs outside a desktop session
+# (its window is never put on screen, and the notification centre refuses
+# the app), so as on Windows the notification step skips itself; iOS's job
+# covers Apple's notification centre.
 "acceptance: [macos]":
   extends:
   - .flutter-macos
   - .acceptance-costly
   timeout: 60m
+  variables:
+    ACCEPTANCE_NO_NOTIFICATIONS: "1"
   script:
   - flutter test tool/acceptance_test.dart
 

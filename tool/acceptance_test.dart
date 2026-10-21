@@ -89,7 +89,16 @@ Future<Process> _startWebDriver() async {
         // Not there yet, or not on this one.
       }
     }
-    if (DateTime.now().isAfter(deadline)) fail('$program did not listen on port 4444; it said: $said');
+    if (DateTime.now().isAfter(deadline)) {
+      // Whether it ended, and where it listens if it lives: a driver that
+      // says nothing still says that much.
+      final ended = await driver.exitCode.timeout(Duration.zero, onTimeout: () => -1);
+      final ports = Platform.isWindows
+          ? ''
+          : (await Process.run('lsof', ['-nP', '-a', '-p', '${driver.pid}', '-iTCP'])).stdout;
+      fail('$program did not listen on port 4444; '
+          '${ended == -1 ? 'it runs, with sockets: $ports' : 'it ended with $ended'}; it said: $said');
+    }
     await Future<void>.delayed(const Duration(milliseconds: 200));
   }
 }
@@ -179,8 +188,10 @@ void main() {
             '-d', 'web-server',
             '--browser-name=$_browserName',
             if (_browserName == 'chrome') '--chrome-binary=${testBrowserNamed('chrome').browser.path}',
-            // Safari has no headless mode.
-            if (_env['ACCEPTANCE_HEADED'] == null && _browserName != 'safari') '--headless',
+            // Chrome only: Safari has no headless mode, and Firefox has
+            // nothing to show a notification with in it (NS_ERROR_FAILURE),
+            // so it takes the display tool/linux_session.sh gives.
+            if (_env['ACCEPTANCE_HEADED'] == null && _browserName == 'chrome') '--headless',
             ...settings,
           ];
     print('flutter ${args.where((a) => !a.contains('ACCEPTANCE_SEED')).join(' ')}');
