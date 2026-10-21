@@ -62,7 +62,8 @@ Future<int> _freePort() async {
 /// waits until it answers.
 Future<Process> _startWebDriver() async {
   final (program, args) = switch (_browserName) {
-    'safari' => ('safaridriver', ['-p', '4444']),
+    // Its log goes to ~/Library/Logs/com.apple.WebDriver (_safariLog).
+    'safari' => ('safaridriver', ['--diagnose', '-p', '4444']),
     final name => () {
         final pinned = testBrowserNamed(name);
         if (!pinned.ready) fail('No $name ${pinned.version} in ${pinned.dir.path}: run `dart run tool/fetch_test_browser.dart $name`.');
@@ -97,10 +98,23 @@ Future<Process> _startWebDriver() async {
           ? ''
           : (await Process.run('lsof', ['-nP', '-a', '-p', '${driver.pid}', '-iTCP'])).stdout;
       fail('$program did not listen on port 4444; '
-          '${ended == -1 ? 'it runs, with sockets: $ports' : 'it ended with $ended'}; it said: $said');
+          '${ended == -1 ? 'it runs, with sockets: $ports' : 'it ended with $ended'}; it said: $said'
+          '${_browserName == 'safari' ? '\nits log: ${_safariLog()}' : ''}');
     }
     await Future<void>.delayed(const Duration(milliseconds: 200));
   }
+}
+
+/// The end of safaridriver's latest log (`--diagnose`): it says nothing on
+/// its output.
+String _safariLog() {
+  final dir = Directory('${Platform.environment['HOME']}/Library/Logs/com.apple.WebDriver');
+  if (!dir.existsSync()) return 'none, in ${dir.path}';
+  final logs = dir.listSync().whereType<File>().toList()
+    ..sort((a, b) => a.lastModifiedSync().compareTo(b.lastModifiedSync()));
+  if (logs.isEmpty) return 'none, in ${dir.path}';
+  final lines = logs.last.readAsLinesSync();
+  return '${logs.last.path}:\n${lines.skip(lines.length > 40 ? lines.length - 40 : 0).join('\n')}';
 }
 
 /// Stops the node the app under test may have left running (a test that
@@ -188,10 +202,8 @@ void main() {
             '-d', 'web-server',
             '--browser-name=$_browserName',
             if (_browserName == 'chrome') '--chrome-binary=${testBrowserNamed('chrome').browser.path}',
-            // Chrome only: Safari has no headless mode, and Firefox has
-            // nothing to show a notification with in it (NS_ERROR_FAILURE),
-            // so it takes the display tool/linux_session.sh gives.
-            if (_env['ACCEPTANCE_HEADED'] == null && _browserName == 'chrome') '--headless',
+            // Safari has no headless mode.
+            if (_env['ACCEPTANCE_HEADED'] == null && _browserName != 'safari') '--headless',
             ...settings,
           ];
     print('flutter ${args.where((a) => !a.contains('ACCEPTANCE_SEED')).join(' ')}');

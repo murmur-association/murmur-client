@@ -125,10 +125,12 @@ TestBrowser get _firefox {
       unpack: ['tar', '-xzf'],
     ),
   ], {
-    // Notifications allowed from the start: Firefox asks only from a real
-    // user's gesture, which a test's tap isn't, and geckodriver can't grant
-    // them (WebDriver's Set Permission is Chrome's).
-    'firefox/defaults/pref/acceptance.js': 'pref("permissions.default.desktop-notification", 1);\n',
+    // Notifications drawn by Firefox itself: its system backend needs
+    // libnotify, and without it every notification fails (NS_ERROR_FAILURE).
+    // Set by policy, the one setting file a browser's own folder carries
+    // that Firefox reads.
+    'firefox/distribution/policies.json':
+        '{"policies": {"Preferences": {"alerts.useSystemBackend": {"Value": false, "Status": "locked"}}}}\n',
   });
 }
 
