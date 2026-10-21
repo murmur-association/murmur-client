@@ -563,10 +563,12 @@ package:
   - sha256sum murmur-* > SHA256SUMS
   - cat SHA256SUMS
   - |
+    # Retries spaced over about five minutes: v0.8.0's upload met an outage of
+    # gitlab.com that outlasted curl's default spacing, and the release stopped.
     upload() { # <package> <file>...
       package=$1; shift
       for f in "$@" SHA256SUMS; do
-        curl --fail --silent --show-error --retry 5 --retry-all-errors --header "JOB-TOKEN: $CI_JOB_TOKEN" --upload-file "$f" \
+        curl --fail --silent --show-error --retry 10 --retry-delay 15 --retry-all-errors --header "JOB-TOKEN: $CI_JOB_TOKEN" --upload-file "$f" \
           "$CI_API_V4_URL/projects/$CI_PROJECT_ID/packages/generic/$package/$CI_COMMIT_TAG/$f"
       done
     }
