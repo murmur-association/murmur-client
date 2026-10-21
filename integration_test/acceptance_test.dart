@@ -234,9 +234,9 @@ void main() {
     // And off again.
     await app.switchOnNotifications(l.notifyReplies);
     expect(app.prefs.notifyTopics, isEmpty);
-    // Not where the app offers none (iOS, for now), nor on a machine with no
-    // desktop to show them on (a CI runner's service session).
-  }, skip: !notificationsSupported || acceptanceNoNotifications);
+    // Not on a machine with no desktop to show them on (a CI runner's
+    // service session).
+  }, skip: acceptanceNoNotifications);
 
   testWidgets("a desktop's own node: it runs beside the app, and mines on the graphics card or says why not",
       (tester) async {

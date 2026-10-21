@@ -108,17 +108,16 @@ test:
   - flutter test
 
 # The acceptance tests: what a user does with the app (a wallet, a thread,
-# a reply, an invitation card, a restart), inside the built app and against
-# a node of its own on a demo chain. One test file
+# a reply, an invitation card, a restart, a notification), inside the built
+# app and against a node of its own on a demo chain. One test file
 # (integration_test/acceptance_test.dart), run once per flavour by
-# tool/acceptance_test.dart: here the Linux app (with its own node, and
-# mining on a graphics card this runner doesn't have), and a browser (the
-# pinned Chrome for Testing) with a passphrase and again with a passkey.
-# Windows, iOS and Android run it too, in jobs of their own below (named
-# "acceptance: [windows]" and so on, so the pipeline shows all of them as one
-# group); those cost more, so they run by themselves on the default branch
-# and tags, by hand elsewhere. New, so allowed to fail until it has run green here:
-# it must not stop the scheduled release before then.
+# tool/acceptance_test.dart. Every job is named "acceptance: [<flavour>]",
+# so the pipeline shows them as one group: here the Linux app (with its own
+# node, and mining on a graphics card this runner doesn't have) and the
+# browsers that run on Linux (pinned, tool/fetch_test_browser.dart): Chrome
+# with a passphrase and with a passkey, and Firefox. New, so allowed to fail
+# until it has run green here: it must not stop the scheduled release
+# before then.
 acceptance:
   extends:
   - .flutter
@@ -129,29 +128,23 @@ acceptance:
     MURMUR_REQUIRE_NODE: "1"
   parallel:
     matrix:
-    - ACCEPTANCE_DEVICE: [linux, chrome, chrome-passkey]
+    - ACCEPTANCE_DEVICE: [linux, chrome, chrome-passkey, firefox]
   script:
   - apt-get update -qq
-  - DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends $LINUX_APP_PACKAGES libnss3 libgbm1
+  # Firefox's archive is xz, and it plays (and so loads) sound.
+  - DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends $LINUX_APP_PACKAGES libnss3 libgbm1 xz-utils
+  - DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends libasound2t64 || DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends libasound2
   - dart run tool/bundle_node.dart --for-tests
-  - case "$ACCEPTANCE_DEVICE" in chrome*) dart run tool/fetch_test_browser.dart;; esac
-  # The same session for both: the Linux app needs its display, and the
+  - case "$ACCEPTANCE_DEVICE" in chrome*) dart run tool/fetch_test_browser.dart chrome;; firefox) dart run tool/fetch_test_browser.dart firefox;; esac
+  # The same session for all: the Linux app needs its display, and a
   # browser is none the worse for it.
   - tool/linux_session.sh flutter test tool/acceptance_test.dart
 
-# The acceptance tests in an Android emulator, on GitLab's hosted Linux
-# runner, against a node of their own. The runner has no KVM, so the
-# emulator emulates the processor (measured 2026-10-20: a boot in about
-# three minutes, the whole job about 50), and the suite is slower than
-# elsewhere. Like iOS: by itself on the default
-# branch and on tags, by hand elsewhere. New, so allowed to fail until it
-# has run green.
-"acceptance: [android]":
-  extends: .flutter
+# The flavours that cost more (other runners, or an hour on this one): by
+# themselves on the default branch and on tags, by hand elsewhere. New, so
+# allowed to fail until they have run green.
+.acceptance-costly:
   stage: test
-  tags:
-  - saas-linux-large-amd64
-  timeout: 3h
   allow_failure: true
   rules:
   - if: $CI_PIPELINE_SOURCE == "schedule"
@@ -160,6 +153,47 @@ acceptance:
   - when: manual
   variables:
     MURMUR_REQUIRE_NODE: "1"
+
+# GitLab's macOS runner, ready to build the app and run its tests: the
+# pinned Flutter SDK (cloned and cached, as on Linux and Windows), the
+# packages, and the pinned node's macOS build. For iOS, macOS and Safari.
+.flutter-macos:
+  image: macos-26-xcode-26
+  tags:
+  - saas-macos-medium-m1
+  variables:
+    PUB_CACHE: "$CI_PROJECT_DIR/.pub-cache"
+  cache:
+  - key: flutter-sdk-macos-$FLUTTER_VERSION
+    paths:
+    - .flutter-sdk-macos/
+  before_script:
+  - |
+    if [ "$(cat .flutter-sdk-macos/.ci-version 2>/dev/null)" != "$FLUTTER_VERSION" ]; then
+      rm -rf .flutter-sdk-macos
+      git clone --depth 1 --branch "$FLUTTER_VERSION" https://github.com/flutter/flutter.git .flutter-sdk-macos
+      echo "$FLUTTER_VERSION" > .flutter-sdk-macos/.ci-version
+    fi
+  - export PATH="$CI_PROJECT_DIR/.flutter-sdk-macos/bin:$PATH"
+  - flutter --version
+  - flutter pub get
+  - dart run tool/bundle_node.dart --for-tests
+
+# In an Android emulator, on GitLab's hosted Linux runner. The runner has
+# no KVM, so the emulator emulates the processor (measured 2026-10-20: a
+# boot in about three minutes, the whole job about 50), and the suite waits
+# six times as long. The runner answers the system's screens from the host
+# (tool/android_system.dart): the notification permission, a fingerprint
+# enrolled and touched, a notification opened from the shade, the
+# background job run as Android would.
+"acceptance: [android]":
+  extends:
+  - .flutter
+  - .acceptance-costly
+  tags:
+  - saas-linux-large-amd64
+  timeout: 3h
+  variables:
     # Every instruction emulated: a passphrase's 600,000 rounds of PBKDF2
     # take minutes, so the suite waits six times as long.
     ACCEPTANCE_SLOW: "1"
@@ -174,43 +208,38 @@ acceptance:
   after_script:
   - tail -n 60 /tmp/murmur-emulator.log || true
 
-# The acceptance tests in an iPhone simulator, on GitLab's macOS runner (the
-# trial of 2026-10-20 found a simulator there, and a Flutter app's tests
-# running in it), against a node of their own: the node's macOS build. It
-# costs macOS minutes, so it runs by itself on the default branch and on
-# tags, and by hand elsewhere. New, so allowed to fail until it has run
-# green.
+# In an iPhone simulator, on GitLab's macOS runner (tool/ios_simulator.sh
+# boots one), against the node's macOS build.
 "acceptance: [ios]":
-  stage: test
-  image: macos-26-xcode-26
-  tags:
-  - saas-macos-medium-m1
+  extends:
+  - .flutter-macos
+  - .acceptance-costly
   timeout: 60m
-  allow_failure: true
-  rules:
-  - if: $CI_PIPELINE_SOURCE == "schedule"
-    when: never
-  - if: $CI_COMMIT_TAG || $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-  - when: manual
-  variables:
-    MURMUR_REQUIRE_NODE: "1"
-    PUB_CACHE: "$CI_PROJECT_DIR/.pub-cache"
-  cache:
-  - key: flutter-sdk-macos-$FLUTTER_VERSION
-    paths:
-    - .flutter-sdk-macos/
   script:
-  - |
-    if [ "$(cat .flutter-sdk-macos/.ci-version 2>/dev/null)" != "$FLUTTER_VERSION" ]; then
-      rm -rf .flutter-sdk-macos
-      git clone --depth 1 --branch "$FLUTTER_VERSION" https://github.com/flutter/flutter.git .flutter-sdk-macos
-      echo "$FLUTTER_VERSION" > .flutter-sdk-macos/.ci-version
-    fi
-  - export PATH="$CI_PROJECT_DIR/.flutter-sdk-macos/bin:$PATH"
-  - flutter --version
-  - flutter pub get
-  - dart run tool/bundle_node.dart --for-tests
   - export ACCEPTANCE_DEVICE=$(tool/ios_simulator.sh)
+  - flutter test tool/acceptance_test.dart
+
+# The Mac app, on GitLab's macOS runner, with its own node (the node's macOS
+# build) as on Windows and Linux.
+"acceptance: [macos]":
+  extends:
+  - .flutter-macos
+  - .acceptance-costly
+  timeout: 60m
+  script:
+  - flutter test tool/acceptance_test.dart
+
+# Safari, on GitLab's macOS runner: it and safaridriver come with macOS, and
+# safaridriver needs enabling once.
+"acceptance: [safari]":
+  extends:
+  - .flutter-macos
+  - .acceptance-costly
+  timeout: 60m
+  variables:
+    ACCEPTANCE_DEVICE: safari
+  script:
+  - sudo safaridriver --enable
   - flutter test tool/acceptance_test.dart
 
 build-web:
@@ -408,21 +437,12 @@ build-web-testnet:
 # app the tests build gets, beside it, the software graphics the smoke test
 # uses and Visual Studio's debug runtime, and the node gets the release
 # runtime. The app keeps its settings in memory here (app_driver.dart), so
-# Windows' own storage isn't needed. It costs Windows minutes: by itself on
-# the default branch and on tags, by hand elsewhere. New, so allowed to
-# fail until it has run green.
+# Windows' own storage isn't needed.
 "acceptance: [windows]":
-  extends: .flutter-windows
-  stage: test
+  extends:
+  - .flutter-windows
+  - .acceptance-costly
   timeout: 60m
-  allow_failure: true
-  rules:
-  - if: $CI_PIPELINE_SOURCE == "schedule"
-    when: never
-  - if: $CI_COMMIT_TAG || $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-  - when: manual
-  variables:
-    MURMUR_REQUIRE_NODE: "1"
   script:
   - dart run tool/bundle_node.dart --for-tests
   # The debug build first, so its folder is there to put things beside the

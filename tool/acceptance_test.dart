@@ -3,17 +3,20 @@
 // the run, served and mined on by the pinned murmur-node release
 // (test/support/test_node.dart), paying a wallet made for the run.
 //
-//   flutter test tool/acceptance_test.dart                             # this desktop: Windows or Linux
+//   flutter test tool/acceptance_test.dart                             # this desktop: Windows, Linux or macOS
 //   ACCEPTANCE_DEVICE=chrome flutter test tool/acceptance_test.dart    # a browser, with a passphrase
 //   ACCEPTANCE_DEVICE=chrome-passkey flutter test tool/acceptance_test.dart   # a browser, with a passkey
+//   ACCEPTANCE_DEVICE=firefox flutter test tool/acceptance_test.dart   # Firefox (Linux)
+//   ACCEPTANCE_DEVICE=safari flutter test tool/acceptance_test.dart    # Safari (macOS)
 //   ACCEPTANCE_DEVICE=emulator-5554 flutter test tool/acceptance_test.dart   # an Android emulator
 //   ACCEPTANCE_DEVICE=$(tool/ios_simulator.sh) flutter test tool/acceptance_test.dart   # an iPhone simulator (macOS)
 //
-// A browser run uses the pinned "Chrome for Testing" and its chromedriver
-// (`dart run tool/fetch_test_browser.dart` downloads them): the driver is
-// started here, on port 4444, and stopped afterwards. ACCEPTANCE_HEADED
-// shows the browser. Only Chrome: `flutter drive` asks Edge's driver for a
-// browser it doesn't know by that name.
+// A browser run uses a pinned browser and its WebDriver (`dart run
+// tool/fetch_test_browser.dart chrome|firefox` downloads them), or Safari's
+// own safaridriver (enabled once with `sudo safaridriver --enable`): the
+// driver is started here, on port 4444, and stopped afterwards.
+// ACCEPTANCE_HEADED shows the browser. Not Edge: `flutter drive` asks Edge's
+// driver for a browser it doesn't know by that name.
 //
 // The app in the test keeps nothing on the device (app_driver.dart), so
 // this can run where the app is used. On Linux it still needs a display:
@@ -29,12 +32,19 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:murmur_client/crypto/wallet.dart';
 import 'package:murmur_client/protocol/bytes.dart';
 
+import 'package:murmur_client/ui/notifications.dart' show backgroundCheckLog;
+
+import '../integration_test/support/acceptance_protocol.dart';
 import '../test/support/test_node.dart';
+import 'android_system.dart';
 import 'fetch_test_browser.dart';
 
 final _env = Platform.environment;
 final _device = _env['ACCEPTANCE_DEVICE'] ?? Platform.operatingSystem;
-const _browsers = {'chrome', 'chrome-passkey'};
+const _browsers = {'chrome', 'chrome-passkey', 'firefox', 'safari'};
+
+/// The browser `flutter drive` drives for a browser flavour.
+String get _browserName => _device == 'chrome-passkey' ? 'chrome' : _device;
 const _suite = 'integration_test/acceptance_test.dart';
 
 /// A device far slower than a desktop (ACCEPTANCE_SLOW): the suite waits longer.
@@ -51,11 +61,18 @@ Future<int> _freePort() async {
 /// Starts the browser's WebDriver on the port `flutter drive` expects, and
 /// waits until it answers.
 Future<Process> _startWebDriver() async {
-  if (!testBrowserReady) {
-    fail('No Chrome for Testing $testBrowserVersion in $testBrowserDir: run `dart run tool/fetch_test_browser.dart`.');
-  }
-  const program = 'chromedriver';
-  final driver = await Process.start(testBrowserDriver.path, ['--port=4444']);
+  final (program, args) = switch (_browserName) {
+    'safari' => ('safaridriver', ['-p', '4444']),
+    final name => () {
+        final pinned = testBrowserNamed(name);
+        if (!pinned.ready) fail('No $name ${pinned.version} in ${pinned.dir.path}: run `dart run tool/fetch_test_browser.dart $name`.');
+        return (
+          pinned.driver.path,
+          name == 'firefox' ? ['--port', '4444', '--binary', pinned.browser.path] : ['--port=4444'],
+        );
+      }(),
+  };
+  final driver = await Process.start(program, args);
   unawaited(driver.stdout.drain<void>());
   unawaited(driver.stderr.drain<void>());
   final deadline = DateTime.now().add(const Duration(seconds: 20));
@@ -85,22 +102,16 @@ Future<void> _stopOwnNode(Directory data) async {
     // Still held for a moment by the node on its way out.
   }
 }
-/// Allows the app on the Android device `device` to notify, as its user
-/// would when it asks (Android 13 and later ask; an in-app test can't tap
-/// the system's question): granted again every few seconds, since `flutter
-/// test` installs the app anew, until the run ends. Null without the app's
-/// Android project (generated per machine, README).
-Timer? _allowNotifications(String device) {
-  final gradle = [File('android/app/build.gradle.kts'), File('android/app/build.gradle')]
-      .where((f) => f.existsSync())
-      .firstOrNull;
-  final id = gradle == null
-      ? null
-      : RegExp(r"""applicationId\s*=?\s*["']([^"']+)["']""").firstMatch(gradle.readAsStringSync())?.group(1);
-  if (id == null) return null;
-  return Timer.periodic(const Duration(seconds: 3), (_) {
-    Process.run('adb', ['-s', device, 'shell', 'pm', 'grant', id, 'android.permission.POST_NOTIFICATIONS']);
-  });
+/// Finds the app's WorkManager job (scheduled once notifications are on),
+/// runs it as Android would, and says whether its Dart side ran.
+Future<bool> _runBackgroundJob(AndroidSystem android) async {
+  for (var i = 0; i < 30; i++) {
+    final job = await android.backgroundJob();
+    if (job != null) return android.runBackgroundJob(job, backgroundCheckLog);
+    await Future<void>.delayed(const Duration(seconds: 2));
+  }
+  print('android: no background job was scheduled');
+  return false;
 }
 
 void main() {
@@ -120,7 +131,7 @@ void main() {
     final host = _device.startsWith('emulator-') ? '10.0.2.2' : '127.0.0.1';
     // A desktop app can run a node of its own: the pinned one, on the demo
     // network, in a folder thrown away with the run (never the user's).
-    final desktop = _device == 'windows' || _device == 'linux';
+    final desktop = _device == 'windows' || _device == 'linux' || _device == 'macos';
     final ownNodeData = desktop ? await Directory.systemTemp.createTemp('murmur-acceptance-node') : null;
     if (ownNodeData != null) addTearDown(() => _stopOwnNode(ownNodeData));
     final settings = [
@@ -137,10 +148,21 @@ void main() {
       final driver = await _startWebDriver();
       addTearDown(driver.kill);
     }
-    if (_device.startsWith('emulator-')) {
-      final allowing = _allowNotifications(_device);
-      if (allowing != null) addTearDown(allowing.cancel);
+    // An Android emulator's system screens are the runner's to answer
+    // (tool/android_system.dart): a fingerprint enrolled first, so the
+    // wallet goes under the device's lock as on a phone; then, while the
+    // suite runs, its prompts answered and its requests done.
+    final android = _device.startsWith('emulator-') ? AndroidSystem(_device, androidApplicationId()!) : null;
+    if (android != null) {
+      android.fingerprint = await android.enrollFingerprint();
+      print('android: a fingerprint is ${android.fingerprint ? '' : 'not '}enrolled');
+      if (android.fingerprint) settings.add('--dart-define=ACCEPTANCE_DEVICE_LOCK=true');
+      unawaited(android.watch());
+      addTearDown(android.stop);
     }
+    // Whether the app's background job ran when the runner ran it: null
+    // until the suite asks.
+    bool? backgroundJobRan;
     final args = !browser
         ? ['test', _suite, '-d', _device, ...settings]
         : [
@@ -148,9 +170,10 @@ void main() {
             '--driver=test_driver/integration_test.dart',
             '--target=$_suite',
             '-d', 'web-server',
-            '--browser-name=chrome',
-            '--chrome-binary=${testBrowser.path}',
-            if (_env['ACCEPTANCE_HEADED'] == null) '--headless',
+            '--browser-name=$_browserName',
+            if (_browserName == 'chrome') '--chrome-binary=${testBrowserNamed('chrome').browser.path}',
+            // Safari has no headless mode.
+            if (_env['ACCEPTANCE_HEADED'] == null && _browserName != 'safari') '--headless',
             ...settings,
           ];
     print('flutter ${args.where((a) => !a.contains('ACCEPTANCE_SEED')).join(' ')}');
@@ -170,10 +193,22 @@ void main() {
       stream.transform(const Utf8Decoder(allowMalformed: true)).transform(const LineSplitter()).listen((line) {
         said.add(line);
         print(line);
+        if (android == null) return;
+        final click = line.indexOf(androidClickRequest);
+        if (click >= 0) {
+          final title = line.substring(click + androidClickRequest.length).trim();
+          android.clickNotification(title).then((done) => print('android: clicked "$title": $done'));
+        } else if (line.contains(androidBackgroundJobRequest)) {
+          _runBackgroundJob(android).then((ran) {
+            backgroundJobRan = ran;
+            print('android: the background job ran: $ran');
+          });
+        }
       });
     }
     expect(await flutter.exitCode, 0, reason: 'the acceptance tests on $_device');
     // `flutter drive` can end with 0 after tests that failed.
     expect(said.where((line) => line.contains('Some tests failed') || line.contains('[E]')), isEmpty);
+    if (android != null) expect(backgroundJobRan, isTrue, reason: "the app's background job, run as Android runs it");
   }, skip: nodeSkip, timeout: Timeout(Duration(minutes: _slow ? 150 : 30)));
 }

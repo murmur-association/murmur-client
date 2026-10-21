@@ -10,7 +10,7 @@
 
 import 'dart:async';
 
-import 'package:flutter/foundation.dart' show defaultTargetPlatform;
+import 'package:flutter/foundation.dart' show TargetPlatform, defaultTargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -18,13 +18,16 @@ import 'package:murmur_client/crypto/wallet.dart';
 import 'package:murmur_client/main.dart' as app;
 import 'package:murmur_client/protocol/bytes.dart';
 import 'package:murmur_client/protocol/models.dart';
+import 'package:murmur_client/services/key_vault.dart' show deviceKeyStoreAllowed;
 import 'package:murmur_client/services/local_node.dart';
 import 'package:murmur_client/services/node_client.dart';
+import 'package:murmur_client/services/notifier.dart';
 import 'package:murmur_client/services/storage.dart';
 import 'package:murmur_client/ui/common.dart';
 import 'package:murmur_client/ui/home_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'acceptance_protocol.dart';
 import 'passkey_io.dart' if (dart.library.js_interop) 'passkey_web.dart';
 
 /// `host:port` of the demo node the app connects to.
@@ -61,7 +64,11 @@ Duration _scaled(Duration d) => acceptanceSlow ? d * 6 : d;
 /// check passes by itself: an iPhone simulator, which has no passcode set,
 /// so the key store asks nothing (services/key_vault_io.dart). The vault
 /// then never asks for a passphrase either.
-bool get acceptanceDeviceLock => defaultTargetPlatform == TargetPlatform.iOS;
+/// On Android, the runner enrolls a fingerprint in the emulator and touches
+/// it for each prompt (tool/android_system.dart), and says so with
+/// ACCEPTANCE_DEVICE_LOCK.
+bool get acceptanceDeviceLock =>
+    defaultTargetPlatform == TargetPlatform.iOS || const bool.fromEnvironment('ACCEPTANCE_DEVICE_LOCK');
 
 /// The one passphrase of the app in these tests.
 const passphrase = 'correct horse battery';
@@ -107,6 +114,9 @@ class AppDriver {
       tester.testTextInput.register();
       addTearDown(tester.testTextInput.unregister);
     }
+    // A Mac's key store asks for the login password in a dialog the test
+    // can't answer: a passphrase instead, as on Windows and Linux.
+    if (defaultTargetPlatform == TargetPlatform.macOS) deviceKeyStoreAllowed = false;
     await app.main();
     await waitFor(find.byType(HomePage), what: 'the home page');
     await waitUntil(() => client.state == LinkState.live, what: 'the app to follow the chain');
@@ -307,9 +317,19 @@ class AppDriver {
   /// Switches on notifications of `topic` (its switch's title), from the
   /// bell in the Messages tab, and closes the settings.
   Future<void> switchOnNotifications(String topic) async {
+    // Apple's notification centre asks the user, in a dialog of the system's
+    // that the test can't answer: quiet permission needs no answer.
+    if (defaultTargetPlatform == TargetPlatform.iOS || defaultTargetPlatform == TargetPlatform.macOS) {
+      SystemNotifier.quietPermission = true;
+    }
     await openTab(l.tabMessages);
     await tap(find.byTooltip(l.notifications), what: 'the notifications bell');
     await flip(topic);
+    // Android's background check, scheduled now: the runner runs it as
+    // Android would, and checks its Dart side ran.
+    if (defaultTargetPlatform == TargetPlatform.android && prefs.notifyTopics.isNotEmpty) {
+      debugPrint(androidBackgroundJobRequest);
+    }
     await press<TextButton>(l.done);
     await waitGone(find.text(topic), what: 'the notification settings to close');
   }

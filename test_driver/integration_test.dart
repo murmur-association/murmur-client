@@ -22,11 +22,16 @@ import 'package:integration_test/common.dart';
 
 Future<void> main() async {
   final driver = await FlutterDriver.connect();
-  // WebDriver's "Set Permission" (the Permissions specification).
-  await driver.webDriver.postRequest('permissions', {
-    'descriptor': {'name': 'notifications'},
-    'state': 'granted',
-  });
+  // WebDriver's "Set Permission" (the Permissions specification). Not every
+  // browser's driver has it: then the notification test says it was refused.
+  try {
+    await driver.webDriver.postRequest('permissions', {
+      'descriptor': {'name': 'notifications'},
+      'state': 'granted',
+    });
+  } catch (e) {
+    print('This browser\'s WebDriver could not grant notifications: $e');
+  }
   if (Platform.environment['ACCEPTANCE_PASSKEY'] != null) {
     // WebDriver's "Add Virtual Authenticator": built into the device
     // ("internal"), with a user check that always passes.
