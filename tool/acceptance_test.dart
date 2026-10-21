@@ -14,7 +14,8 @@
 // A browser run uses a pinned browser and its WebDriver (`dart run
 // tool/fetch_test_browser.dart chrome|firefox` downloads them), or Safari's
 // own safaridriver (enabled once with `sudo safaridriver --enable`): the
-// driver is started here, on port 4444, and stopped afterwards.
+// driver is started here, on port 4444, and stopped afterwards, unless one
+// already listens there (CI starts safaridriver itself: see .gitlab-ci.yml).
 // ACCEPTANCE_HEADED shows the browser. Not Edge: `flutter drive` asks Edge's
 // driver for a browser it doesn't know by that name.
 //
@@ -58,9 +59,25 @@ Future<int> _freePort() async {
   return port;
 }
 
+/// Whether a WebDriver answers on the port `flutter drive` expects, on
+/// either loopback (safaridriver listens on IPv6's).
+Future<bool> _webDriverListens() async {
+  for (final loopback in [InternetAddress.loopbackIPv4, InternetAddress.loopbackIPv6]) {
+    try {
+      (await Socket.connect(loopback, 4444)).destroy();
+      return true;
+    } on SocketException {
+      // Not there yet, or not on this one.
+    }
+  }
+  return false;
+}
+
 /// Starts the browser's WebDriver on the port `flutter drive` expects, and
-/// waits until it answers.
-Future<Process> _startWebDriver() async {
+/// waits until it answers; or takes one already there (null), which is how
+/// CI gives Safari's: safaridriver started from here ends at once.
+Future<Process?> _startWebDriver() async {
+  if (await _webDriverListens()) return null;
   final (program, args) = switch (_browserName) {
     // Its log goes to ~/Library/Logs/com.apple.WebDriver (_safariLog).
     'safari' => ('safaridriver', ['--diagnose', '-p', '4444']),
@@ -81,15 +98,7 @@ Future<Process> _startWebDriver() async {
   }
   final deadline = DateTime.now().add(const Duration(seconds: 30));
   while (true) {
-    // Either loopback: safaridriver listens on IPv6's.
-    for (final loopback in [InternetAddress.loopbackIPv4, InternetAddress.loopbackIPv6]) {
-      try {
-        (await Socket.connect(loopback, 4444)).destroy();
-        return driver;
-      } on SocketException {
-        // Not there yet, or not on this one.
-      }
-    }
+    if (await _webDriverListens()) return driver;
     if (DateTime.now().isAfter(deadline)) {
       // Whether it ended, and where it listens if it lives: a driver that
       // says nothing still says that much.
@@ -176,7 +185,7 @@ void main() {
     ];
     if (browser) {
       final driver = await _startWebDriver();
-      addTearDown(driver.kill);
+      if (driver != null) addTearDown(driver.kill);
     }
     // An Android emulator's system screens are the runner's to answer
     // (tool/android_system.dart): a fingerprint enrolled first, so the

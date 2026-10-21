@@ -245,6 +245,11 @@ acceptance:
     ACCEPTANCE_DEVICE: safari
   script:
   - sudo safaridriver --enable
+  # Started here, not by the runner: launched from the test process it
+  # ends at once with 1, saying nothing. The runner takes the one listening.
+  - safaridriver -p 4444 > /tmp/safaridriver.log 2>&1 &
+  - for i in $(seq 30); do curl -sf http://localhost:4444/status && break; sleep 1; done
+  - curl -sf http://localhost:4444/status || { cat /tmp/safaridriver.log; exit 1; }
   - flutter test tool/acceptance_test.dart
 
 build-web:
