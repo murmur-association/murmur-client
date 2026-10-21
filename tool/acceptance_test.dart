@@ -7,14 +7,12 @@
 //   ACCEPTANCE_DEVICE=chrome flutter test tool/acceptance_test.dart    # a browser, with a passphrase
 //   ACCEPTANCE_DEVICE=chrome-passkey flutter test tool/acceptance_test.dart   # a browser, with a passkey
 //   ACCEPTANCE_DEVICE=firefox flutter test tool/acceptance_test.dart   # Firefox (Linux)
-//   ACCEPTANCE_DEVICE=safari flutter test tool/acceptance_test.dart    # Safari (macOS)
 //   ACCEPTANCE_DEVICE=emulator-5554 flutter test tool/acceptance_test.dart   # an Android emulator
 //   ACCEPTANCE_DEVICE=$(tool/ios_simulator.sh) flutter test tool/acceptance_test.dart   # an iPhone simulator (macOS)
 //
 // A browser run uses a pinned browser and its WebDriver (`dart run
-// tool/fetch_test_browser.dart chrome|firefox` downloads them), or Safari's
-// own safaridriver (enabled once with `sudo safaridriver --enable`): the
-// driver is started here, on port 4444, and stopped afterwards.
+// tool/fetch_test_browser.dart chrome|firefox` downloads them): the driver
+// is started here, on port 4444, and stopped afterwards.
 // ACCEPTANCE_HEADED shows the browser. Not Edge: `flutter drive` asks Edge's
 // driver for a browser it doesn't know by that name.
 //
@@ -41,7 +39,7 @@ import 'fetch_test_browser.dart';
 
 final _env = Platform.environment;
 final _device = _env['ACCEPTANCE_DEVICE'] ?? Platform.operatingSystem;
-const _browsers = {'chrome', 'chrome-passkey', 'firefox', 'safari'};
+const _browsers = {'chrome', 'chrome-passkey', 'firefox'};
 
 /// The browser `flutter drive` drives for a browser flavour.
 String get _browserName => _device == 'chrome-passkey' ? 'chrome' : _device;
@@ -61,19 +59,15 @@ Future<int> _freePort() async {
 /// Starts the browser's WebDriver on the port `flutter drive` expects, and
 /// waits until it answers.
 Future<Process> _startWebDriver() async {
-  final (program, args) = switch (_browserName) {
-    // Its log goes to ~/Library/Logs/com.apple.WebDriver (_safariLog).
-    'safari' => ('safaridriver', ['--diagnose', '-p', '4444']),
-    final name => () {
-        final pinned = testBrowserNamed(name);
-        if (!pinned.ready) fail('No $name ${pinned.version} in ${pinned.dir.path}: run `dart run tool/fetch_test_browser.dart $name`.');
-        return (
-          pinned.driver.path,
-          name == 'firefox' ? ['--port', '4444', '--binary', pinned.browser.path] : ['--port=4444'],
-        );
-      }(),
-  };
-  final driver = await Process.start(program, args);
+  final pinned = testBrowserNamed(_browserName);
+  if (!pinned.ready) {
+    fail('No $_browserName ${pinned.version} in ${pinned.dir.path}: '
+        'run `dart run tool/fetch_test_browser.dart $_browserName`.');
+  }
+  final driver = await Process.start(pinned.driver.path, [
+    '--port=4444',
+    if (_browserName == 'firefox') '--binary=${pinned.browser.path}',
+  ]);
   // Kept for a failure's report: a driver that won't start says why.
   final said = StringBuffer();
   for (final stream in [driver.stdout, driver.stderr]) {
@@ -81,40 +75,14 @@ Future<Process> _startWebDriver() async {
   }
   final deadline = DateTime.now().add(const Duration(seconds: 30));
   while (true) {
-    // Either loopback: safaridriver listens on IPv6's.
-    for (final loopback in [InternetAddress.loopbackIPv4, InternetAddress.loopbackIPv6]) {
-      try {
-        (await Socket.connect(loopback, 4444)).destroy();
-        return driver;
-      } on SocketException {
-        // Not there yet, or not on this one.
-      }
-    }
-    if (DateTime.now().isAfter(deadline)) {
-      // Whether it ended, and where it listens if it lives: a driver that
-      // says nothing still says that much.
-      final ended = await driver.exitCode.timeout(Duration.zero, onTimeout: () => -1);
-      final ports = Platform.isWindows
-          ? ''
-          : (await Process.run('lsof', ['-nP', '-a', '-p', '${driver.pid}', '-iTCP'])).stdout;
-      fail('$program did not listen on port 4444; '
-          '${ended == -1 ? 'it runs, with sockets: $ports' : 'it ended with $ended'}; it said: $said'
-          '${_browserName == 'safari' ? '\nits log: ${_safariLog()}' : ''}');
+    try {
+      (await Socket.connect(InternetAddress.loopbackIPv4, 4444)).destroy();
+      return driver;
+    } on SocketException {
+      if (DateTime.now().isAfter(deadline)) fail('${pinned.driver.path} did not listen on port 4444; it said: $said');
     }
     await Future<void>.delayed(const Duration(milliseconds: 200));
   }
-}
-
-/// The end of safaridriver's latest log (`--diagnose`): it says nothing on
-/// its output.
-String _safariLog() {
-  final dir = Directory('${Platform.environment['HOME']}/Library/Logs/com.apple.WebDriver');
-  if (!dir.existsSync()) return 'none, in ${dir.path}';
-  final logs = dir.listSync().whereType<File>().toList()
-    ..sort((a, b) => a.lastModifiedSync().compareTo(b.lastModifiedSync()));
-  if (logs.isEmpty) return 'none, in ${dir.path}';
-  final lines = logs.last.readAsLinesSync();
-  return '${logs.last.path}:\n${lines.skip(lines.length > 40 ? lines.length - 40 : 0).join('\n')}';
 }
 
 /// Stops the node the app under test may have left running (a test that
@@ -202,8 +170,7 @@ void main() {
             '-d', 'web-server',
             '--browser-name=$_browserName',
             if (_browserName == 'chrome') '--chrome-binary=${testBrowserNamed('chrome').browser.path}',
-            // Safari has no headless mode.
-            if (_env['ACCEPTANCE_HEADED'] == null && _browserName != 'safari') '--headless',
+            if (_env['ACCEPTANCE_HEADED'] == null) '--headless',
             ...settings,
           ];
     print('flutter ${args.where((a) => !a.contains('ACCEPTANCE_SEED')).join(' ')}');

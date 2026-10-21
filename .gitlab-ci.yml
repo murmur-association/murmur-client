@@ -156,7 +156,7 @@ acceptance:
 
 # GitLab's macOS runner, ready to build the app and run its tests: the
 # pinned Flutter SDK (cloned and cached, as on Linux and Windows), the
-# packages, and the pinned node's macOS build. For iOS, macOS and Safari.
+# packages, and the pinned node's macOS build. For iOS and macOS.
 .flutter-macos:
   image: macos-26-xcode-26
   tags:
@@ -232,31 +232,6 @@ acceptance:
   variables:
     ACCEPTANCE_NO_NOTIFICATIONS: "1"
   script:
-  - flutter test tool/acceptance_test.dart
-
-# Safari, by hand only, on a Mac runner with someone logged in to its
-# desktop: safaridriver drives Safari in that session, and GitLab's hosted
-# Macs have none (the console belongs to root, and safaridriver ends at once
-# with 1, saying nothing; tried 2026-10-21). Safari and safaridriver come
-# with macOS; safaridriver needs enabling once.
-"acceptance: [safari]":
-  extends:
-  - .flutter-macos
-  - .acceptance-costly
-  rules:
-  - if: $CI_PIPELINE_SOURCE == "schedule"
-    when: never
-  - when: manual
-  timeout: 60m
-  variables:
-    ACCEPTANCE_DEVICE: safari
-  script:
-  - |
-    if [ "$(stat -f%Su /dev/console)" != "$(whoami)" ]; then
-      echo "Nobody is logged in to this Mac's desktop as $(whoami) (the console belongs to $(stat -f%Su /dev/console)): Safari can't run here."
-      exit 1
-    fi
-  - sudo safaridriver --enable
   - flutter test tool/acceptance_test.dart
 
 build-web:

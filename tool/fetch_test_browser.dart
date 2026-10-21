@@ -3,8 +3,7 @@
 // into build/test-browser/<browser>: "Chrome for Testing" with the
 // chromedriver of the same version, or Firefox with geckodriver. Each is
 // pinned by version and SHA-256, so every run, here and in CI, drives the
-// same browser. Safari needs nothing fetched: it and safaridriver come with
-// macOS.
+// same browser.
 //
 //   dart run tool/fetch_test_browser.dart [chrome|firefox]     # chrome by default
 //
