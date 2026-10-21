@@ -122,14 +122,25 @@ class AppDriver {
 
   /// Lets the app run until `done`, for at most `timeout`: frames are drawn
   /// as time passes, without waiting for animations to end (a spinner never
-  /// does).
+  /// does). A `done` that throws (it reads a field of a page not built yet,
+  /// as on a slow device) counts as not yet.
   Future<void> waitUntil(bool Function() done,
       {required String what, Duration timeout = const Duration(seconds: 90)}) async {
     final deadline = DateTime.now().add(_scaled(timeout));
-    while (!done()) {
+    Object? lastError;
+    bool doneYet() {
+      try {
+        return done();
+      } on StateError catch (e) {
+        lastError = e;
+        return false;
+      }
+    }
+
+    while (!doneYet()) {
       if (DateTime.now().isAfter(deadline)) {
         fail('timed out waiting for $what (link ${client.state.name} at ${client.height}, error ${client.error})\n'
-            '${_onScreen()}');
+            '${lastError == null ? '' : 'last: $lastError\n'}${_onScreen()}');
       }
       await tester.pump(const Duration(milliseconds: 100));
     }
