@@ -3622,6 +3622,35 @@ class MurmurClient extends ChangeNotifier {
   /// A Reply goes in the thread of the message `reference` names, and a
   /// Flag of a reply names that reply's thread: both are worked out here.
   /// A thread or a reply names the addresses in `mentions` (at most 4).
+  /// How long [submit] waits for the wallet's state proven at the tip before
+  /// it gives up ([TxProblemKind.checkingBalance]).
+  @visibleForTesting
+  Duration provenTipWait = const Duration(seconds: 30);
+
+  /// Waits until `address` is proven at height `h` or later; throws a
+  /// [TxProblem] if the link goes, or after [provenTipWait].
+  Future<void> _provenSince(String address, int h) async {
+    bool fresh() => (account(address)?.height ?? -1) >= h;
+    if (fresh()) return;
+    final done = Completer<void>();
+    void changed() {
+      if (done.isCompleted) return;
+      if (fresh()) {
+        done.complete();
+      } else if (state != LinkState.live) {
+        done.completeError(const TxProblem(TxProblemKind.connectionLost));
+      }
+    }
+
+    addListener(changed);
+    try {
+      await done.future.timeout(provenTipWait,
+          onTimeout: () => throw const TxProblem(TxProblemKind.checkingBalance));
+    } finally {
+      removeListener(changed);
+    }
+  }
+
   Future<Transaction> submit({
     required MurmurWallet wallet,
     required TxKind kind,
@@ -3635,6 +3664,11 @@ class MurmurClient extends ChangeNotifier {
     if (state != LinkState.live) {
       throw const TxProblem(TxProblemKind.notLive);
     }
+    // The wallet proven at the block it's signed at, or later: a proof from
+    // an earlier block misses what the wallet sent since from another device,
+    // and the nonce would be one too few (the node refuses such a
+    // transaction). Proofs follow the tip, so this is most often at hand.
+    await _provenSince(wallet.addressHex, height);
     final problem = checkTransaction(
         fromAddress: wallet.addressHex,
         kind: kind,

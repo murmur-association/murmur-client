@@ -364,6 +364,39 @@ void main() {
       print('claimed ${client.account(newcomer.addressHex)!.balance} into a new wallet: '
           '${costs.perCard - costs.claimFee} = five threads');
     }, timeout: const Timeout(Duration(minutes: 3)));
+
+    test('one wallet on two devices: the second signs only once it\'s proven past what the first sent', () async {
+      final node = await short(mining: true);
+      final first = await node.connect(MurmurClient());
+      final me = miner.addressHex;
+      bool mined(MurmurClient c, Transaction tx) => c.lookupTx(tx.id)?.confirmed ?? false;
+      await until(first, () => first.availableTo(me) != null);
+      // The second device, which keeps showing the proof it has now: as a
+      // session does whose proof came before the first device's transaction.
+      final second = _HeldProof();
+      await node.connect(second);
+      await until(second, () => second.account(me) != null);
+      second.hold = true;
+      final sent = await first.submit(
+          wallet: miner, kind: TxKind.raw, to: await someoneElse(), amount: unitsPerToken, fee: minFee);
+      await until(first, what: 'the first device\'s transfer mined', () => mined(first, sent));
+      await until(second, () => second.height > second.account(me)!.height);
+
+      // From the older proof, its nonce would be the one just used: it
+      // doesn't sign, and says it's still checking with the node.
+      second.provenTipWait = const Duration(seconds: 2);
+      await expectLater(
+          second.submit(wallet: miner, kind: TxKind.raw, to: await someoneElse(), amount: unitsPerToken, fee: minFee),
+          throwsA(isA<TxProblem>().having((p) => p.kind, 'kind', TxProblemKind.checkingBalance)));
+
+      // Proven at the tip, it signs with the next nonce, and it's mined.
+      second.hold = false;
+      second.provenTipWait = const Duration(seconds: 30);
+      final next = await second.submit(
+          wallet: miner, kind: TxKind.raw, to: await someoneElse(), amount: unitsPerToken, fee: minFee);
+      expect(next.nonce, sent.nonce + 1);
+      await until(second, what: 'the second device\'s transfer mined', () => mined(second, next));
+    }, timeout: const Timeout(Duration(minutes: 3)));
   }, skip: nodeSkip);
 
   group('the node\'s index', () {
@@ -711,4 +744,22 @@ void main() {
           timeout: const Duration(minutes: 2));
     }, timeout: const Timeout(Duration(minutes: 4)));
   }, skip: nodeSkip);
+}
+
+/// A client that, while [hold] is on, keeps showing the proofs it had when
+/// it was switched on: a session whose proof of a wallet predates what that
+/// wallet sent from another device.
+class _HeldProof extends MurmurClient {
+  bool hold = false;
+  final _held = <String, AccountState?>{};
+
+  @override
+  AccountState? account(String address) {
+    final now = super.account(address);
+    if (!hold) {
+      _held[address] = now;
+      return now;
+    }
+    return _held[address];
+  }
 }
