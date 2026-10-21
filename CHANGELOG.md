@@ -13,6 +13,12 @@ Newest first. Each release is a `vX.Y.Z` tag matching `version` in `pubspec.yaml
 - **Fixed: one wallet on two devices.** Sending right after the other device had sent could use the same transaction number, and the node refused it; the app now waits until it has checked the wallet at the newest block.
 - **Changed: Starred has two lists**, one for threads and messages and one for people, each on a tab of its own; a dot on a tab says that list has news.
 
+## v0.7.2: checkpoint refresh (2026-10-20)
+
+No protocol or network change.
+
+- **Changed: the testnet checkpoint** is now block 5,000, refreshed from the live network by the scheduled release.
+
 ## v0.7.1: checkpoint refresh (2026-10-19)
 
 No protocol or network change.
