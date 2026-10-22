@@ -59,3 +59,4 @@ murmur-data/
 
 # Release archives made locally (tool/package_desktop.dart).
 /dist/
+web_dev_config.yaml

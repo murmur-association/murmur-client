@@ -51,6 +51,13 @@ Future<PickedPicture?> pickPictureFromSystem(PictureSource source) async {
       ]),
   };
   if (file == null) return null;
-  if (await file.length() > maxPictureFileBytes) return (bytes: null, problem: PictureProblem.tooLarge);
-  return (bytes: await file.readAsBytes(), problem: null);
+  // In a browser the file is read from a blob: URL, which the page's
+  // Content-Security-Policy must allow (web/_headers); a read that fails
+  // for any reason is a file that can't be used, said so, never silence.
+  try {
+    if (await file.length() > maxPictureFileBytes) return (bytes: null, problem: PictureProblem.tooLarge);
+    return (bytes: await file.readAsBytes(), problem: null);
+  } catch (_) {
+    return (bytes: null, problem: PictureProblem.unreadable);
+  }
 }

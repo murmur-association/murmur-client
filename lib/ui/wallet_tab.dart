@@ -171,7 +171,10 @@ class _PublicName extends StatelessWidget {
           text: current ?? '', builder: (context, controller) => StatefulBuilder(builder: (context, setState) {
         // Reads a picked image into a picture, or says why it can't.
         Future<void> choose(PictureSource source) async {
-          final picked = await pickPicture(source);
+          // The system's chooser itself failing is said, as for a file that
+          // can't be read, rather than nothing happening.
+          final picked = await pickPicture(source)
+              .catchError((Object _) => (bytes: null, problem: PictureProblem.unreadable) as PickedPicture?);
           if (picked == null || !context.mounted) return;
           setState(() => (reading, problem) = (true, null));
           final made = picked.bytes == null ? null : await pictureFromImage(picked.bytes!);

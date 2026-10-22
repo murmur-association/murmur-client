@@ -4,7 +4,7 @@
 // acceptance_protocol.dart): it picks a file in the dialog the app opens, or
 // cancels it, as a user would.
 //
-// - Windows: the common file dialog, through Windows' UI Automation (in
+// - Windows: the common file dialog, through Win32 (in
 //   PowerShell, which every Windows has): the file's path in its "File name"
 //   box, then Open; or Cancel. Only with a desktop: a CI runner's service
 //   session has none.
@@ -24,7 +24,7 @@ import 'dart:io';
 abstract class SystemChooser {
   /// The chooser for this machine, or null with why not.
   static Future<(SystemChooser?, String)> here() async {
-    if (Platform.isWindows) return (_WindowsChooser(), 'Windows UI Automation');
+    if (Platform.isWindows) return (_WindowsChooser(), 'Win32');
     if (Platform.isLinux) {
       final xdotool = await Process.run('which', ['xdotool']);
       return xdotool.exitCode == 0 ? (_LinuxChooser(), 'xdotool') : (null, 'no xdotool');
@@ -46,11 +46,13 @@ class _WindowsChooser extends SystemChooser {
   Future<bool> _withDialog(String then) async {
     final script = '''
 \$ErrorActionPreference = 'Stop'
-Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
-# Through the dialog's own controls, as its buttons do: the path in its
-# file name box (control 1148), then the OK or Cancel command. Whatever the
-# system's language and wherever the focus is. (UI Automation's tree of the
-# dialog doesn't hold its buttons.)
+# Win32 alone: the dialog found among the app's windows, then worked through
+# its own controls, as its buttons do: the path in its file name box
+# (control 1148), then the OK or Cancel command. Whatever the system's
+# language and wherever the focus is. Not UI Automation: a client of it
+# asking about the app's window switches on Flutter's semantics, which a
+# test then finds left on ("A SemanticsHandle was active"), and its tree of
+# the dialog lacks the buttons.
 Add-Type -TypeDefinition @'
 using System;
 using System.Text;
@@ -66,6 +68,36 @@ public static class MurmurDialog {
   [DllImport("user32.dll")] static extern bool EnumChildWindows(IntPtr parent, EachChild each, IntPtr data);
   [DllImport("user32.dll")] static extern bool PostMessage(IntPtr window, int message, IntPtr w, IntPtr l);
   [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr window);
+  [DllImport("user32.dll")] static extern bool EnumWindows(EachChild each, IntPtr data);
+  [DllImport("user32.dll")] static extern int GetWindowThreadProcessId(IntPtr window, out int process);
+  static string ClassOf(IntPtr window) {
+    var name = new StringBuilder(256);
+    GetClassName(window, name, 256);
+    return name.ToString();
+  }
+  // A visible dialog ("#32770") of one of `processes`: a file dialog is a
+  // top-level window, owned by the app's. One just closed may linger hidden.
+  public static IntPtr Find(int[] processes) {
+    IntPtr found = IntPtr.Zero;
+    EnumWindows((w, _) => {
+      int process;
+      GetWindowThreadProcessId(w, out process);
+      if (Array.IndexOf(processes, process) >= 0 && ClassOf(w) == "#32770" && IsWindowVisible(w)) { found = w; return false; }
+      return true;
+    }, IntPtr.Zero);
+    return found;
+  }
+  // The top-level windows of `processes`, for a failure's report.
+  public static string Windows(int[] processes) {
+    var all = new StringBuilder();
+    EnumWindows((w, _) => {
+      int process;
+      GetWindowThreadProcessId(w, out process);
+      if (Array.IndexOf(processes, process) >= 0) all.Append(ClassOf(w)).Append(IsWindowVisible(w) ? "" : " (hidden)").Append("; ");
+      return true;
+    }, IntPtr.Zero);
+    return all.ToString();
+  }
   const int SetText = 0x000C, GetText = 0x000D, Command = 0x0111;
   // A control's text, also in another process (GetWindowText reads only
   // the caller's own).
@@ -106,33 +138,18 @@ public static class MurmurDialog {
   public static string NameText(IntPtr dialog) { return TextOf(NameBox(dialog)); }
 }
 '@
-\$A = [System.Windows.Automation.AutomationElement]
-\$scope = [System.Windows.Automation.TreeScope]
-\$isDialog = New-Object System.Windows.Automation.PropertyCondition(\$A::ClassNameProperty, '#32770')
-\$app = @(Get-Process -Name murmur_client -ErrorAction SilentlyContinue | ForEach-Object { \$_.Id })
-function Visible(\$e) { \$e -and [MurmurDialog]::IsWindowVisible([System.IntPtr]\$e.Current.NativeWindowHandle) }
-\$dialog = \$null
+\$app = [int[]]@(Get-Process -Name murmur_client -ErrorAction SilentlyContinue | ForEach-Object { \$_.Id })
+\$window = [System.IntPtr]::Zero
 \$deadline = (Get-Date).AddSeconds(90)
-while (-not \$dialog -and (Get-Date) -lt \$deadline) {
-  # A dialog the app's window owns shows under that window; else on its
-  # own. Only a visible one: one just closed may linger hidden.
-  foreach (\$w in \$A::RootElement.FindAll(\$scope::Children, [System.Windows.Automation.Condition]::TrueCondition)) {
-    if (\$app -notcontains \$w.Current.ProcessId) { continue }
-    if (\$w.Current.ClassName -eq '#32770' -and (Visible \$w)) { \$dialog = \$w; break }
-    \$inside = \$w.FindFirst(\$scope::Children, \$isDialog)
-    if (Visible \$inside) { \$dialog = \$inside; break }
-  }
-  if (-not \$dialog) { Start-Sleep -Milliseconds 300 }
+while (\$window -eq [System.IntPtr]::Zero -and (Get-Date) -lt \$deadline) {
+  \$window = [MurmurDialog]::Find(\$app)
+  if (\$window -eq [System.IntPtr]::Zero) { Start-Sleep -Milliseconds 300 }
 }
-if (-not \$dialog) {
-  \$seen = foreach (\$w in \$A::RootElement.FindAll(\$scope::Children, [System.Windows.Automation.Condition]::TrueCondition)) {
-    if (\$app -contains \$w.Current.ProcessId) { "'" + \$w.Current.Name + "' (" + \$w.Current.ClassName + ")" }
-  }
-  Write-Output ("no file dialog; the app's windows: " + (\$seen -join ', ') + "; its processes: " + (\$app -join ', '))
+if (\$window -eq [System.IntPtr]::Zero) {
+  Write-Output ("no file dialog; the app's windows: " + [MurmurDialog]::Windows(\$app) + " its processes: " + (\$app -join ', '))
   exit 1
 }
 Start-Sleep -Milliseconds 500
-\$window = [System.IntPtr]\$dialog.Current.NativeWindowHandle
 $then
 # Closed, as a dialog is once it has its answer.
 \$closing = (Get-Date).AddSeconds(15)

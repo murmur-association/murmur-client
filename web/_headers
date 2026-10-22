@@ -4,10 +4,13 @@
 # connection is the node the user chose, over wss://.
 # - 'wasm-unsafe-eval': CanvasKit is WebAssembly.
 # - style-src 'unsafe-inline': the engine sets inline styles on its elements.
-# - connect-src wss:: any node the user picks, not only node.murmur.info.
+# - connect-src wss:: any node the user picks, not only node.murmur.info;
+#   blob:: a picked picture is read from the blob: URL the browser gives it
+#   (it never leaves the page).
+#   Changing this policy: the acceptance tests run the page under it (tool/acceptance_test.dart).
 # Permissions-Policy leaves publickey-credentials alone: passkeys use them.
 /*
-  Content-Security-Policy: default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' wss:; worker-src 'self' blob:; manifest-src 'self'; base-uri 'self'; form-action 'none'; frame-ancestors 'none'
+  Content-Security-Policy: default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' wss: blob:; worker-src 'self' blob:; manifest-src 'self'; base-uri 'self'; form-action 'none'; frame-ancestors 'none'
   Referrer-Policy: no-referrer
   X-Content-Type-Options: nosniff
   Permissions-Policy: interest-cohort=(), camera=(), microphone=(), geolocation=()

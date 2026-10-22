@@ -86,6 +86,26 @@ Future<Process> _startWebDriver() async {
   }
 }
 
+/// Flutter's web server settings (web_dev_config.yaml) that serve the page
+/// with the headers Cloudflare gives app.murmur.info (`headers`, web/_headers
+/// in Cloudflare's format), plus one thing only the test needs: its node,
+/// a plain WebSocket on this machine, among the places the page may connect
+/// to (`node`; the public page reaches its nodes over wss:).
+String webDevConfig(String headers, {required String node}) {
+  final yaml = StringBuffer('# Written by tool/acceptance_test.dart for a browser run, and removed after.\n'
+      'server:\n  headers:\n');
+  for (final line in headers.split('\n')) {
+    final header = RegExp(r'^\s+([A-Za-z-]+):\s*(.*?)\s*$').firstMatch(line);
+    if (header == null) continue;
+    var value = header[2]!;
+    if (header[1]!.toLowerCase() == 'content-security-policy') {
+      value = value.replaceFirstMapped(RegExp(r'connect-src([^;]*)'), (m) => 'connect-src${m[1]} $node');
+    }
+    yaml.write('    - name: "${header[1]}"\n      value: "${value.replaceAll(r'\', r'\\').replaceAll('"', r'\"')}"\n');
+  }
+  return '$yaml';
+}
+
 /// Stops the node the app under test may have left running (a test that
 /// failed midway never switched it off), then removes its folder.
 Future<void> _stopOwnNode(Directory data) async {
@@ -146,6 +166,13 @@ void main() {
     if (browser) {
       final driver = await _startWebDriver();
       addTearDown(driver.kill);
+      // The page is served with app.murmur.info's own headers (web/_headers),
+      // its Content-Security-Policy above all: a policy that blocked the
+      // picked picture's read passed tests served without it.
+      final config = File('web_dev_config.yaml');
+      if (config.existsSync()) fail('web_dev_config.yaml is in the way: the runner writes its own');
+      config.writeAsStringSync(webDevConfig(File('web/_headers').readAsStringSync(), node: 'ws://127.0.0.1:$webSocket'));
+      addTearDown(() => config.existsSync() ? config.deleteSync() : null);
     }
     // An Android emulator's system screens are the runner's to answer
     // (tool/android_system.dart): a fingerprint enrolled first, so the
@@ -200,6 +227,10 @@ void main() {
             '--driver=test_driver/integration_test.dart',
             '--target=$_suite',
             '-d', 'web-server',
+            // As app.murmur.info is built: a release build, CanvasKit served
+            // from the page. (A debug build can't run under the page's
+            // Content-Security-Policy, which the run applies.)
+            '--release', '--no-web-resources-cdn',
             '--browser-name=$_browserName',
             if (_browserName == 'chrome') '--chrome-binary=${testBrowserNamed('chrome').browser.path}',
             if (_env['ACCEPTANCE_HEADED'] == null) '--headless',
