@@ -2,6 +2,13 @@
 
 Newest first. Each release is a `vX.Y.Z` tag matching `version` in `pubspec.yaml`; see [README](README.md#releases-and-deployment). Entries marked **Breaking** need action from users.
 
+## v0.9.3: choosing a picture in the browser (2026-10-22)
+
+No protocol or network change.
+
+- **Fixed: choosing a profile picture on app.murmur.info did nothing.** The page's security policy kept it from reading the picked file. It may now, and a file that can't be read, for whatever reason, is said so.
+- **Changed: the testnet checkpoint** is now block 2,500.
+
 ## v0.9.2: profile pictures on any graphics (2026-10-22)
 
 No protocol or network change.
