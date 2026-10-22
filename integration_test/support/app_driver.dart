@@ -10,7 +10,6 @@
 
 import 'dart:async';
 import 'dart:typed_data';
-import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart' show TargetPlatform, defaultTargetPlatform;
 import 'package:flutter/material.dart';
@@ -27,6 +26,7 @@ import 'package:murmur_client/services/notifier.dart';
 import 'package:murmur_client/services/storage.dart';
 import 'package:murmur_client/ui/common.dart';
 import 'package:murmur_client/ui/home_page.dart';
+import 'package:murmur_client/protocol/profile.dart';
 import 'package:murmur_client/ui/people.dart' show ProfilePicturePainter;
 import 'package:murmur_client/ui/picture_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -61,6 +61,14 @@ const acceptanceNoNotifications = bool.fromEnvironment('ACCEPTANCE_NO_NOTIFICATI
 /// is six times as long. The runner sets it from the environment's
 /// ACCEPTANCE_SLOW.
 const acceptanceSlow = bool.fromEnvironment('ACCEPTANCE_SLOW');
+
+/// Who works the system's picture chooser in this run, as the runner says:
+/// `host`, the runner itself, at the app's requests (Android, Linux, and
+/// Windows with a desktop: tool/system_chooser.dart); `browser`, the
+/// browser's driver, by itself; empty where nothing outside the app can
+/// (macOS, iOS, Windows without a desktop), and the test then hands over a
+/// file in the chooser's place.
+const acceptanceSystemChooser = String.fromEnvironment('ACCEPTANCE_SYSTEM_CHOOSER');
 
 Duration _scaled(Duration d) => acceptanceSlow ? d * 6 : d;
 
@@ -432,28 +440,67 @@ class AppDriver {
   }
 
   /// Sets the wallet's public name with a picture (a profile, PROTOCOL.md
-  /// Section 7.8), from the Wallet tab: the name typed, `file` chosen where
-  /// a user would choose it (the system's chooser stands aside: no test can
-  /// work it), then the summary and the passphrase.
-  Future<void> setPublicName(String name, Uint8List file) async {
+  /// Section 7.8), from the Wallet tab: the name typed, a picture chosen
+  /// from every source the device offers, then the summary and the
+  /// passphrase. The chooser is the system's own wherever something outside
+  /// the app can work it ([acceptanceSystemChooser]), which first cancels it
+  /// once from each source where it can; elsewhere [samplePictureFile] is
+  /// handed over in its place. Gives the picture the dialog showed, which is
+  /// what's sent.
+  Future<ProfilePicture> setPublicName(String name) async {
     await backHome();
     await openTab(l.tabWallet);
     await press<TextButton>(l.publicNameSet);
     await waitFor(find.text(l.publicNameField), what: 'the public name dialog');
     await type(l.publicNameField, name);
-    final asked = <PictureSource>[];
+    // What each chooser gave back, in turn.
+    final returned = <PickedPicture?>[];
+    final file = acceptanceSystemChooser.isEmpty ? await samplePictureFile() : null;
     pickPictureOverride = (source) async {
-      asked.add(source);
-      return (bytes: file, problem: null);
+      final picked = file != null ? (bytes: file, problem: null) : await pickPictureFromSystem(source);
+      returned.add(picked);
+      return picked;
     };
+    // A phone offers its photos and its files; elsewhere, one button for a file.
+    final sources = hasPhotoLibrary ? [PictureSource.photos, PictureSource.files] : [PictureSource.files];
+    String label(PictureSource source) => !hasPhotoLibrary
+        ? l.pictureChoose
+        : (source == PictureSource.photos ? l.pictureFromPhotos : l.pictureFromFiles);
+    Future<PickedPicture?> choose(PictureSource source, {bool cancel = false}) async {
+      final before = returned.length;
+      if (acceptanceSystemChooser == 'host') {
+        debugPrint('${cancel ? chooserCancelRequest : chooserPickRequest}${source.name}');
+      }
+      await press<OutlinedButton>(label(source));
+      await waitUntil(() => returned.length > before,
+          what: cancel ? "the system's chooser to be cancelled" : "a file from the system's chooser",
+          timeout: const Duration(minutes: 3));
+      // Its buttons come back once the file is read.
+      await waitFor(find.text(label(source)), what: 'the picked file to be read');
+      return returned.last;
+    }
+
     try {
-      // A phone offers its photos and its files; elsewhere, a file.
-      await press<OutlinedButton>(hasPhotoLibrary ? l.pictureFromPhotos : l.pictureChoose);
-      await waitUntil(() => find.text(l.pictureRemove).evaluate().isNotEmpty, what: 'the picture to be read');
+      // Cancelled, the chooser leaves the dialog as it was.
+      if (acceptanceSystemChooser == 'host') {
+        for (final source in sources) {
+          expect(await choose(source, cancel: true), isNull, reason: 'cancelled from ${source.name}');
+          expect(find.text(l.pictureRemove), findsNothing, reason: 'no picture after a cancel');
+          expect(find.text(l.pictureUnreadable), findsNothing, reason: 'and nothing wrong');
+        }
+      }
+      // Picked from each source; the last is what's sent.
+      for (final source in sources) {
+        final picked = await choose(source);
+        expect(picked?.bytes, isNotNull, reason: 'a file from ${source.name}');
+        expect(picked!.bytes, isNotEmpty);
+        expect(find.text(l.pictureUnreadable), findsNothing, reason: 'the file from ${source.name} is a picture');
+        expect(find.text(l.pictureRemove), findsOneWidget, reason: 'a picture to send, from ${source.name}');
+      }
     } finally {
       pickPictureOverride = null;
     }
-    expect(asked, [hasPhotoLibrary ? PictureSource.photos : PictureSource.files]);
+    final shown = tester.widget<PicturePreview>(find.byWidgetPredicate((w) => w is PicturePreview && w.size == 72));
     expect(find.byWidgetPredicate((w) => w is InfoPoint && w.text == l.pictureCost), findsOneWidget,
         reason: 'what a picture costs, said before sending');
     await press<FilledButton>(l.publicNameSet);
@@ -462,6 +509,7 @@ class AppDriver {
     await waitFor(find.text(l.confirmSendTitle), what: 'the summary before signing');
     await press<FilledButton>(l.signAndSend);
     await unlock();
+    return shown.picture!;
   }
 
   /// Writes `text` on the compose page that's open, and signs and sends it:
@@ -476,16 +524,67 @@ class AppDriver {
 }
 
 /// An image file a user might pick for their picture: a wide PNG (a sky, a
-/// sun, a hill), of which the picture takes the middle.
+/// sun, a hill), of which the picture takes the middle. Made in plain Dart,
+/// with nothing drawn: drawing and reading back failed on a machine with
+/// software graphics (Windows' CI runner).
 Future<Uint8List> samplePictureFile() async {
-  const size = Size(240, 160);
-  final recorder = ui.PictureRecorder();
-  Canvas(recorder)
-    ..drawRect(Offset.zero & size,
-        Paint()..shader = const LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter,
-            colors: [Color(0xFF2B2D6E), Color(0xFFF2B35E)]).createShader(Offset.zero & size))
-    ..drawCircle(const Offset(130, 70), 26, Paint()..color = const Color(0xFFFFE3A3))
-    ..drawOval(const Rect.fromLTWH(-40, 110, 320, 120), Paint()..color = const Color(0xFF3A2E3F));
-  final image = await recorder.endRecording().toImage(size.width.toInt(), size.height.toInt());
-  return (await image.toByteData(format: ui.ImageByteFormat.png))!.buffer.asUint8List();
+  const width = 240, height = 160;
+  int mix(int a, int b, double t) => (a + (b - a) * t).round();
+  final rows = BytesBuilder();
+  for (var y = 0; y < height; y++) {
+    rows.addByte(0); // Each row unfiltered.
+    for (var x = 0; x < width; x++) {
+      final t = y / (height - 1);
+      var rgb = [mix(0x2B, 0xF2, t), mix(0x2D, 0xB3, t), mix(0x6E, 0x5E, t)];
+      if ((x - 130) * (x - 130) + (y - 70) * (y - 70) <= 26 * 26) rgb = [0xFF, 0xE3, 0xA3];
+      final hx = (x - 120) / 160, hy = (y - 170) / 60;
+      if (hx * hx + hy * hy <= 1) rgb = [0x3A, 0x2E, 0x3F];
+      rows.add(rgb);
+    }
+  }
+  return _png(width, height, rows.takeBytes());
+}
+
+/// A PNG of `width` x `height` RGB pixels, `raw` its filtered rows, stored
+/// uncompressed (zlib's stored blocks), so no compressor is needed.
+Uint8List _png(int width, int height, Uint8List raw) {
+  final png = BytesBuilder()..add(const [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  List<int> u32(int v) => [(v >> 24) & 0xff, (v >> 16) & 0xff, (v >> 8) & 0xff, v & 0xff];
+  void chunk(String type, List<int> data) {
+    final typed = [...type.codeUnits, ...data];
+    png
+      ..add(u32(data.length))
+      ..add(typed)
+      ..add(u32(_crc32(typed)));
+  }
+
+  final zlib = BytesBuilder()..add(const [0x78, 0x01]);
+  for (var at = 0; at < raw.length; at += 65535) {
+    final n = raw.length - at < 65535 ? raw.length - at : 65535;
+    zlib
+      ..addByte(at + n == raw.length ? 1 : 0)
+      ..add([n & 0xff, n >> 8, ~n & 0xff, (~n >> 8) & 0xff])
+      ..add(Uint8List.sublistView(raw, at, at + n));
+  }
+  var a = 1, b = 0;
+  for (final byte in raw) {
+    a = (a + byte) % 65521;
+    b = (b + a) % 65521;
+  }
+  zlib.add(u32(b * 65536 + a));
+  chunk('IHDR', [...u32(width), ...u32(height), 8, 2, 0, 0, 0]);
+  chunk('IDAT', zlib.takeBytes());
+  chunk('IEND', const []);
+  return png.takeBytes();
+}
+
+int _crc32(List<int> bytes) {
+  var crc = 0xffffffff;
+  for (final byte in bytes) {
+    crc ^= byte;
+    for (var k = 0; k < 8; k++) {
+      crc = crc & 1 != 0 ? (crc >> 1) ^ 0xedb88320 : crc >> 1;
+    }
+  }
+  return (crc ^ 0xffffffff) & 0xffffffff;
 }

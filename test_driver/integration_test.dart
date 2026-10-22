@@ -9,12 +9,16 @@
 // (lib/services/key_vault_web.dart). The app then takes its real passkey
 // path, with nobody at the keyboard.
 //
+// It gives the page's file inputs the runner's picture (ACCEPTANCE_PICTURE_FILE),
+// as a user picking it in the browser's chooser would.
+//
 // It also allows the page's notifications, as a user does when the app
 // asks: the acceptance tests switch them on, and read back what the
 // browser shows.
 
 // ignore_for_file: avoid_print
 
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_driver/flutter_driver.dart';
@@ -46,9 +50,15 @@ Future<void> main() async {
     });
     print('A virtual passkey authenticator is in place.');
   }
+  // The page's file inputs (a picture chooser, file_selector_web) get the
+  // runner's picture as soon as they appear, as a user picking it would.
+  final picture = Platform.environment['ACCEPTANCE_PICTURE_FILE'];
+  var running = true;
+  if (picture != null) unawaited(_fillFileInputs(driver, picture, () => running));
   // As integration_test's own `integrationDriver` does from here, which
   // can't be given a driver that's already connected.
   final response = Response.fromJson(await driver.requestData(null, timeout: const Duration(minutes: 20)));
+  running = false;
   await driver.close();
   if (response.allTestsPassed) {
     print('All tests passed.');
@@ -56,4 +66,29 @@ Future<void> main() async {
   }
   print('Failure Details:\n${response.formattedFailureDetails}');
   exit(1);
+}
+
+/// Gives every file input that appears in the page `file`, through
+/// WebDriver's "Element Send Keys" (which sets a file input's files and
+/// fires its change event), until `running` says the tests are over.
+Future<void> _fillFileInputs(FlutterDriver driver, String file, bool Function() running) async {
+  final given = <String>{};
+  while (running()) {
+    try {
+      // The driver's library answers with its own element objects (package
+      // webdriver's WebElement, not a dependency of this project's).
+      final inputs = await driver.webDriver.postRequest('elements', {'using': 'css selector', 'value': 'input[type=file]'});
+      for (final dynamic input in inputs as List) {
+        final id = input.id as String;
+        if (!given.add(id)) continue;
+        await input.sendKeys(file);
+        print('The page asked for a file: given $file');
+      }
+    } catch (e) {
+      // An input removed while it was being given its file: the next look
+      // finds the page as it is.
+      print('Giving the page a file: $e');
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 500));
+  }
 }

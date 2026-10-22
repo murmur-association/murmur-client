@@ -36,6 +36,7 @@ import '../integration_test/support/acceptance_protocol.dart';
 import '../test/support/test_node.dart';
 import 'android_system.dart';
 import 'fetch_test_browser.dart';
+import 'system_chooser.dart';
 
 final _env = Platform.environment;
 final _device = _env['ACCEPTANCE_DEVICE'] ?? Platform.operatingSystem;
@@ -161,6 +162,37 @@ void main() {
     // Whether the app's background job ran when the runner ran it: null
     // until the suite asks.
     bool? backgroundJobRan;
+    // The system's picture chooser, worked from outside the app wherever it
+    // can be: by the browser's driver (test_driver/integration_test.dart),
+    // through adb on Android, by tool/system_chooser.dart on a desktop with
+    // a screen. Elsewhere the suite hands over a file in its place.
+    // In the system's own form (backslashes on Windows, whose file dialog
+    // takes no other).
+    final picture = File(chooserPictureFile).resolveSymbolicLinksSync();
+    final (desktopChooser, chooserWhy) =
+        desktop && _env['ACCEPTANCE_NO_NOTIFICATIONS'] == null ? await SystemChooser.here() : (null, 'no desktop');
+    final chooser = browser
+        ? 'browser'
+        : android != null || desktopChooser != null
+            ? 'host'
+            : '';
+    print('the picture chooser: ${switch (chooser) {
+      'browser' => "the browser's driver",
+      'host' => android != null ? 'adb' : chooserWhy,
+      _ => 'none here ($chooserWhy): a file is handed over in its place',
+    }}');
+    if (chooser.isNotEmpty) settings.add('--dart-define=ACCEPTANCE_SYSTEM_CHOOSER=$chooser');
+    await android?.placePicture(picture);
+    // What the runner did with each request, for a failure's report.
+    final chooserDone = <String>[];
+    Future<void> answerChooser(String line) async {
+      final cancel = line.contains(chooserCancelRequest);
+      final done = android != null
+          ? await (cancel ? android.cancelChooser() : android.pickPicture())
+          : await (cancel ? desktopChooser!.cancel() : desktopChooser!.pick(picture));
+      chooserDone.add('${cancel ? 'cancel' : 'pick'}: $done');
+      print('the picture chooser: ${chooserDone.last}');
+    }
     final args = !browser
         ? ['test', _suite, '-d', _device, ...settings]
         : [
@@ -182,6 +214,8 @@ void main() {
         if (key != 'FONTCONFIG_FILE' && key != 'FLUTTER_TEST') key: value,
       if (ownNodeData != null) ...{'MURMUR_NODE_BIN': nodeBinary!, 'MURMUR_NODE_DATA': ownNodeData.path},
       if (passkey) 'ACCEPTANCE_PASSKEY': '1',
+      // The file a browser's driver gives the page's file input.
+      if (browser) 'ACCEPTANCE_PICTURE_FILE': picture,
     };
     final flutter = await Process.start(Platform.isWindows ? 'flutter.bat' : 'flutter', args,
         environment: environment, includeParentEnvironment: false, runInShell: Platform.isWindows);
@@ -190,6 +224,9 @@ void main() {
       stream.transform(const Utf8Decoder(allowMalformed: true)).transform(const LineSplitter()).listen((line) {
         said.add(line);
         print(line);
+        if (chooser == 'host' && (line.contains(chooserPickRequest) || line.contains(chooserCancelRequest))) {
+          unawaited(answerChooser(line));
+        }
         if (android == null) return;
         final click = line.indexOf(androidClickRequest);
         if (click >= 0) {
@@ -207,5 +244,13 @@ void main() {
     // `flutter drive` can end with 0 after tests that failed.
     expect(said.where((line) => line.contains('Some tests failed') || line.contains('[E]')), isEmpty);
     if (android != null) expect(backgroundJobRan, isTrue, reason: "the app's background job, run as Android runs it");
+    // A cancel and a pick from each source the device offers (Android has
+    // two), each done in the system's own chooser.
+    if (chooser == 'host') {
+      expect(chooserDone, [
+        for (final _ in android != null ? [1, 2] : [1]) 'cancel: true',
+        for (final _ in android != null ? [1, 2] : [1]) 'pick: true',
+      ], reason: "the system's picture chooser, worked from outside the app");
+    }
   }, skip: nodeSkip, timeout: Timeout(Duration(minutes: _slow ? 150 : 30)));
 }

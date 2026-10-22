@@ -161,16 +161,20 @@ void main() {
     }
     expect(app.asksPassphrase, isFalse);
 
-    // A public name with a picture (a profile): once mined and proven, the
-    // picture made of the chosen file replaces the wallet's mark.
-    final file = await samplePictureFile();
-    await app.setPublicName(publicName, file);
+    // A public name with a picture (a profile), chosen in the system's own
+    // chooser where the run can work it: once mined and proven, the picture
+    // the dialog showed replaces the wallet's mark.
+    final shown = await app.setPublicName(publicName);
+    if (acceptanceSystemChooser.isEmpty) {
+      expect(shown.pixels, (await pictureFromImage(await samplePictureFile()))!.pixels,
+          reason: 'the file handed over, shrunk');
+    }
     await app.waitUntil(
         () => app.client.publishedAlias(me) == publicName && app.client.publishedPicture(me) != null,
         what: 'the profile, mined and proven',
         timeout: const Duration(minutes: 3));
-    expect(app.client.publishedPicture(me)!.pixels, (await pictureFromImage(file))!.pixels,
-        reason: 'what was published is the chosen file, shrunk as the dialog showed it');
+    expect(app.client.publishedPicture(me)!.pixels, shown.pixels, reason: 'what was published is what the dialog showed');
+    expect(app.client.publishedPicture(me)!.palette, shown.palette);
     await app.backHome();
     await app.openTab(l.tabWallet);
     await app.waitUntil(() => app.showsPicture(me), what: "the wallet's picture in place of its mark");

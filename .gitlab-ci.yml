@@ -19,13 +19,21 @@ include:
 
 variables:
   SECRET_DETECTION_ENABLED: 'true'
+  # Frugal CI, while the project's compute minutes are short (the user's
+  # call, 2026-10-22, until November): "1" leaves out every job but the unit
+  # tests (analyze, test) and what deploys a tag (the testnet page, its
+  # package, the deploy and the GitLab Release), and the security scanners.
+  # The acceptance tests are run by hand instead (AGENTS.md). Set "0" to run
+  # everything again.
+  CI_FRUGAL: "1"
   # The Flutter SDK every job builds with (cloned at this tag, and cached).
   FLUTTER_VERSION: "3.47.5"
   # What building the Linux app needs, and what its tests need to run it
-  # without a desktop: a display, a window manager, a session and a keyring.
+  # without a desktop: a display, a window manager, a session and a keyring;
+  # xdotool works GTK's file dialog for the acceptance tests.
   LINUX_APP_PACKAGES: >-
     clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev g++ libsecret-1-dev libjsoncpp-dev
-    xvfb openbox wmctrl dbus dbus-x11 gnome-keyring libgl1-mesa-dri libegl1 libgles2 procps
+    xvfb openbox wmctrl xdotool dbus dbus-x11 gnome-keyring libgl1-mesa-dri libegl1 libgles2 procps
 
 # No merge request pipelines (pushes are checked as branch pipelines), and a
 # scheduled pipeline holds the scheduled release alone: the scanners are
@@ -35,6 +43,10 @@ workflow:
   - if: $CI_PIPELINE_SOURCE == "merge_request_event"
     when: never
   - if: $CI_PIPELINE_SOURCE == "schedule"
+    variables:
+      SAST_DISABLED: "true"
+      SECRET_DETECTION_DISABLED: "true"
+  - if: $CI_FRUGAL == "1"
     variables:
       SAST_DISABLED: "true"
       SECRET_DETECTION_DISABLED: "true"
@@ -74,8 +86,22 @@ secret_detection:
 
 # The checks of every push and tag; not of a scheduled pipeline, where the
 # scheduled release runs them itself on what it's about to publish.
+# Left out while CI is frugal (CI_FRUGAL, above).
+.frugal: &frugal
+  if: $CI_FRUGAL == "1"
+  when: never
+
 .checks:
   rules:
+  - if: $CI_PIPELINE_SOURCE == "schedule"
+    when: never
+  - when: on_success
+
+# A check that costs more than the unit tests: as .checks, but not while
+# CI is frugal.
+.checks-unless-frugal:
+  rules:
+  - *frugal
   - if: $CI_PIPELINE_SOURCE == "schedule"
     when: never
   - when: on_success
@@ -121,7 +147,7 @@ test:
 acceptance:
   extends:
   - .flutter
-  - .checks
+  - .checks-unless-frugal
   stage: test
   allow_failure: true
   variables:
@@ -147,6 +173,7 @@ acceptance:
   stage: test
   allow_failure: true
   rules:
+  - *frugal
   - if: $CI_PIPELINE_SOURCE == "schedule"
     when: never
   - if: $CI_COMMIT_TAG || $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
@@ -237,7 +264,7 @@ acceptance:
 build-web:
   extends:
   - .flutter
-  - .checks
+  - .checks-unless-frugal
   stage: build
   script:
   - flutter build web --release
@@ -319,6 +346,13 @@ scheduled-release:
   rules:
   - if: $CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+$/
 
+# A release job that only checks or adds to the release: not while CI is
+# frugal (the page is still built, packaged and deployed).
+.on-release-tag-unless-frugal:
+  rules:
+  - *frugal
+  - if: $CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+$/
+
 # A release ships the testnet checkpoint committed in
 # lib/protocol/network.dart (tool/refresh_checkpoint.dart writes it before
 # the tag). This checks it against the live network, which is never its
@@ -328,7 +362,7 @@ scheduled-release:
 check-checkpoint:
   extends:
   - .flutter
-  - .on-release-tag
+  - .on-release-tag-unless-frugal
   stage: test
   script:
   - flutter test tool/check_checkpoint.dart
@@ -344,7 +378,7 @@ check-checkpoint:
 public-node-tests:
   extends:
   - .flutter
-  - .on-release-tag
+  - .on-release-tag-unless-frugal
   stage: test
   variables:
     MURMUR_NODE: testnet-seed.murmur.info:7878
@@ -469,7 +503,7 @@ build-web-testnet:
 # (its link on the release page leads nowhere).
 build-windows:
   extends:
-  - .on-release-tag
+  - .on-release-tag-unless-frugal
   - .flutter-windows
   stage: build
   allow_failure: true
@@ -525,7 +559,7 @@ build-windows:
 build-linux:
   extends:
   - .flutter
-  - .on-release-tag
+  - .on-release-tag-unless-frugal
   stage: build
   allow_failure: true
   script:
@@ -558,10 +592,13 @@ package:
   stage: package
   needs:
   - build-web-testnet
+  # Optional: left out while CI is frugal.
   - job: build-windows
     artifacts: true
+    optional: true
   - job: build-linux
     artifacts: true
+    optional: true
   script:
   - apk add --no-cache curl zip
   - mkdir -p dist

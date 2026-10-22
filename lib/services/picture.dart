@@ -2,6 +2,10 @@
 // Section 7.8): its middle square, shrunk to 32 x 32, reduced to 16 colours.
 // The engine decodes the user's own file here; what others publish is never
 // decoded by it (protocol/profile.dart reads those).
+//
+// Nothing is drawn: the decoded pixels are read and averaged here. Drawing
+// the image and reading it back failed on a machine with software graphics
+// (Windows' CI runner: "operation failed"), and left the dialog waiting.
 
 import 'dart:typed_data';
 import 'dart:ui' as ui;
@@ -12,62 +16,64 @@ import '../protocol/profile.dart';
 /// for 32 x 32 pixels.
 const maxPictureFileBytes = 20 * 1000 * 1000;
 
-/// The side the image is drawn at before averaging down to 32: four source
-/// pixels each way per picture pixel.
-const _drawn = profileSide * 4;
+/// The shorter side an image is decoded at, at most: four pixels each way
+/// per picture pixel.
+const _decoded = profileSide * 4;
 
 /// The profile picture made from an image file's bytes (PNG, JPEG, GIF,
-/// WebP, BMP: what the engine decodes), or null if they aren't an image.
+/// WebP, BMP: what the engine decodes), or null if they can't be made one.
 /// Transparent parts come out white.
 Future<ProfilePicture?> pictureFromImage(Uint8List bytes) async {
-  final ui.Image image;
   try {
     final buffer = await ui.ImmutableBuffer.fromUint8List(bytes);
     // Decoded straight to about the size needed, not the photo's own.
     final codec = await ui.instantiateImageCodecWithSize(buffer, getTargetSize: (w, h) {
-      final scale = _drawn / (w < h ? w : h);
-      return scale >= 1 ? ui.TargetImageSize(width: w, height: h)
+      final scale = _decoded / (w < h ? w : h);
+      return scale >= 1
+          ? ui.TargetImageSize(width: w, height: h)
           : ui.TargetImageSize(width: (w * scale).ceil(), height: (h * scale).ceil());
     });
-    image = (await codec.getNextFrame()).image;
-  } on Exception {
+    final image = (await codec.getNextFrame()).image;
+    final pixels = await image.toByteData(format: ui.ImageByteFormat.rawStraightRgba);
+    if (pixels == null) return null;
+    return pictureFromRgb(middleSquare(pixels.buffer.asUint8List(), image.width, image.height));
+    // Whatever the engine throws (not only Exceptions): no picture, which
+    // the dialog says, rather than a dialog left waiting.
+  } catch (_) {
     return null;
   }
-  final side = image.width < image.height ? image.width : image.height;
-  final recorder = ui.PictureRecorder();
-  ui.Canvas(recorder)
-    ..drawRect(const ui.Rect.fromLTWH(0, 0, _drawn * 1.0, _drawn * 1.0), ui.Paint()..color = const ui.Color(0xFFFFFFFF))
-    ..drawImageRect(
-      image,
-      ui.Rect.fromLTWH((image.width - side) / 2, (image.height - side) / 2, side * 1.0, side * 1.0),
-      const ui.Rect.fromLTWH(0, 0, _drawn * 1.0, _drawn * 1.0),
-      ui.Paint()..filterQuality = ui.FilterQuality.medium,
-    );
-  final drawn = await recorder.endRecording().toImage(_drawn, _drawn);
-  final rgba = (await drawn.toByteData(format: ui.ImageByteFormat.rawRgba))!.buffer.asUint8List();
-  return pictureFromRgb(_shrunk(rgba));
 }
 
-/// [_drawn]-pixel RGBA shrunk to 32 x 32 by averaging, as 0xRRGGBB values.
-List<int> _shrunk(Uint8List rgba) {
-  const k = _drawn ~/ profileSide;
+/// The middle square of `width` x `height` RGBA pixels (alpha not
+/// premultiplied), at 32 x 32, as 0xRRGGBB values on white, rows from the
+/// top: each picture pixel the average of the pixels it covers, or the
+/// nearest one when the image is smaller.
+List<int> middleSquare(Uint8List rgba, int width, int height) {
+  final side = width < height ? width : height;
+  final left = (width - side) ~/ 2, top = (height - side) ~/ 2;
+  // Where picture pixel `i` starts in the square, along one side.
+  int from(int i) => i * side ~/ profileSide;
   return [
     for (var y = 0; y < profileSide; y++)
-      for (var x = 0; x < profileSide; x++) _average(rgba, x * k, y * k, k),
+      for (var x = 0; x < profileSide; x++)
+        _average(rgba, width, left + from(x), top + from(y),
+            (from(x + 1) - from(x)).clamp(1, side), (from(y + 1) - from(y)).clamp(1, side)),
   ];
 }
 
-int _average(Uint8List rgba, int x0, int y0, int k) {
-  var r = 0, g = 0, b = 0;
-  for (var y = y0; y < y0 + k; y++) {
-    for (var x = x0; x < x0 + k; x++) {
-      final i = (y * _drawn + x) * 4;
-      r += rgba[i];
-      g += rgba[i + 1];
-      b += rgba[i + 2];
+/// The average of a `w` x `h` block from (`x0`, `y0`), on white.
+int _average(Uint8List rgba, int width, int x0, int y0, int w, int h) {
+  var r = 0.0, g = 0.0, b = 0.0;
+  for (var y = y0; y < y0 + h; y++) {
+    for (var x = x0; x < x0 + w; x++) {
+      final i = (y * width + x) * 4;
+      final a = rgba[i + 3] / 255;
+      r += rgba[i] * a + 255 * (1 - a);
+      g += rgba[i + 1] * a + 255 * (1 - a);
+      b += rgba[i + 2] * a + 255 * (1 - a);
     }
   }
-  final n = k * k;
+  final n = w * h;
   return (r / n).round() * 0x10000 + (g / n).round() * 0x100 + (b / n).round();
 }
 

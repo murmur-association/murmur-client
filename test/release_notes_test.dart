@@ -47,6 +47,19 @@ void main() {
         '## v0.2.1: older (2026-10-05)\n\n- x\n');
   });
 
+  test('an empty "Unreleased" heading is nothing waiting, and goes', () {
+    // As a release by hand left it once (v0.9.0), which v0.9.1 then
+    // released as "what was waiting", run into the section below.
+    const expected = '# Changelog\n\nNewest first.\n\n'
+        '## v0.2.2: checkpoint refresh (2026-10-12)\n\nNo protocol or network change.\n\n'
+        '- **Changed: the testnet checkpoint** is now block 21,900, refreshed from the live network by the scheduled release.\n\n'
+        '## v0.2.1: older (2026-10-05)\n\n- x\n';
+    for (final heading in ['## Unreleased\n\n', '## Unreleased\n', '## Unreleased\n\n\n']) {
+      final before = '# Changelog\n\nNewest first.\n\n$heading## v0.2.1: older (2026-10-05)\n\n- x\n';
+      expect(withRelease(before, version: '0.2.2', date: '2026-10-12', height: 21900), expected, reason: heading);
+    }
+  });
+
   test('line endings are kept', () {
     const before = '# Changelog\r\n\r\n## Unreleased\r\n\r\n- a\r\n\r\n## v0.1.0: first (2026-09-30)\r\n';
     final after = withRelease(before, version: '0.1.1', date: '2026-10-12', height: 100);

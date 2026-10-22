@@ -23,16 +23,19 @@ enum PictureProblem { tooLarge, unreadable }
 /// What was picked: the file's bytes, or why they can't be used.
 typedef PickedPicture = ({Uint8List? bytes, PictureProblem? problem});
 
-/// Stands in for the system's chooser: the acceptance tests can't work a
-/// file dialog, a browser's file input or a phone's photo picker, so they
-/// hand over the file a user would have picked.
+/// Takes the place of [pickPicture] in the acceptance tests: where the
+/// system's chooser can be worked from outside the app it calls
+/// [pickPictureFromSystem] and watches what comes back; elsewhere (macOS,
+/// iOS) it hands over the file a user would have picked.
 @visibleForTesting
 Future<PickedPicture?> Function(PictureSource source)? pickPictureOverride;
 
 /// Asks the user for an image from `source`. Null when they cancel.
-Future<PickedPicture?> pickPicture(PictureSource source) async {
-  final override = pickPictureOverride;
-  if (override != null) return override(source);
+Future<PickedPicture?> pickPicture(PictureSource source) =>
+    (pickPictureOverride ?? pickPictureFromSystem)(source);
+
+/// [pickPicture] through the system's own chooser.
+Future<PickedPicture?> pickPictureFromSystem(PictureSource source) async {
   final XFile? file = switch (source) {
     // Already shrunk by the system (and HEIC turned into JPEG on iPhones),
     // without asking for the library's metadata, so no permission is asked.

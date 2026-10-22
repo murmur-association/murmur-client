@@ -33,8 +33,15 @@ String withRelease(String changelog, {required String version, required String d
   final note = '- **Changed: the testnet checkpoint** is now block ${grouped(height)}, '
       'refreshed from the live network by the scheduled release.';
   final unreleased = RegExp(r'^## Unreleased[ \t]*\r?\n(\r?\n)?', multiLine: true);
-  final waiting = unreleased.firstMatch(changelog);
+  var waiting = unreleased.firstMatch(changelog);
   final eol = changelog.contains('\r\n') ? '\r\n' : '\n';
+  // A heading with nothing under it (a release by hand left it): nothing
+  // waits, and the heading goes.
+  final after = waiting == null ? null : RegExp(r'\s*(?=## |$)').matchAsPrefix(changelog, waiting.end);
+  if (waiting != null && after != null) {
+    changelog = changelog.replaceRange(waiting.start, after.end, '');
+    waiting = null;
+  }
   if (waiting != null) {
     return changelog.replaceRange(waiting.start, waiting.end,
         '## v$version: scheduled release, with what was waiting ($date)$eol$eol$note$eol');

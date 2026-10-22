@@ -107,6 +107,71 @@ class AndroidSystem {
     return false;
   }
 
+  // ---- the picture chooser ------------------------------------------------------
+
+  /// What the picture the runner picks is called on the device.
+  static const pictureName = 'murmur-acceptance.png';
+
+  /// Puts `hostFile` in the device's Downloads, and has the media store
+  /// list it, so the photo picker and the Files app both offer it.
+  Future<void> placePicture(String hostFile) async {
+    await adb(['push', hostFile, '/sdcard/Download/$pictureName']);
+    await _shell('content call --uri content://media --method scan_volume --arg external_primary');
+    await _shell('am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d file:///sdcard/Download/$pictureName');
+  }
+
+  /// The screen once a chooser of the system's is on it: an app other than
+  /// this one and the system's own bar. Null if none comes.
+  Future<List<ScreenNode>?> _chooser({Duration timeout = const Duration(minutes: 2)}) async {
+    final deadline = DateTime.now().add(timeout);
+    while (DateTime.now().isBefore(deadline)) {
+      final now = await screen();
+      final others = {for (final n in now) n.attributes['package'] ?? ''}..removeAll({'', package, 'com.android.systemui'});
+      if (others.isNotEmpty) return now;
+      await Future<void>.delayed(const Duration(seconds: 1));
+    }
+    return null;
+  }
+
+  /// Cancels the chooser the app opens, as the Back key does; false if none
+  /// came.
+  Future<bool> cancelChooser() async {
+    if (await _chooser() == null) return false;
+    await _shell('input keyevent KEYCODE_BACK');
+    return true;
+  }
+
+  /// Picks [pictureName] in the chooser the app opens: the photo picker (its
+  /// first photo, the only one on the device) or the Files app (the file by
+  /// name, from Downloads if it isn't listed at first). False if it can't.
+  Future<bool> pickPicture({Duration timeout = const Duration(minutes: 3)}) async {
+    if (await _chooser() == null) return false;
+    final deadline = DateTime.now().add(timeout);
+    // What the chooser showed, for a failure's report.
+    var last = '';
+    while (DateTime.now().isBefore(deadline)) {
+      final now = await screen();
+      last = [for (final n in now) if ((n.attributes['text'] ?? '').isNotEmpty) n.attributes['text']].join(' | ');
+      final byName = find(now, texts: const [pictureName]);
+      final photo = now.where((n) =>
+          (n.attributes['resource-id'] ?? '').endsWith(':id/icon_thumbnail') ||
+          (n.attributes['content-desc'] ?? '').startsWith('Photo taken')).firstOrNull;
+      final roots = now.where((n) => n.attributes['content-desc'] == 'Show roots').firstOrNull;
+      final downloads = find(now, texts: const ['Downloads']);
+      if (byName ?? photo case final n?) {
+        await tap(n);
+        return true;
+      } else if (downloads != null) {
+        await tap(downloads);
+      } else if (roots != null) {
+        await tap(roots);
+      }
+      await Future<void>.delayed(const Duration(seconds: 2));
+    }
+    print('android: the picture was not found in the chooser; it last showed: $last');
+    return false;
+  }
+
   // ---- the device's setup -------------------------------------------------------
 
   /// Sets a screen lock and enrolls finger 1, through Settings' own screens;

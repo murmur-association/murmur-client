@@ -7,7 +7,8 @@
 #   tool/linux_session.sh dart run tool/desktop_smoke_test.dart [--wallet-storage] <app folder>
 #   tool/linux_session.sh flutter test tool/acceptance_test.dart
 #
-# Needs xvfb, openbox, wmctrl, dbus and gnome-keyring: a display, a window
+# Needs xvfb, openbox, wmctrl, dbus and gnome-keyring (and xdotool for the
+# acceptance tests' file dialog): a display, a window
 # manager to pass the close request on, a way to send it, and a session
 # with an unlocked keyring, as a desktop gives the app. (The app keeps the
 # wallet in the keyring, and the plugin for it waits on the app's main
