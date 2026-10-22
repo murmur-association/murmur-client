@@ -2,9 +2,19 @@
 
 Newest first. Each release is a `vX.Y.Z` tag matching `version` in `pubspec.yaml`; see [README](README.md#releases-and-deployment). Entries marked **Breaking** need action from users.
 
-## v0.9.1: scheduled release, with what was waiting (2026-10-22)
+## v0.9.2: profile pictures on any graphics (2026-10-22)
+
+No protocol or network change.
+
+- **Fixed: choosing a profile picture on a computer drawing without a graphics card** could leave the Public name dialog waiting. The picked file is now read without drawing it, and a file that can't be read says so.
+- **Changed: the testnet checkpoint** is now block 2,400.
+
+## v0.9.1: checkpoint refresh (2026-10-22)
+
+No protocol or network change.
 
 - **Changed: the testnet checkpoint** is now block 1,400, refreshed from the live network by the scheduled release.
+
 ## v0.9.0: profile pictures, the first testnet-14 checkpoint (2026-10-21)
 
 No protocol or network change: profiles are a convention between clients (PROTOCOL.md Section 7.8), and nodes carry them like any message.
