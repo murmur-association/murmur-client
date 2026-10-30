@@ -127,9 +127,10 @@ class _ListTab extends StatelessWidget {
         child: Badge(
           isLabelVisible: unread,
           smallSize: 8,
-          // Room for the dot after the text, on whichever side that is.
+          // Room for the dot after the text, on whichever side that is. Only
+          // with the dot: the tab's underline spans this padding too.
           child: Padding(
-            padding: const EdgeInsetsDirectional.only(end: 10),
+            padding: EdgeInsetsDirectional.only(end: unread ? 10 : 0),
             child: Text(text, maxLines: 1, overflow: TextOverflow.ellipsis),
           ),
         ),

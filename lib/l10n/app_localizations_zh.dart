@@ -1818,7 +1818,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get starredPeople => '用户';
 
   @override
-  String get starredThreads => '话题和消息';
+  String get starredThreads => '消息';
 
   @override
   String get noStarredThreads => '没有加星标的话题或消息。在其页面上加星标，它就会出现在这里。';

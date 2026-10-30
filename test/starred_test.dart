@@ -171,7 +171,7 @@ void main() {
       await tester.tap(find.text(l.starredTitle));
       await frames(tester);
       expect(find.text(l.starredPeople), findsOneWidget);
-      expect(find.text(l.starredThreads), findsOneWidget);
+      expect(starredList(l), findsOneWidget);
       expect(find.text('a starred thread'), findsOneWidget);
       expect(find.textContaining('bob writes again'), findsNothing, reason: 'people have a list of their own');
       expect(find.byTooltip(l.newActivity), findsOneWidget);
@@ -196,7 +196,7 @@ void main() {
       expect(badge(l, 2), findsNothing);
 
       // Opened: the row is read, and its list's dot goes; the other stays.
-      await tester.tap(find.text(l.starredThreads));
+      await tester.tap(starredList(l));
       await frames(tester);
       await tester.tap(find.text('a starred thread'));
       await frames(tester);
@@ -315,7 +315,7 @@ void main() {
       await frames(tester);
       expect(find.text(shortHex(toHex(carol))), findsOneWidget);
 
-      await tester.tap(find.text(l.starredThreads));
+      await tester.tap(starredList(l));
       await frames(tester);
       expect(find.text(l.noStarredThreads), findsOneWidget);
       expect(find.text(shortHex(toHex(carol))), findsNothing);
@@ -356,3 +356,7 @@ void main() {
     });
   });
 }
+
+/// The Starred tab's list of messages, by its name in the list's tab: the home
+/// page's Messages tab may carry the same word.
+Finder starredList(AppLocalizations l) => find.descendant(of: find.byType(Tab), matching: find.text(l.starredThreads));

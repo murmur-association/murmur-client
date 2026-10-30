@@ -458,7 +458,7 @@
   "qrCode": "Código QR",
   "addressQrHint": "Escanea para abrir esta dirección en Murmur.",
   "starredPeople": "Personas",
-  "starredThreads": "Hilos y mensajes",
+  "starredThreads": "Mensajes",
   "noStarredThreads": "No hay hilos ni mensajes destacados. Destaca uno desde su página y aparecerá aquí.",
   "noStarredPeople": "No hay personas destacadas. Destaca a alguien desde su página y aparecerá aquí.",
   "newActivity": "Actividad nueva",

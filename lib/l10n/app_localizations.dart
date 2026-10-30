@@ -2860,10 +2860,10 @@ abstract class AppLocalizations {
   /// **'People'**
   String get starredPeople;
 
-  /// Starred tab: heading of the starred threads and messages
+  /// Starred tab: heading of the starred messages (a starred thread is its starred first message)
   ///
   /// In en, this message translates to:
-  /// **'Threads and messages'**
+  /// **'Messages'**
   String get starredThreads;
 
   /// Starred tab: the threads and messages list, empty

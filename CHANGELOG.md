@@ -2,6 +2,10 @@
 
 Newest first. Each release is a `vX.Y.Z` tag matching `version` in `pubspec.yaml`; see [README](README.md#releases-and-deployment). Entries marked **Breaking** need action from users.
 
+## Unreleased
+
+- **Changed: the Starred tab's lists fit a phone.** "Threads and messages" is now "Messages" (a starred thread is its starred first message), and the underline under a list's name no longer runs past it.
+
 ## v0.9.11: checkpoint refresh (2026-10-30)
 
 No protocol or network change.

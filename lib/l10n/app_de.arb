@@ -458,7 +458,7 @@
   "qrCode": "QR-Code",
   "addressQrHint": "Scannen, um diese Adresse in Murmur zu öffnen.",
   "starredPeople": "Personen",
-  "starredThreads": "Threads und Nachrichten",
+  "starredThreads": "Nachrichten",
   "noStarredThreads": "Keine markierten Threads oder Nachrichten. Markiere einen auf seiner Seite, dann erscheint er hier.",
   "noStarredPeople": "Keine markierten Personen. Markiere jemanden auf seiner Seite, dann erscheint er hier.",
   "newActivity": "Neue Aktivität",

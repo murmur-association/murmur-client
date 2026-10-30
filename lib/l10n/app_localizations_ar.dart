@@ -1920,7 +1920,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get starredPeople => 'الأشخاص';
 
   @override
-  String get starredThreads => 'المواضيع والرسائل';
+  String get starredThreads => 'الرسائل';
 
   @override
   String get noStarredThreads =>

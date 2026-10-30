@@ -1900,7 +1900,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get starredPeople => 'Pessoas';
 
   @override
-  String get starredThreads => 'Tópicos e mensagens';
+  String get starredThreads => 'Mensagens';
 
   @override
   String get noStarredThreads =>

@@ -1903,7 +1903,7 @@ class AppLocalizationsEs extends AppLocalizations {
   String get starredPeople => 'Personas';
 
   @override
-  String get starredThreads => 'Hilos y mensajes';
+  String get starredThreads => 'Mensajes';
 
   @override
   String get noStarredThreads =>

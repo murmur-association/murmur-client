@@ -1838,7 +1838,7 @@ class AppLocalizationsJa extends AppLocalizations {
   String get starredPeople => 'ユーザー';
 
   @override
-  String get starredThreads => 'スレッドとメッセージ';
+  String get starredThreads => 'メッセージ';
 
   @override
   String get noStarredThreads =>

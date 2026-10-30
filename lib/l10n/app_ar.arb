@@ -458,7 +458,7 @@
   "qrCode": "رمز QR",
   "addressQrHint": "امسح الرمز لفتح هذا العنوان في Murmur.",
   "starredPeople": "الأشخاص",
-  "starredThreads": "المواضيع والرسائل",
+  "starredThreads": "الرسائل",
   "noStarredThreads": "لا مواضيع ولا رسائل مميزة بنجمة. ميّز واحدًا بنجمة من صفحته وسيظهر هنا.",
   "noStarredPeople": "لا أشخاص مميزون بنجمة. ميّز شخصًا بنجمة من صفحته وسيظهر هنا.",
   "newActivity": "نشاط جديد",

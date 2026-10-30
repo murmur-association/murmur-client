@@ -458,7 +458,7 @@
   "qrCode": "二维码",
   "addressQrHint": "扫描即可在 Murmur 中打开此地址。",
   "starredPeople": "用户",
-  "starredThreads": "话题和消息",
+  "starredThreads": "消息",
   "noStarredThreads": "没有加星标的话题或消息。在其页面上加星标，它就会出现在这里。",
   "noStarredPeople": "没有加星标的用户。在用户页面上加星标，就会出现在这里。",
   "newActivity": "有新动态",

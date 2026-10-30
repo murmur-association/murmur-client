@@ -458,7 +458,7 @@
   "qrCode": "QR コード",
   "addressQrHint": "スキャンすると、このアドレスを Murmur で開けます。",
   "starredPeople": "ユーザー",
-  "starredThreads": "スレッドとメッセージ",
+  "starredThreads": "メッセージ",
   "noStarredThreads": "スター付きのスレッドやメッセージはありません。ページでスターを付けると、ここに表示されます。",
   "noStarredPeople": "スター付きのユーザーはいません。ユーザーのページでスターを付けると、ここに表示されます。",
   "newActivity": "新しいアクティビティ",

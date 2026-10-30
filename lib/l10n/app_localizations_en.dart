@@ -1887,7 +1887,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get starredPeople => 'People';
 
   @override
-  String get starredThreads => 'Threads and messages';
+  String get starredThreads => 'Messages';
 
   @override
   String get noStarredThreads =>
