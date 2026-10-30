@@ -1141,7 +1141,7 @@ class AppLocalizationsIt extends AppLocalizations {
 
   @override
   String get localNodeExplain =>
-      'Il tuo computer verifica da sé la catena, aiuta a diffonderla e mantiene disponibili i tuoi messaggi. Non conserva i messaggi di nessun altro oltre la verifica di un\'ora.';
+      'Il tuo computer verifica da sé l\'intera catena, aiuta a diffonderla e mantiene disponibili i tuoi messaggi. Conserva solo l\'ultimo giorno della catena, e nessun messaggio altrui oltre la verifica di un\'ora.';
 
   @override
   String get localNodeStarting => 'Avvio del nodo…';
@@ -1159,6 +1159,20 @@ class AppLocalizationsIt extends AppLocalizations {
   @override
   String get localNodeFailedUnknown =>
       'Il nodo si è fermato in modo imprevisto.';
+
+  @override
+  String get localNodeFromCheckpoint =>
+      'Avvio dai blocchi più recenti: quelli precedenti vengono verificati dopo.';
+
+  @override
+  String localNodeCatchingUp(String height, String total) {
+    return 'Allineamento alla catena: blocco $height di $total';
+  }
+
+  @override
+  String localNodeCheckingHistory(String height, String total) {
+    return 'Verifica dei blocchi precedenti in background: $height di $total';
+  }
 
   @override
   String get localNodeMine => 'Mina con questo computer';

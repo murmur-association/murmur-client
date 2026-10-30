@@ -1675,7 +1675,7 @@ abstract class AppLocalizations {
   /// No description provided for @localNodeExplain.
   ///
   /// In en, this message translates to:
-  /// **'Your computer checks the chain itself, helps relay it, and keeps your own messages available. It keeps nobody else\'s messages beyond the one-hour check.'**
+  /// **'Your computer checks the whole chain itself, helps relay it, and keeps your own messages available. It keeps only the latest day of the chain, and nobody else\'s messages beyond the one-hour check.'**
   String get localNodeExplain;
 
   /// No description provided for @localNodeStarting.
@@ -1701,6 +1701,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The node stopped unexpectedly.'**
   String get localNodeFailedUnknown;
+
+  /// No description provided for @localNodeFromCheckpoint.
+  ///
+  /// In en, this message translates to:
+  /// **'Starting at the newest blocks: the older ones are checked afterwards.'**
+  String get localNodeFromCheckpoint;
+
+  /// height, total: block heights, already formatted
+  ///
+  /// In en, this message translates to:
+  /// **'Catching up with the chain: block {height} of {total}'**
+  String localNodeCatchingUp(String height, String total);
+
+  /// height, total: block heights, already formatted
+  ///
+  /// In en, this message translates to:
+  /// **'Checking the older blocks in the background: {height} of {total}'**
+  String localNodeCheckingHistory(String height, String total);
 
   /// No description provided for @localNodeMine.
   ///

@@ -1144,7 +1144,7 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get localNodeExplain =>
-      'Dein Computer prüft die Kette selbst, hilft sie weiterzugeben und hält deine eigenen Nachrichten verfügbar. Nachrichten anderer behält er nicht über die einstündige Prüfung hinaus.';
+      'Dein Computer prüft die ganze Kette selbst, hilft sie weiterzugeben und hält deine eigenen Nachrichten verfügbar. Er behält nur den letzten Tag der Kette, und Nachrichten anderer nicht über die einstündige Prüfung hinaus.';
 
   @override
   String get localNodeStarting => 'Knoten wird gestartet…';
@@ -1161,6 +1161,20 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get localNodeFailedUnknown => 'Der Knoten wurde unerwartet beendet.';
+
+  @override
+  String get localNodeFromCheckpoint =>
+      'Start bei den neuesten Blöcken: Die älteren werden danach geprüft.';
+
+  @override
+  String localNodeCatchingUp(String height, String total) {
+    return 'Holt die Kette ein: Block $height von $total';
+  }
+
+  @override
+  String localNodeCheckingHistory(String height, String total) {
+    return 'Prüft die älteren Blöcke im Hintergrund: $height von $total';
+  }
 
   @override
   String get localNodeMine => 'Mit diesem Computer minen';

@@ -1114,7 +1114,7 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get localNodeExplain =>
-      'このコンピューターがチェーンを自分で検証し、中継を手伝い、あなた自身のメッセージを読める状態に保ちます。1 時間の検証を過ぎた他の人のメッセージは保持しません。';
+      'このコンピューターがチェーン全体を自分で検証し、中継を手伝い、あなた自身のメッセージを読める状態に保ちます。保持するのはチェーンの直近 1 日分だけで、1 時間の検証を過ぎた他の人のメッセージは保持しません。';
 
   @override
   String get localNodeStarting => 'ノードを起動しています…';
@@ -1131,6 +1131,19 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get localNodeFailedUnknown => 'ノードが予期せず停止しました。';
+
+  @override
+  String get localNodeFromCheckpoint => '最新のブロックから開始しています。古いブロックはその後に検証します。';
+
+  @override
+  String localNodeCatchingUp(String height, String total) {
+    return 'チェーンに追いついています：ブロック $height / $total';
+  }
+
+  @override
+  String localNodeCheckingHistory(String height, String total) {
+    return '古いブロックをバックグラウンドで検証中：$height / $total';
+  }
 
   @override
   String get localNodeMine => 'このコンピューターでマイニングする';

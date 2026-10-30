@@ -10,6 +10,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:murmur_client/crypto/wallet.dart';
+import 'package:murmur_client/protocol/network.dart';
 import 'package:murmur_client/services/local_node.dart';
 import 'package:murmur_client/services/local_node_io.dart';
 import 'package:murmur_client/services/local_node_link.dart';
@@ -23,10 +24,16 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'support/test_node.dart';
 
 void main() {
-  test('options: short-retention, local-only, and the wallet kept and paid only when given', () {
+  test('options: short-retention, pruned, local-only, and the wallet kept and paid only when given', () {
     final bare = localNodeArgs(dataDir: '/d', spec: 'whitepaper');
     expect(bare, containsAllInOrder(['--port', '127.0.0.1:0']));
-    expect(bare, containsAll(['--prune-content', '--prune-retracted', '--daemon']));
+    expect(bare, containsAll(['--prune-content', '--prune-retracted', '--prune-blocks', '--daemon']));
+    expect(bare, isNot(contains('--checkpoint')), reason: 'none given');
+    // The app's own checkpoint, as the node takes one; never a malformed one.
+    const at = Checkpoint(2500, '000002cee4bc1f9e4da32c87c389b9144cba8df6bc0b1f1f34e955f11e0fb208');
+    expect(localNodeArgs(dataDir: '/d', checkpoint: at), containsAllInOrder(['--checkpoint', '2500:${at.hash}']));
+    expect(localNodeArgs(dataDir: '/d', checkpoint: const Checkpoint(0, 'x')), isNot(contains('--checkpoint')));
+    expect(localNodeNetwork.checkpoint, NetworkInfo.whitepaper.checkpoint, reason: 'the testnet unless built for demo');
     expect(bare, isNot(contains('--keep-author')));
     expect(bare, isNot(contains('--mine-to')));
     // Mining needs an address to pay.
@@ -43,6 +50,47 @@ void main() {
     expect(full, isNot(contains('--gpu')), reason: 'off unless asked');
     expect(localNodeArgs(dataDir: '/d', address: a, gpu: true), isNot(contains('--gpu')));
     expect(localNodeArgs(dataDir: '/d', mine: true, gpu: true), isNot(contains('--gpu')), reason: 'no address to pay');
+  });
+
+  test("how far the node has come is read from its output's stable lines", () {
+    // A start from the checkpoint, its catching up, and the check from genesis
+    // behind it, in the node's words (node v0.16.0, README and fast_start.rs).
+    final lines = [
+      '[net] listening for peers on 127.0.0.1:49272',
+      '[start] starting from the checkpoint at height 2500 (000002cee4bc1f9e)',
+      '[start] started at height 16883: its state, from a peer, is the one its block commits to, on headers '
+          'checked from the checkpoint; checking the chain from the genesis block in the background',
+      '[sync] at height 16900 of 17000 from 1.2.3.4:7878\r',
+      '[check] checked the chain from the genesis block to height 4000 of 16883',
+      '[sync] synced from 1.2.3.4:7878 to height 17000',
+      '[chain] accepted block at height 17001 (3 tx)',
+      '[check] checked every block from the genesis block to height 16883: the checkpoint and the state this '
+          'node started from are the chain\'s',
+    ];
+    final seen = <NodeSync>[];
+    var sync = const NodeSync();
+    for (final line in lines) {
+      sync = sync.after(line);
+      seen.add(sync);
+    }
+    expect(seen, [
+      const NodeSync(),
+      const NodeSync(fromCheckpoint: true),
+      const NodeSync(history: (0, 16883)),
+      const NodeSync(catchingUp: (16900, 17000), history: (0, 16883)),
+      const NodeSync(catchingUp: (16900, 17000), history: (4000, 16883)),
+      const NodeSync(history: (4000, 16883)),
+      const NodeSync(history: (4000, 16883)),
+      const NodeSync(),
+    ]);
+
+    // No peer could start it: it syncs from genesis like any node.
+    final fallback = const NodeSync(fromCheckpoint: true)
+        .after('[start] no peer could start this node from the checkpoint; syncing from the genesis block instead');
+    expect(fallback, const NodeSync());
+    // A restart, or another peer, checks from genesis again.
+    expect(const NodeSync(history: (9000, 16883)).after('[check] checking the chain from the genesis block to height 16883 again'),
+        const NodeSync(history: (0, 16883)));
   });
 
   test('what the node says of its GPU miner is read from its output', () {
@@ -150,6 +198,20 @@ void main() {
     await node.start(const []);
     await tester.pump();
     expect(find.textContaining('127.0.0.1:49272'), findsOneWidget);
+
+    // On a long chain the first start takes a while: the card shows it moving.
+    final words = tester.element(find.byType(ChainTab)).l10n;
+    expect(find.byType(LinearProgressIndicator), findsNothing, reason: 'at the tip');
+    node.sync = const NodeSync(catchingUp: (16900, 17000), history: (4000, 16883));
+    node.say(null);
+    await tester.pump();
+    expect(find.text(words.localNodeCatchingUp('16,900', '17,000')), findsOneWidget);
+    expect(find.text(words.localNodeCheckingHistory('4,000', '16,883')), findsOneWidget);
+    expect(find.byType(LinearProgressIndicator), findsNWidgets(2));
+    node.sync = const NodeSync();
+    node.say(null);
+    await tester.pump();
+    expect(find.byType(LinearProgressIndicator), findsNothing);
 
     // Mining: the address it pays, in full, once there's a wallet to pay.
     final paid = '07' * 32;
@@ -296,6 +358,9 @@ class _RecordingNode extends LocalNode {
 
   @override
   GpuMining? gpu;
+
+  @override
+  NodeSync sync = const NodeSync();
 
   /// The node reports on its GPU miner.
   void say(GpuMining? status) {

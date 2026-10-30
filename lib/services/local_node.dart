@@ -9,7 +9,11 @@
 // The node the app runs is a legally light one (whitepaper Section 8.6):
 // short-retention (--prune-content), so it keeps nobody's content past the
 // one-hour check, except the user's own messages (--keep-author), and
-// retracted messages are deleted (--prune-retracted). It listens only on
+// retracted messages are deleted (--prune-retracted). It is a pruned node
+// (--prune-blocks): it checks every block, keeps the latest day of them and
+// no index, so it stays the same size however old the chain. A new one starts
+// from the app's checkpoint (--checkpoint) and checks the blocks before it in
+// the background. It listens only on
 // this machine (--port 127.0.0.1:0): it connects out to the network, and
 // peers aren't told an address nobody can reach. It holds no key: mining
 // pays the wallet's address.
@@ -21,6 +25,7 @@
 
 import 'package:flutter/foundation.dart';
 
+import '../protocol/network.dart';
 import 'local_node_io.dart' if (dart.library.js_interop) 'local_node_web.dart' as impl;
 
 enum LocalNodeState {
@@ -38,6 +43,9 @@ enum LocalNodeState {
 /// `demo` for local testing (`--dart-define=MURMUR_LOCAL_NODE_SPEC=demo`).
 const localNodeSpec = String.fromEnvironment('MURMUR_LOCAL_NODE_SPEC', defaultValue: 'whitepaper');
 
+/// The network [localNodeSpec] names, for its checkpoint.
+NetworkInfo get localNodeNetwork => localNodeSpec == 'demo' ? NetworkInfo.demo : NetworkInfo.whitepaper;
+
 /// Default share of one CPU core the node may mine with.
 const defaultLocalNodeCpu = 25;
 
@@ -49,6 +57,7 @@ List<String> localNodeArgs({
   bool mine = false,
   int cpuPct = defaultLocalNodeCpu,
   bool gpu = false,
+  Checkpoint? checkpoint,
 }) =>
     [
       '--daemon',
@@ -60,6 +69,15 @@ List<String> localNodeArgs({
       '--rpc-port', '0',
       '--prune-content',
       '--prune-retracted',
+      // Every block is checked, then only the latest day of them is kept,
+      // so disk and memory stay flat however old the chain. It implies no
+      // index, which serves clients, and none reads from this node.
+      '--prune-blocks',
+      // A new node starts at the tip from the checkpoint this app's release
+      // carries (the trust is the app's own, Section 7.7), then checks every
+      // block from genesis in the background (Section 7.10). A node that
+      // already has a chain ignores it.
+      if (checkpoint != null && checkpoint.wellFormed) ...['--checkpoint', '${checkpoint.height}:${checkpoint.hash}'],
       if (address != null) ...['--keep-author', address],
       if (mine && address != null) ...[
         '--mine-to', address,
@@ -126,6 +144,73 @@ GpuMining? gpuMiningOf(String line) {
   return null;
 }
 
+/// How far the node has come with the chain, as its output last said: the
+/// lines README calls stable for programs showing progress. All empty once
+/// it's at the tip and has checked everything.
+class NodeSync {
+  const NodeSync({this.fromCheckpoint = false, this.catchingUp, this.history});
+
+  /// Starting from the app's checkpoint (PROTOCOL.md Section 7.10): taking
+  /// the state of a recent block, before following the chain from there.
+  final bool fromCheckpoint;
+
+  /// Catching up with the chain: at this height, of as far as the peer's
+  /// checked headers go so far.
+  final (int, int)? catchingUp;
+
+  /// Started from the checkpoint, checking every block from genesis up to
+  /// the one it started at, in the background: this far, of that height.
+  final (int, int)? history;
+
+  @override
+  bool operator ==(Object other) =>
+      other is NodeSync &&
+      other.fromCheckpoint == fromCheckpoint &&
+      other.catchingUp == catchingUp &&
+      other.history == history;
+
+  @override
+  int get hashCode => Object.hash(fromCheckpoint, catchingUp, history);
+
+  @override
+  String toString() => 'NodeSync(fromCheckpoint: $fromCheckpoint, catchingUp: $catchingUp, history: $history)';
+
+  /// What `line` of the node's output changes; this, if nothing.
+  NodeSync after(String line) {
+    final l = line.trimRight();
+    Match? match(String pattern) => RegExp(pattern).firstMatch(l);
+    int at(Match m, int group) => int.parse(m.group(group)!);
+    if (l.startsWith('[start] starting from the checkpoint at height ')) {
+      return NodeSync(fromCheckpoint: true, catchingUp: catchingUp, history: history);
+    }
+    // Started: the blocks below are checked from genesis next.
+    if (match(r'^\[start\] started at height (\d+)') case final m?) {
+      return NodeSync(catchingUp: catchingUp, history: (0, at(m, 1)));
+    }
+    // No peer could: the node syncs from genesis like any other.
+    if (l.startsWith('[start] no peer could start this node from the checkpoint')) {
+      return NodeSync(catchingUp: catchingUp, history: history);
+    }
+    if (match(r'^\[sync\] at height (\d+) of (\d+) from ') case final m?) {
+      return NodeSync(fromCheckpoint: fromCheckpoint, catchingUp: (at(m, 1), at(m, 2)), history: history);
+    }
+    if (match(r'^\[sync\] synced from .* to height \d+$') != null) {
+      return NodeSync(fromCheckpoint: fromCheckpoint, history: history);
+    }
+    if (match(r'^\[check\] checked the chain from the genesis block to height (\d+) of (\d+)$') case final m?) {
+      return NodeSync(fromCheckpoint: fromCheckpoint, catchingUp: catchingUp, history: (at(m, 1), at(m, 2)));
+    }
+    // A restart, or another peer, checks again from genesis.
+    if (match(r'^\[check\] checking the chain from the genesis block to height (\d+) again$') case final m?) {
+      return NodeSync(fromCheckpoint: fromCheckpoint, catchingUp: catchingUp, history: (0, at(m, 1)));
+    }
+    if (l.startsWith('[check] checked every block from the genesis block to height ')) {
+      return NodeSync(fromCheckpoint: fromCheckpoint, catchingUp: catchingUp);
+    }
+    return this;
+  }
+}
+
 /// The peer-to-peer port a node reports at startup ("[net] listening for
 /// peers on 127.0.0.1:<port>"), if `line` is that line.
 int? listeningPort(String line) {
@@ -156,6 +241,9 @@ abstract class LocalNode extends ChangeNotifier {
 
   /// Its GPU miner, when it was started to mine on the card; null otherwise.
   GpuMining? get gpu;
+
+  /// How far it has come with the chain, while running.
+  NodeSync get sync;
 
   bool get available => state != LocalNodeState.unavailable;
 

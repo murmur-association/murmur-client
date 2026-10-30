@@ -125,6 +125,23 @@ void main() {
     expect(() => decodeMessage(tooMany), throwsFormatException);
   });
 
+  test('snapshot messages have the node layout (Section 7.10)', () {
+    // The node's vector (node/src/wire.rs): GetSnapshot for tip 03 x 32,
+    // from byte 7.
+    final ask = encodePayload(GetSnapshot(_filled(3), 7));
+    expect(toHex(ask), '20${'03' * 32}0000000000000007');
+    final asked = decodeMessage(ask) as GetSnapshot;
+    expect((toHex(asked.tip), asked.offset), ('03' * 32, 7));
+
+    final part = decodeMessage(encodePayload(Snapshot(_filled(3), 10, 7, Uint8List.fromList([1, 2, 3])))) as Snapshot;
+    expect((toHex(part.tip), part.total, part.offset), ('03' * 32, 10, 7));
+    expect(part.data, [1, 2, 3]);
+
+    // A chunk over 1 MiB is malformed.
+    final tooBig = encodePayload(Snapshot(_filled(3), 0, 0, Uint8List(maxSnapshotChunk + 1)));
+    expect(() => decodeMessage(tooBig), throwsFormatException);
+  });
+
   test('messages have the node layout', () async {
     final hello = encodePayload(Hello(
       version: protocolVersion,
@@ -136,7 +153,7 @@ void main() {
     ));
     // tag(1) version(4) genesis(32) nonce(8) port(2) height(8) work(32)
     expect(hello.length, 87);
-    expect(hello.sublist(0, 5), [0, 0, 0, 0, 15]);
+    expect(hello.sublist(0, 5), [0, 0, 0, 0, 16]);
 
     final w = await MurmurWallet.generate();
     final flag = await w.sign(

@@ -4,6 +4,11 @@ Newest first. Each release is a `vX.Y.Z` tag matching `version` in `pubspec.yaml
 
 ## Unreleased
 
+**Breaking: protocol 16**, on the same network (`murmur-testnet-14`): the app reaches only nodes of release v0.16.0 and later. Nothing to do: wallets, settings and the local copy carry over.
+
+- **Changed: the desktop app's own node stays the same size however old the chain.** It still checks every block, then keeps only the latest day of them and the chain's state, where it used to keep every block and every header, which on a chain ten years old would come to several gigabytes on disk and in memory. It no longer keeps an index of threads and addresses either: the app never reads from its own node.
+- **Changed: the app's own node starts in moments.** A new one starts at the newest blocks from the checkpoint the app's release carries, and checks every block from the first in the background, instead of checking them all before it takes part.
+- **Added: the Chain tab shows how far the app's own node has come:** catching up with the chain, and checking the older blocks in the background, each with a bar.
 - **Changed: the Starred tab's lists fit a phone.** "Threads and messages" is now "Messages" (a starred thread is its starred first message), and the underline under a list's name no longer runs past it.
 
 ## v0.9.11: checkpoint refresh (2026-10-30)

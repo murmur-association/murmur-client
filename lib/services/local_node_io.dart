@@ -58,10 +58,14 @@ class ProcessLocalNode extends LocalNode {
   int? _port;
   String? _problem;
   GpuMining? _gpu;
+  NodeSync _sync = const NodeSync();
   bool _stopping = false;
 
   @override
   GpuMining? get gpu => _gpu;
+
+  @override
+  NodeSync get sync => _sync;
 
   // murmur-miner, which the node runs from its own folder.
   @override
@@ -97,6 +101,7 @@ class ProcessLocalNode extends LocalNode {
     _port = null;
     // Asked to mine on the card: starting, until the node says more.
     _gpu = args.contains('--gpu') ? const GpuMining(GpuMiningState.starting) : null;
+    _sync = const NodeSync();
     _set(LocalNodeState.starting);
     await Directory(dataDir).create(recursive: true);
     // A node left running by a session that crashed would share this data
@@ -120,6 +125,11 @@ class ProcessLocalNode extends LocalNode {
         _port = p;
         _set(LocalNodeState.running);
       }
+      final sync = _sync.after(line);
+      if (sync != _sync) {
+        _sync = sync;
+        notifyListeners();
+      }
       final gpu = _gpu == null ? null : gpuMiningOf(line);
       if (gpu != null && gpu != _gpu) {
         _gpu = gpu;
@@ -138,6 +148,7 @@ class ProcessLocalNode extends LocalNode {
     _process = null;
     _port = null;
     _gpu = null;
+    _sync = const NodeSync();
     try {
       _pidFile.deleteSync();
     } on FileSystemException {

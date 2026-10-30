@@ -232,6 +232,33 @@ class _LocalNodeCardState extends State<_LocalNodeCard> {
   /// The slider's value while dragged; saved (restarting the node) on release.
   double? _cpu;
 
+  /// How far the node has come with the chain: on a long chain, its first
+  /// start takes a while, and the user should see it moving.
+  List<Widget> _progress(BuildContext context, NodeSync sync, TextStyle? style) {
+    final l = context.l10n;
+    Widget bar((int, int) at) => Padding(
+          padding: const EdgeInsets.only(top: 4, bottom: 4),
+          child: LinearProgressIndicator(value: at.$2 > 0 ? (at.$1 / at.$2).clamp(0.0, 1.0) : null),
+        );
+    String n(int v) => formatCount(context, v);
+    return [
+      if (sync.fromCheckpoint) ...[
+        const SizedBox(height: 8),
+        InfoPoint(Glyph.pending, l.localNodeFromCheckpoint, style: style),
+      ],
+      if (sync.catchingUp case final at?) ...[
+        const SizedBox(height: 8),
+        Text(l.localNodeCatchingUp(n(at.$1), n(at.$2)), style: style),
+        bar(at),
+      ],
+      if (sync.history case final at?) ...[
+        const SizedBox(height: 8),
+        Text(l.localNodeCheckingHistory(n(at.$1), n(at.$2)), style: style),
+        bar(at),
+      ],
+    ];
+  }
+
   @override
   Widget build(BuildContext context) {
     final l = context.l10n;
@@ -265,6 +292,7 @@ class _LocalNodeCardState extends State<_LocalNodeCard> {
                 onChanged: prefs.setRunLocalNode,
               ),
               if (prefs.runLocalNode && status != null) Text(status, style: small),
+              if (prefs.runLocalNode && node.state == LocalNodeState.running) ..._progress(context, node.sync, small),
               if (prefs.runLocalNode) ...[
                 const Divider(height: 24),
                 SwitchListTile(

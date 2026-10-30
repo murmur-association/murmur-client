@@ -1137,7 +1137,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get localNodeExplain =>
-      'O seu computador verifica a cadeia por si, ajuda a difundi-la e mantém disponíveis as suas próprias mensagens. Não guarda mensagens de mais ninguém para lá da verificação de uma hora.';
+      'O seu computador verifica por si toda a cadeia, ajuda a difundi-la e mantém disponíveis as suas próprias mensagens. Guarda apenas o último dia da cadeia, e nenhuma mensagem de mais ninguém para lá da verificação de uma hora.';
 
   @override
   String get localNodeStarting => 'A iniciar o nó…';
@@ -1154,6 +1154,20 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get localNodeFailedUnknown => 'O nó parou inesperadamente.';
+
+  @override
+  String get localNodeFromCheckpoint =>
+      'A começar pelos blocos mais recentes: os anteriores são verificados depois.';
+
+  @override
+  String localNodeCatchingUp(String height, String total) {
+    return 'A acompanhar a cadeia: bloco $height de $total';
+  }
+
+  @override
+  String localNodeCheckingHistory(String height, String total) {
+    return 'A verificar os blocos anteriores em segundo plano: $height de $total';
+  }
 
   @override
   String get localNodeMine => 'Minerar com este computador';

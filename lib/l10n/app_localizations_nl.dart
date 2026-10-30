@@ -1138,7 +1138,7 @@ class AppLocalizationsNl extends AppLocalizations {
 
   @override
   String get localNodeExplain =>
-      'Je computer controleert de keten zelf, helpt hem door te geven en houdt je eigen berichten beschikbaar. Berichten van anderen bewaart hij niet langer dan de controle van een uur.';
+      'Je computer controleert zelf de hele keten, helpt hem door te geven en houdt je eigen berichten beschikbaar. Hij bewaart alleen de laatste dag van de keten, en berichten van anderen niet langer dan de controle van een uur.';
 
   @override
   String get localNodeStarting => 'De node start…';
@@ -1155,6 +1155,20 @@ class AppLocalizationsNl extends AppLocalizations {
 
   @override
   String get localNodeFailedUnknown => 'De node is onverwacht gestopt.';
+
+  @override
+  String get localNodeFromCheckpoint =>
+      'Begint bij de nieuwste blokken: de oudere worden daarna gecontroleerd.';
+
+  @override
+  String localNodeCatchingUp(String height, String total) {
+    return 'Haalt de keten in: blok $height van $total';
+  }
+
+  @override
+  String localNodeCheckingHistory(String height, String total) {
+    return 'Controleert de oudere blokken op de achtergrond: $height van $total';
+  }
 
   @override
   String get localNodeMine => 'Minen met deze computer';

@@ -2209,6 +2209,10 @@ class MurmurClient extends ChangeNotifier {
       // blocks, so it keeps receiving NewBlock. Ignored.
       case SendCompact() || CompactBlock() || GetBlockTxs() || BlockTxs():
         break;
+      // Snapshots start a pruned node from a checkpoint (Section 7.10). The
+      // client never asks for one, and serves none.
+      case GetSnapshot() || Snapshot():
+        break;
     }
   }
 

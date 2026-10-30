@@ -1,6 +1,6 @@
 # Murmur client
 
-A Flutter light client for the Murmur chain, speaking **protocol 15** (networks `murmur-testnet-14` and `murmur-demo-14`). The node, the whitepaper and the protocol specification live in the [murmur repository](https://gitlab.com/murmur-association/murmur); section numbers below refer to its [PROTOCOL.md](https://gitlab.com/murmur-association/murmur/-/blob/main/PROTOCOL.md). With the client you can:
+A Flutter light client for the Murmur chain, speaking **protocol 16** (networks `murmur-testnet-14` and `murmur-demo-14`). The node, the whitepaper and the protocol specification live in the [murmur repository](https://gitlab.com/murmur-association/murmur); section numbers below refer to its [PROTOCOL.md](https://gitlab.com/murmur-association/murmur/-/blob/main/PROTOCOL.md). With the client you can:
 
 - read threads, newest activity first, each with its replies from the newest down, and see which reply an answer is for;
 - browse blocks, transactions and addresses, and search by height, txid, block hash or address;
@@ -197,7 +197,9 @@ Then start the client, which connects to `127.0.0.1:7878` by default. To spend t
 
 Desktop builds can run a Murmur node of their own: **Chain → Run a Murmur node on this computer**. The app then starts `murmur-node` in the background and stops it when it closes. The app doesn't read from it: it stays connected to the node chosen under **Node**, since its own keeps nobody else's messages. The computer checks the chain itself and helps relay it. Mining can be switched on, paying the wallet's address, with a limit on how much of one processor core it uses, or on the graphics card (**Mine on the graphics card**: the node runs `murmur-miner`, shipped beside it, through the card's OpenCL driver, and mines on the processor whenever the card can't be used).
 
-The node is set up to keep the user out of hosting other people's content: it listens only on this machine (`--port 127.0.0.1:0`), keeps message content only for the one-hour check (`--prune-content`) except the user's own messages (`--keep-author`), and deletes withdrawn messages (`--prune-retracted`). It holds no key. Its data is in `murmur-client/node` in the user's application data folder.
+The node is set up to keep the user out of hosting other people's content: it listens only on this machine (`--port 127.0.0.1:0`), keeps message content only for the one-hour check (`--prune-content`) except the user's own messages (`--keep-author`), and deletes withdrawn messages (`--prune-retracted`). It holds no key.
+
+It stays the same size however old the chain: it checks every block, then keeps only the latest day of them and the chain's state (`--prune-blocks`). A new one starts at the newest blocks from the app's own checkpoint (`--checkpoint`), and checks every block from the first in the background; the Chain tab shows how far each has come. Its data is in `murmur-client/node` in the user's application data folder.
 
 The option appears only when `murmur-node` is next to the app's executable. After `flutter build windows` (or `linux`, `macos`), put it there:
 

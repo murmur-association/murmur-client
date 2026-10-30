@@ -26,6 +26,9 @@ class _NoLocalNode extends LocalNode {
   GpuMining? get gpu => null;
 
   @override
+  NodeSync get sync => const NodeSync();
+
+  @override
   Future<void> start(List<String> args) async {}
 
   @override

@@ -45,6 +45,7 @@ class LocalNodeLink {
             mine: prefs.localNodeMining,
             cpuPct: prefs.localNodeCpu,
             gpu: prefs.localNodeGpu && node.canMineOnGpu,
+            checkpoint: localNodeNetwork.checkpoint,
           )
         : null;
     if (_same(wanted, _running)) return;

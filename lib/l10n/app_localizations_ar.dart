@@ -1162,7 +1162,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get localNodeExplain =>
-      'يتحقق حاسوبك من السلسلة بنفسه، ويساعد في نقلها، ويبقي رسائلك متاحة. ولا يحتفظ برسائل أي شخص آخر بعد فحص الساعة الواحدة.';
+      'يتحقق حاسوبك من السلسلة كاملةً بنفسه، ويساعد في نقلها، ويبقي رسائلك متاحة. ولا يحتفظ إلا بآخر يوم من السلسلة، ولا برسائل أي شخص آخر بعد فحص الساعة الواحدة.';
 
   @override
   String get localNodeStarting => 'جارٍ تشغيل العقدة…';
@@ -1179,6 +1179,20 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get localNodeFailedUnknown => 'توقفت العقدة على نحو غير متوقع.';
+
+  @override
+  String get localNodeFromCheckpoint =>
+      'البدء من أحدث الكتل: تُفحص الكتل الأقدم بعد ذلك.';
+
+  @override
+  String localNodeCatchingUp(String height, String total) {
+    return 'اللحاق بالسلسلة: الكتلة $height من $total';
+  }
+
+  @override
+  String localNodeCheckingHistory(String height, String total) {
+    return 'فحص الكتل الأقدم في الخلفية: $height من $total';
+  }
 
   @override
   String get localNodeMine => 'التعدين بهذا الحاسوب';

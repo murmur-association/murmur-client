@@ -13,7 +13,7 @@ import 'bytes.dart';
 import 'commitments.dart';
 import 'models.dart';
 
-const protocolVersion = 15;
+const protocolVersion = 16;
 
 /// Payloads over this are a protocol violation.
 const maxPayloadBytes = 16 * 1024 * 1024;
@@ -412,6 +412,35 @@ class BlockTxs extends Message {
 
   final Uint8List block;
   final List<Transaction> txs;
+}
+
+// ---- starting a node from a checkpoint, between nodes (Section 7.10) ------------
+//
+// A pruned node starting from a checkpoint asks a peer for a snapshot of its
+// state. A light client never asks (it proves each entry it needs instead),
+// and a node only answers what it's asked; both are decoded only because
+// decoding is strict.
+
+/// Most bytes of a snapshot per Snapshot message.
+const maxSnapshotChunk = 1024 * 1024;
+
+/// "Send me your snapshot at `tip` (zeros: whichever you offer), from byte
+/// `offset`."
+class GetSnapshot extends Message {
+  const GetSnapshot(this.tip, this.offset);
+
+  final Uint8List tip;
+  final int offset;
+}
+
+/// Part of a snapshot: `data` from byte `offset` of `total`.
+class Snapshot extends Message {
+  const Snapshot(this.tip, this.total, this.offset, this.data);
+
+  final Uint8List tip;
+  final int total;
+  final int offset;
+  final Uint8List data;
 }
 
 // ---- transactions and blocks ------------------------------------------------
@@ -864,6 +893,18 @@ Uint8List encodePayload(Message message) {
         ..u8(29)
         ..bytes(msg.root);
       _encodePage(w, msg.page);
+    case final GetSnapshot msg:
+      w
+        ..u8(32)
+        ..bytes(msg.tip)
+        ..u64(msg.offset);
+    case final Snapshot msg:
+      w
+        ..u8(33)
+        ..bytes(msg.tip)
+        ..u64(msg.total)
+        ..u64(msg.offset)
+        ..vec(msg.data);
     case final GetAddress msg:
       w
         ..u8(30)
@@ -1032,6 +1073,15 @@ Message decodeMessage(Uint8List payload) {
     case 31:
       final address = r.hash32();
       msg = Address(address, _decodeAddressList(r), _decodePage(r));
+    case 32:
+      msg = GetSnapshot(r.hash32(), r.u64());
+    case 33:
+      final tip = r.hash32();
+      final total = r.u64();
+      final offset = r.u64();
+      final data = r.vec();
+      if (data.length > maxSnapshotChunk) throw FormatException('${data.length} snapshot bytes exceeds limit');
+      msg = Snapshot(tip, total, offset, data);
     default:
       throw FormatException('unknown message tag $tag');
   }

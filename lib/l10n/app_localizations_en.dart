@@ -1135,7 +1135,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get localNodeExplain =>
-      'Your computer checks the chain itself, helps relay it, and keeps your own messages available. It keeps nobody else\'s messages beyond the one-hour check.';
+      'Your computer checks the whole chain itself, helps relay it, and keeps your own messages available. It keeps only the latest day of the chain, and nobody else\'s messages beyond the one-hour check.';
 
   @override
   String get localNodeStarting => 'Starting the node…';
@@ -1152,6 +1152,20 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get localNodeFailedUnknown => 'The node stopped unexpectedly.';
+
+  @override
+  String get localNodeFromCheckpoint =>
+      'Starting at the newest blocks: the older ones are checked afterwards.';
+
+  @override
+  String localNodeCatchingUp(String height, String total) {
+    return 'Catching up with the chain: block $height of $total';
+  }
+
+  @override
+  String localNodeCheckingHistory(String height, String total) {
+    return 'Checking the older blocks in the background: $height of $total';
+  }
 
   @override
   String get localNodeMine => 'Mine with this computer';

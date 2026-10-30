@@ -1109,7 +1109,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get localNodeExplain =>
-      '你的电脑会自行校验区块链、帮助传播，并保持你自己的消息可用。超过一小时的校验期后，它不保留任何其他人的消息。';
+      '你的电脑会自行校验整条区块链、帮助传播，并保持你自己的消息可用。它只保留最近一天的区块链，超过一小时的校验期后也不保留任何其他人的消息。';
 
   @override
   String get localNodeStarting => '正在启动节点…';
@@ -1126,6 +1126,19 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get localNodeFailedUnknown => '节点意外停止。';
+
+  @override
+  String get localNodeFromCheckpoint => '正在从最新的区块开始：较早的区块随后校验。';
+
+  @override
+  String localNodeCatchingUp(String height, String total) {
+    return '正在追上区块链：区块 $height / $total';
+  }
+
+  @override
+  String localNodeCheckingHistory(String height, String total) {
+    return '正在后台校验较早的区块：$height / $total';
+  }
 
   @override
   String get localNodeMine => '用这台电脑挖矿';
