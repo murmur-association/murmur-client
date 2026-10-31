@@ -2,7 +2,7 @@
 
 Newest first. Each release is a `vX.Y.Z` tag matching `version` in `pubspec.yaml`; see [README](README.md#releases-and-deployment). Entries marked **Breaking** need action from users.
 
-## Unreleased
+## v0.10.0: protocol 17, signatures checked, your messages kept available (2026-10-31)
 
 **Breaking: protocol 17, on a new network** (`murmur-testnet-15`, started 2026-10-31): the app reaches only nodes of release v0.16.0 and later. The testnet starts over: a wallet keeps its seed and works on the new network, but starts with nothing there; the local copy of the old chain is dropped by itself.
 
