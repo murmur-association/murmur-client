@@ -26,6 +26,12 @@ Newest first. Each release is a `vX.Y.Z` tag matching `version` in `pubspec.yaml
 - **Changed: in a thread, the picture and name above a quoted reply open its author's page.** The rest of the quote still goes to the reply.
 - **Changed: dialogs no longer put the cursor in their first field**, so a phone's keyboard doesn't cover them until a field is tapped.
 
+## v0.9.12: checkpoint refresh (2026-10-31)
+
+No protocol or network change.
+
+- **Changed: the testnet checkpoint** is now block 27,400, refreshed from the live network by the scheduled release.
+
 ## v0.9.11: checkpoint refresh (2026-10-30)
 
 No protocol or network change.
