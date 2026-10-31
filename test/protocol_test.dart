@@ -142,6 +142,27 @@ void main() {
     expect(() => decodeMessage(tooBig), throwsFormatException);
   });
 
+  test('Restore and Serving have the node layout (Section 7.3, rules 6 and 7)', () {
+    // The node's vectors (NODE-protocol-17.md): Restore of ([04 x 32], 01 02),
+    // and Serving of [05 x 32].
+    final restore = encodePayload(Restore([MessageContent(_filled(4), Uint8List.fromList([1, 2]))]));
+    expect(toHex(restore), '2200000001${'04' * 32}000000020102');
+    final restored = decodeMessage(restore) as Restore;
+    expect(toHex(restored.items.single.hash), '04' * 32);
+    expect(restored.items.single.content, [1, 2]);
+    final serving = encodePayload(Serving([_filled(5)]));
+    expect(toHex(serving), '2300000001${'05' * 32}');
+    expect((decodeMessage(serving) as Serving).addresses.map(toHex), ['05' * 32]);
+    // None stops serving.
+    expect((decodeMessage(encodePayload(const Serving([]))) as Serving).addresses, isEmpty);
+
+    // Over the limits is malformed.
+    expect(() => decodeMessage(encodePayload(Serving(List.filled(maxServing + 1, _filled(5))))), throwsFormatException);
+    final tooMany = encodePayload(
+        Restore(List.filled(maxContentRequest + 1, MessageContent(_filled(4), Uint8List.fromList([1])))));
+    expect(() => decodeMessage(tooMany), throwsFormatException);
+  });
+
   test('messages have the node layout', () async {
     final hello = encodePayload(Hello(
       version: protocolVersion,
@@ -153,7 +174,7 @@ void main() {
     ));
     // tag(1) version(4) genesis(32) nonce(8) port(2) height(8) work(32)
     expect(hello.length, 87);
-    expect(hello.sublist(0, 5), [0, 0, 0, 0, 16]);
+    expect(hello.sublist(0, 5), [0, 0, 0, 0, 17]);
 
     final w = await MurmurWallet.generate();
     final flag = await w.sign(

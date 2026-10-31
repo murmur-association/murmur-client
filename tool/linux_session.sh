@@ -6,14 +6,17 @@
 #
 #   tool/linux_session.sh dart run tool/desktop_smoke_test.dart [--wallet-storage] <app folder>
 #   tool/linux_session.sh flutter test tool/acceptance_test.dart
+#   MURMUR_KEYRING=locked tool/linux_session.sh dart run tool/desktop_smoke_test.dart <app folder>
 #
 # Needs xvfb, openbox, wmctrl, dbus and gnome-keyring (and xdotool for the
 # acceptance tests' file dialog): a display, a window
 # manager to pass the close request on, a way to send it, and a session
-# with an unlocked keyring, as a desktop gives the app. (The app keeps the
-# wallet in the keyring, and the plugin for it waits on the app's main
-# thread: with a keyring that is locked and can't ask, the app would hang
-# before showing anything.) Nothing of the user's is read or changed.
+# with an unlocked keyring, as a desktop gives the app; with
+# MURMUR_KEYRING=locked, a locked one with nobody to answer its prompt.
+# (The app keeps the wallet in the keyring, and the plugin for it waits on
+# the app's main thread: with a keyring that is locked and can't ask, the
+# app once hung before showing anything; it now checks first.) Nothing of
+# the user's is read or changed.
 set -euo pipefail
 
 # Everything below runs inside a session bus of its own.
@@ -39,6 +42,13 @@ sleep 1
 openbox >/dev/null 2>&1 & wm=$!
 sleep 1
 echo -n smoke | gnome-keyring-daemon --unlock --components=secrets >/dev/null 2>&1
+if [ "${MURMUR_KEYRING:-}" = locked ]; then
+  # The keyring locked, with nobody to answer its password prompt: where the
+  # app used to hang before showing anything (lib/services/keyring.dart). It
+  # must now start all the same, without a stored wallet.
+  dbus-send --session --print-reply --dest=org.freedesktop.secrets /org/freedesktop/secrets \
+    org.freedesktop.Secret.Service.Lock array:objpath:/org/freedesktop/secrets/collection/login >/dev/null
+fi
 
 # A notification server, as a desktop has, that keeps what it's given in a
 # log the tests read (tool/notification_server.dart); it's ready once the

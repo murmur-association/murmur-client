@@ -467,8 +467,9 @@ class _MessageCard extends StatelessWidget {
 }
 
 /// A reply another one answers, above the answer: who wrote it and how it
-/// starts. A tap goes to it. Without a `view` it is older than the replies
-/// loaded, and a tap loads back to it.
+/// starts. A tap goes to it, except on its author, which opens their page.
+/// Without a `view` it is older than the replies loaded, and a tap loads back
+/// to it.
 class _Quote extends StatelessWidget {
   const _Quote(this.view, {required this.onTap});
 
@@ -492,14 +493,20 @@ class _Quote extends StatelessWidget {
           child: view == null
               ? Text(context.l10n.quoteNotLoaded, style: faint)
               : Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Row(mainAxisSize: MainAxisSize.min, children: [
-                    AddressAvatar(view.tx.fromAddress, size: 16),
-                    const SizedBox(width: 6),
-                    Flexible(
-                      child: Text(nameOf(context, view.tx.fromAddress),
-                          overflow: TextOverflow.ellipsis, style: theme.textTheme.bodySmall?.copyWith(color: copper)),
-                    ),
-                  ]),
+                  // The author opens their page, as on a reply's own card;
+                  // the rest of the quote goes to the reply.
+                  InkWell(
+                    onTap: () => openAddress(context, view.tx.fromAddress),
+                    child: Row(mainAxisSize: MainAxisSize.min, children: [
+                      AddressAvatar(view.tx.fromAddress, size: 16),
+                      const SizedBox(width: 6),
+                      Flexible(
+                        child: Text(nameOf(context, view.tx.fromAddress),
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.bodySmall?.copyWith(color: copper)),
+                      ),
+                    ]),
+                  ),
                   const SizedBox(height: 2),
                   MessageText(messageOrUnavailable(context, view).replaceAll('\n', ' '), maxLines: 2, style: faint),
                 ]),

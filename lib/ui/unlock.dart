@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 
 import '../crypto/wallet.dart';
 import '../services/key_vault.dart';
+import '../services/storage.dart' show KeyringUnavailable;
 import 'common.dart';
 import 'glyphs.dart';
 import 'brand.dart';
@@ -66,7 +67,6 @@ class DialogPrompts implements VaultPrompts {
             TextFormField(
               controller: first,
               obscureText: true,
-              autofocus: true,
               decoration: InputDecoration(labelText: l.passphraseField, border: const OutlineInputBorder()),
               validator: (v) =>
                   (v ?? '').length < minPassphraseLength ? l.passphraseTooShort(minPassphraseLength) : null,
@@ -109,7 +109,6 @@ class DialogPrompts implements VaultPrompts {
           TextField(
             controller: field,
             obscureText: true,
-            autofocus: true,
             decoration: InputDecoration(labelText: l.passphraseField, border: const OutlineInputBorder()),
             onSubmitted: (v) => Navigator.pop(context, v),
           ),
@@ -195,6 +194,10 @@ Future<bool> protectWallet(BuildContext context, Future<void> Function(VaultProm
     // A wrong passphrase: the one the invitation cards are under, which a
     // new wallet shares.
     if (context.mounted) showSnack(context, e.wrongPassphrase ? context.l10n.wrongPassphrase : context.l10n.authFailed);
+    return false;
+  } on KeyringUnavailable {
+    // Linux, with a keyring that is locked and can't ask (services/keyring.dart).
+    if (context.mounted) showSnack(context, context.l10n.keyringUnavailable);
     return false;
   }
 }

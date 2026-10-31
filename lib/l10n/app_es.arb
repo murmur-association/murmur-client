@@ -486,5 +486,17 @@
   "notifyStarredReply": "{name} respondió en un hilo destacado",
   "notifyStarredPerson": "Nuevo mensaje de {name}",
   "notifyMore": "{count, plural, =1{1 mensaje nuevo más} other{{count} mensajes nuevos más}}",
-  "faceIdReason": "Confirma que eres tú antes de que se use o se muestre la clave de tu cartera."
+  "faceIdReason": "Confirma que eres tú antes de que se use o se muestre la clave de tu cartera.",
+  "refresh": "Actualizar",
+  "markAllRead": "Marcar todo como leído",
+  "newAboveLastVisit": "Arriba: lo nuevo desde tu última visita",
+  "publicNameAndPicture": "Nombre público e imagen",
+  "publicNameAndPictureSet": "Poner nombre público e imagen",
+  "publicNameStandOut": "**Destaca**: un nombre y una imagen que los demás ven junto a tu dirección.",
+  "pictureLarger": "Ver la imagen más grande",
+  "keepMessagesAvailable": "Mantener mis mensajes disponibles",
+  "keepMessagesAvailableExplain": "**Mientras la app está abierta**, quien lee recibe tus mensajes de ti cuando los nodos ya no los guardan. **Solo los tuyos**, nunca los de otros.",
+  "errBadSignature": "El bloque {height} contiene una transacción cuya firma no es válida: la cadena del nodo incumple las reglas que aplica todo nodo. No confíes en este nodo: conéctate a otro.",
+  "receivedOmitted": "**El nodo omitió** parte de lo que otros hicieron sobre ti ({count}). Se muestra igualmente, encontrado en los propios bloques.",
+  "keyringUnavailable": "El llavero del sistema está bloqueado y no puede pedir su contraseña, así que la cartera no se puede guardar en este dispositivo. Desbloquea el llavero (suele hacerlo el inicio de sesión en el escritorio) y vuelve a abrir Murmur."
 }

@@ -148,6 +148,7 @@ String linkErrorText(AppLocalizations l, LinkError e) => switch (e.kind) {
       LinkErrorKind.tampered => l.errTampered,
       LinkErrorKind.stateMismatch => l.errStateMismatch(e.height),
       LinkErrorKind.checkpointMismatch => l.errCheckpointMismatch(e.height),
+      LinkErrorKind.badSignature => l.errBadSignature(e.height),
       LinkErrorKind.other => e.detail,
     };
 

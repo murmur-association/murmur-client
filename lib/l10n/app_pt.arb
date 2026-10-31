@@ -486,5 +486,17 @@
   "notifyStarredReply": "{name} respondeu num tópico com estrela",
   "notifyStarredPerson": "Nova mensagem de {name}",
   "notifyMore": "{count, plural, =1{Mais 1 mensagem nova} other{Mais {count} mensagens novas}}",
-  "faceIdReason": "Confirme que é você antes de a chave da sua carteira ser usada ou mostrada."
+  "faceIdReason": "Confirme que é você antes de a chave da sua carteira ser usada ou mostrada.",
+  "refresh": "Atualizar",
+  "markAllRead": "Marcar tudo como lido",
+  "newAboveLastVisit": "Acima: novidades desde a sua última visita",
+  "publicNameAndPicture": "Nome público e imagem",
+  "publicNameAndPictureSet": "Definir nome público e imagem",
+  "publicNameStandOut": "**Destaque-se**: um nome e uma imagem que os outros veem junto ao seu endereço.",
+  "pictureLarger": "Ver a imagem maior",
+  "keepMessagesAvailable": "Manter as minhas mensagens disponíveis",
+  "keepMessagesAvailableExplain": "**Enquanto a app está aberta**, quem lê recebe as suas mensagens de si quando os nós já não as guardam. **Só as suas**, nunca as de outros.",
+  "errBadSignature": "O bloco {height} contém uma transação com uma assinatura inválida: a cadeia do nó viola as regras que todos os nós aplicam. Não confie neste nó: ligue-se a outro.",
+  "receivedOmitted": "**O nó omitiu** parte do que outros fizeram sobre si ({count}). É mostrado na mesma, encontrado nos próprios blocos.",
+  "keyringUnavailable": "O porta-chaves do sistema está bloqueado e não pode pedir a palavra-passe, por isso a carteira não pode ser guardada neste dispositivo. Desbloqueie o porta-chaves (normalmente acontece ao iniciar sessão no ambiente de trabalho) e abra o Murmur de novo."
 }

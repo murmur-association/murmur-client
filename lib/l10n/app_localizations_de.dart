@@ -2042,4 +2042,51 @@ class AppLocalizationsDe extends AppLocalizations {
   @override
   String get faceIdReason =>
       'Bestätige, dass du es bist, bevor der Schlüssel deiner Wallet verwendet oder angezeigt wird.';
+
+  @override
+  String get refresh => 'Aktualisieren';
+
+  @override
+  String get markAllRead => 'Alle als gelesen markieren';
+
+  @override
+  String get newAboveLastVisit => 'Darüber: neu seit deinem letzten Besuch';
+
+  @override
+  String get publicNameAndPicture => 'Öffentlicher Name und Bild';
+
+  @override
+  String get publicNameAndPictureSet => 'Öffentlichen Namen und Bild festlegen';
+
+  @override
+  String get publicNameStandOut =>
+      '**Heb dich ab**: ein Name und ein Bild, die andere neben deiner Adresse sehen.';
+
+  @override
+  String get pictureLarger => 'Bild größer zeigen';
+
+  @override
+  String get keepMessagesAvailable => 'Meine Nachrichten verfügbar halten';
+
+  @override
+  String get keepMessagesAvailableExplain =>
+      '**Solange die App geöffnet ist**, bekommen Leser deine Nachrichten von dir, wenn Knoten sie nicht mehr aufbewahren. **Nur deine**, nie die anderer.';
+
+  @override
+  String errBadSignature(int height) {
+    final intl.NumberFormat heightNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String heightString = heightNumberFormat.format(height);
+
+    return 'Block $heightString enthält eine Transaktion mit ungültiger Signatur: Die Kette des Knotens bricht die Regeln, die jeder Knoten anwendet. Vertraue diesem Knoten nicht: Verbinde dich mit einem anderen.';
+  }
+
+  @override
+  String receivedOmitted(String count) {
+    return '**Der Knoten hat ausgelassen**, was andere zu dir getan haben ($count). Es wird trotzdem angezeigt, gefunden in den Blöcken selbst.';
+  }
+
+  @override
+  String get keyringUnavailable =>
+      'Der Schlüsselbund des Systems ist gesperrt und kann nicht nach seinem Passwort fragen, daher lässt sich die Wallet auf diesem Gerät nicht speichern. Entsperre den Schlüsselbund (meist geschieht das beim Anmelden am Desktop) und starte Murmur neu.';
 }

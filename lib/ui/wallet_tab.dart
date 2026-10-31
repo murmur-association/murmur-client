@@ -70,13 +70,23 @@ class WalletTab extends StatelessWidget {
                       Text(l.balance, style: theme.textTheme.labelLarge),
                       BalanceText(client: client, address: address, style: theme.textTheme.displaySmall),
                       if (pending > 0) Text(l.pendingCommitted(formatAmount(context, pending))),
-                      if (mined > 0) Text(l.blocksMined(mined)),
+                      if ((mined ?? 0) > 0) Text(l.blocksMined(mined!)),
                       const SizedBox(height: 12),
                       Text(l.address, style: theme.textTheme.labelLarge),
                       HashText(address, qr: addressLink(address), qrCaption: l.addressQrHint),
                       const SizedBox(height: 12),
                       _PublicName(client: client, address: address),
                       const SizedBox(height: 4),
+                      // Readers get the user's own messages from this device
+                      // when nodes no longer keep them (Serving).
+                      SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        secondary: const MurmurIcon(Glyph.share),
+                        title: Text(l.keepMessagesAvailable),
+                        subtitle: Emphasized(l.keepMessagesAvailableExplain, style: theme.textTheme.bodySmall),
+                        value: prefs.keepMessagesAvailable,
+                        onChanged: prefs.setKeepMessagesAvailable,
+                      ),
                       _Protection(wallets.protection),
                       const SizedBox(height: 12),
                       Wrap(spacing: 8, runSpacing: 8, children: [
@@ -192,7 +202,7 @@ class _PublicName extends StatelessWidget {
 
         return AlertDialog(
           scrollable: true,
-          title: Text(l.publicName),
+          title: Text(l.publicNameAndPicture),
           content: SizedBox(
             width: 460,
             child: Form(
@@ -202,7 +212,6 @@ class _PublicName extends StatelessWidget {
                 const SizedBox(height: 12),
                 TextFormField(
                   controller: controller,
-                  autofocus: true,
                   onChanged: (_) => setState(() {}),
                   decoration: InputDecoration(
                     labelText: l.publicNameField,
@@ -288,20 +297,52 @@ class _PublicName extends StatelessWidget {
     final l = context.l10n;
     final theme = Theme.of(context);
     final alias = client.publishedAlias(address);
-    return Row(children: [
-      Expanded(
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(l.publicName, style: theme.textTheme.labelLarge),
-          Text(
-            alias == null ? l.publicNameNone : publicNameOf(alias, address),
-            style: alias == null ? theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.outline) : null,
-          ),
-        ]),
-      ),
-      TextButton.icon(
+    final edit = client.state == LinkState.live ? () => _edit(context, alias) : null;
+    // What makes the wallet itself to others: its picture as they see it,
+    // with a pen on it, its name, and a button that says what it sets.
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(l.publicNameAndPicture, style: theme.textTheme.labelLarge),
+      const SizedBox(height: 8),
+      Row(children: [
+        InkResponse(
+          onTap: edit,
+          radius: 32,
+          child: Stack(clipBehavior: Clip.none, children: [
+            AddressAvatar(address, size: 48),
+            PositionedDirectional(
+              end: -6,
+              bottom: -6,
+              child: Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.primary,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: theme.colorScheme.surface, width: 2),
+                ),
+                child: MurmurIcon(Glyph.edit, size: 12, color: theme.colorScheme.onPrimary),
+              ),
+            ),
+          ]),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(
+              alias == null ? l.publicNameNone : publicNameOf(alias, address),
+              style: alias == null
+                  ? theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.outline)
+                  : theme.textTheme.titleSmall,
+            ),
+            const SizedBox(height: 2),
+            Emphasized(l.publicNameStandOut, style: theme.textTheme.bodySmall),
+          ]),
+        ),
+      ]),
+      const SizedBox(height: 10),
+      FilledButton.tonalIcon(
         icon: const MurmurIcon(Glyph.edit, size: 18),
-        label: Text(l.publicNameSet),
-        onPressed: client.state == LinkState.live ? () => _edit(context, alias) : null,
+        label: Text(l.publicNameAndPictureSet),
+        onPressed: edit,
       ),
     ]);
   }

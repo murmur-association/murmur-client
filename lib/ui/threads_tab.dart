@@ -24,9 +24,36 @@ class ThreadsTab extends StatefulWidget {
   State<ThreadsTab> createState() => _ThreadsTabState();
 }
 
-class _ThreadsTabState extends State<ThreadsTab> {
+class _ThreadsTabState extends State<ThreadsTab> with SingleTickerProviderStateMixin {
   /// The snapshot's height; null until the first one is taken.
   int? _height;
+
+  /// Turns the Refresh button's arrow while a refresh the user asked for runs.
+  late final _spin = AnimationController(vsync: this, duration: const Duration(milliseconds: 900));
+  bool _refreshing = false;
+
+  /// Bumped by each refresh the user asks for: the new list fades in. (Other
+  /// snapshots, such as coming back to the tab, just replace it.)
+  int _refreshes = 0;
+
+  /// A new snapshot at the tip, asked for by the button or by pulling the
+  /// list down. It lasts long enough for the arrow to be seen turning, and
+  /// the arrow finishes its turn rather than stopping dead.
+  Future<void> _refresh(MurmurClient client) async {
+    if (_refreshing) return;
+    setState(() => _refreshing = true);
+    _spin.repeat();
+    await Future<void>.delayed(const Duration(milliseconds: 450));
+    if (!mounted) return;
+    setState(() {
+      _snapshot(client);
+      _refreshes++;
+    });
+    await _spin.forward(from: _spin.value);
+    if (!mounted) return;
+    _spin.value = 0;
+    setState(() => _refreshing = false);
+  }
 
   /// When the snapshot's block was mined (Unix seconds).
   int _time = 0;
@@ -106,71 +133,109 @@ class _ThreadsTabState extends State<ThreadsTab> {
         // Also while threads wait for a more recently active one to arrive.
         loadingMore: client.canLoadOlder || client.threadsHeldBack,
         onNeedMore: client.requestOlder,
-        header: [
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsetsDirectional.fromSTEB(16, 4, 8, 0),
-              child: Row(children: [
-                Expanded(
-                  child: Ticking(
-                    builder: (context) => Text(
-                      '${l.threadsAsOf(height, formatClock(context, _time), formatElapsed(context, _time))} · '
-                      '${l.newBlocksSince(newBlocks)}',
-                      style: small,
-                    ),
-                  ),
+      );
+      // The status, the search and the filters stay put above the list:
+      // only the threads scroll, or move when it's pulled down.
+      return Column(children: [
+        Padding(
+          padding: const EdgeInsetsDirectional.fromSTEB(16, 4, 8, 0),
+          child: Row(children: [
+            Expanded(
+              child: Ticking(
+                builder: (context) => Text(
+                  '${l.threadsAsOf(height, formatClock(context, _time), formatElapsed(context, _time))} · '
+                  '${l.newBlocksSince(newBlocks)}',
+                  style: small,
                 ),
-              ]),
-            ),
-          ),
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsetsDirectional.fromSTEB(16, 4, 8, 4),
-              child: Row(children: [
-                Expanded(
-                  child: TextField(
-                    controller: _search,
-                    onChanged: (v) => setState(() => _query = v),
-                    decoration: InputDecoration(
-                      isDense: true,
-                      hintText: l.searchThreads,
-                      prefixIcon: const Padding(padding: EdgeInsets.all(12), child: MurmurIcon(Glyph.search, size: 18)),
-                      border: const OutlineInputBorder(),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 4),
-                _ThreadFilterMenu(languages: languages),
-              ]),
-            ),
-          ),
-          if (hidden > 0)
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsetsDirectional.fromSTEB(16, 0, 16, 4),
-                child: Text(l.threadsHidden(hidden), style: small),
               ),
             ),
-        ],
-      );
-      // Pulled down at its top, the list is taken again at the tip: with a
-      // finger, a mouse or a touchpad alike.
-      return ScrollConfiguration(
-        behavior: ScrollConfiguration.of(context).copyWith(dragDevices: PointerDeviceKind.values.toSet()),
-        child: RefreshIndicator(
-          onRefresh: () async => setState(() => _snapshot(client)),
-          child: list,
+            // In copper, for those who don't think of pulling the list down
+            // (on a desktop, above all).
+            TextButton.icon(
+              icon: RotationTransition(
+                turns: CurvedAnimation(parent: _spin, curve: Curves.easeInOutCubic),
+                child: const MurmurIcon(Glyph.refresh, size: 18),
+              ),
+              label: Text(l.refresh),
+              onPressed: _refreshing ? null : () => _refreshKey.currentState?.show(),
+            ),
+          ]),
         ),
-      );
+        Padding(
+          padding: const EdgeInsetsDirectional.fromSTEB(16, 4, 8, 4),
+          child: Row(children: [
+            Expanded(
+              child: TextField(
+                controller: _search,
+                onChanged: (v) => setState(() => _query = v),
+                decoration: InputDecoration(
+                  isDense: true,
+                  hintText: l.searchThreads,
+                  prefixIcon: const Padding(padding: EdgeInsets.all(12), child: MurmurIcon(Glyph.search, size: 18)),
+                  border: const OutlineInputBorder(),
+                ),
+              ),
+            ),
+            const SizedBox(width: 4),
+            _ThreadFilterMenu(languages: languages),
+          ]),
+        ),
+        AnimatedSize(
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOutCubic,
+          alignment: AlignmentDirectional.topStart,
+          child: hidden > 0
+              ? Padding(
+                  padding: const EdgeInsetsDirectional.fromSTEB(16, 0, 16, 4),
+                  child: Align(
+                    alignment: AlignmentDirectional.centerStart,
+                    child: Text(l.threadsHidden(hidden), style: small),
+                  ),
+                )
+              : const SizedBox(width: double.infinity),
+        ),
+        Expanded(
+          // Pulled down at its top, the list is taken again at the tip: with
+          // a finger, a mouse or a touchpad alike. The button shows the same
+          // indicator, so both read as one action.
+          child: ScrollConfiguration(
+            behavior: ScrollConfiguration.of(context).copyWith(dragDevices: PointerDeviceKind.values.toSet()),
+            child: RefreshIndicator(
+              key: _refreshKey,
+              color: theme.colorScheme.primary,
+              backgroundColor: theme.colorScheme.surfaceContainerHigh,
+              strokeWidth: 2.5,
+              displacement: 28,
+              onRefresh: () => _refresh(client),
+              // The new list rises gently into place.
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 320),
+                switchInCurve: Curves.easeOutCubic,
+                switchOutCurve: Curves.easeInCubic,
+                transitionBuilder: (child, animation) => FadeTransition(
+                  opacity: animation,
+                  child: SlideTransition(
+                    position: Tween(begin: const Offset(0, 0.03), end: Offset.zero).animate(animation),
+                    child: child,
+                  ),
+                ),
+                child: KeyedSubtree(key: ValueKey(_refreshes), child: list),
+              ),
+            ),
+          ),
+        ),
+      ]);
     });
   }
 
   final _search = TextEditingController();
+  final _refreshKey = GlobalKey<RefreshIndicatorState>();
   String _query = '';
 
   @override
   void dispose() {
     _search.dispose();
+    _spin.dispose();
     super.dispose();
   }
 }
@@ -318,9 +383,10 @@ class _ThreadTile extends StatelessWidget {
     // content arrives after the chain is synced.
     // Only the first line: a thread reads as its header.
     final text = firstLine(messageOrUnavailable(context, root));
-    final activity = thread.replies == 0
-        ? l.threadStarted(whenOf(context, root))
-        : l.threadLastReply(formatAgo(context, thread.lastActivity));
+    // When, under the counts, in full; what it was (started, or last reply)
+    // when pointed at.
+    final when = thread.replies == 0 ? whenOf(context, root) : formatAgo(context, thread.lastActivity);
+    final activity = thread.replies == 0 ? l.threadStarted(when) : l.threadLastReply(when);
     // Only its author gets here with a withdrawn thread: faded, since others
     // no longer see it and its text may soon be kept only on this device.
     final withdrawn = AppScope.of(context).client.selfFlagged(root);
@@ -328,11 +394,15 @@ class _ThreadTile extends StatelessWidget {
       // The author's picture: threads read as people talking.
       leading: AvatarLink(root.tx.fromAddress, faded: !root.confirmed),
       title: MessageText(text, maxLines: 1),
-      // Who started it, in copper, then when.
+      // Who started it, in copper.
       subtitle: withdrawn
           ? Text(l.threadWithdrawnMine, maxLines: 1, overflow: TextOverflow.ellipsis)
-          : PersonLine(root.tx.fromAddress, activity),
-      trailing: CountBadges(replies: thread.replies, flags: thread.flags),
+          : PersonLine(root.tx.fromAddress),
+      trailing: TrailingWhen(
+        when: when,
+        tooltip: activity,
+        child: CountBadges(replies: thread.replies, flags: thread.flags),
+      ),
       onTap: () => Navigator.of(context).push(MaterialPageRoute(
         builder: (_) => ThreadPage(rootTxid: root.tx.id),
       )),

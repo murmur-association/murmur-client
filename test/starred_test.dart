@@ -220,6 +220,45 @@ void main() {
       await tester.pumpWidget(const SizedBox()); // stops the pages' timers
     });
 
+    testWidgets('"Mark all as read" reads the list in view; a marked person opens with what is new',
+        (tester) async {
+      final root = txAt(TxKind.orphan, 10, text: 'a starred thread');
+      final chain = FakeChain([root, replyTo(root, 30, from: carol), txAt(TxKind.orphan, 40, text: 'bob again', from: bob)]);
+      final prefs = Preferences()..unreadFrom = _time(25);
+      await prefs.setStarred(root.tx.id, true);
+      await prefs.setStarredPerson(toHex(bob), true);
+      await pumpHome(tester, chain, prefs);
+      final l = tester.element(find.byType(HomePage)).l10n;
+      await tester.tap(find.text(l.starredTitle));
+      await frames(tester);
+      expect(listDots(tester), [true, true]);
+
+      // The threads' list is in view: only it is read.
+      await tester.tap(find.byType(MarkAllReadButton));
+      await frames(tester);
+      expect(listDots(tester), [false, true]);
+      expect(prefs.readUpTo[Preferences.starredThreadsList], _time(30));
+      expect(prefs.opened, isEmpty);
+
+      // Bob's row opens his page marking what he wrote since it was read.
+      await tester.tap(find.text(l.starredPeople));
+      await frames(tester);
+      await tester.tap(find.text(shortHex(toHex(bob))).last);
+      await frames(tester);
+      await frames(tester);
+      expect(tester.widget<AddressPage>(find.byType(AddressPage)).newSince, _time(25));
+      await tester.pageBack();
+      await frames(tester);
+      await frames(tester);
+      expect(listDots(tester), [false, false]);
+      // Read now: opened again, nothing is new.
+      await tester.tap(find.text(shortHex(toHex(bob))).last);
+      await frames(tester);
+      await frames(tester);
+      expect(tester.widget<AddressPage>(find.byType(AddressPage)).newSince, isNull);
+      await tester.pumpWidget(const SizedBox());
+    });
+
     testWidgets('an open tab sees only while the app is in front: away, its news is left to notifications',
         (tester) async {
       final root = txAt(TxKind.orphan, 10, text: 'a starred thread');

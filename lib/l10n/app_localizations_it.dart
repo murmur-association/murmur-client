@@ -2040,4 +2040,51 @@ class AppLocalizationsIt extends AppLocalizations {
   @override
   String get faceIdReason =>
       'Conferma che sei tu prima che la chiave del tuo portafoglio venga usata o mostrata.';
+
+  @override
+  String get refresh => 'Aggiorna';
+
+  @override
+  String get markAllRead => 'Segna tutto come letto';
+
+  @override
+  String get newAboveLastVisit => 'Sopra: le novità dalla tua ultima visita';
+
+  @override
+  String get publicNameAndPicture => 'Nome pubblico e immagine';
+
+  @override
+  String get publicNameAndPictureSet => 'Imposta nome pubblico e immagine';
+
+  @override
+  String get publicNameStandOut =>
+      '**Fatti riconoscere**: un nome e un\'immagine che gli altri vedono accanto al tuo indirizzo.';
+
+  @override
+  String get pictureLarger => 'Mostra l\'immagine più grande';
+
+  @override
+  String get keepMessagesAvailable => 'Mantieni disponibili i miei messaggi';
+
+  @override
+  String get keepMessagesAvailableExplain =>
+      '**Finché l\'app è aperta**, chi legge riceve i tuoi messaggi da te quando i nodi non li conservano più. **Solo i tuoi**, mai quelli degli altri.';
+
+  @override
+  String errBadSignature(int height) {
+    final intl.NumberFormat heightNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String heightString = heightNumberFormat.format(height);
+
+    return 'Il blocco $heightString contiene una transazione con una firma non valida: la catena del nodo viola le regole che ogni nodo applica. Non fidarti di questo nodo: collegati a un altro.';
+  }
+
+  @override
+  String receivedOmitted(String count) {
+    return '**Il nodo ha omesso** parte di ciò che altri hanno fatto su di te ($count). Viene mostrato comunque, trovato nei blocchi stessi.';
+  }
+
+  @override
+  String get keyringUnavailable =>
+      'Il portachiavi di sistema è bloccato e non può chiedere la password, quindi il portafoglio non può essere salvato su questo dispositivo. Sblocca il portachiavi (di solito accade all\'accesso al desktop) e riavvia Murmur.';
 }

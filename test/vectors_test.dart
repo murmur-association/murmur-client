@@ -1,7 +1,7 @@
 // The node's test vectors for protocol 14: those PROTOCOL.md gives without a
-// chain (Sections 2.2, 3.1, 3.2, 3.6, 4 and 6), and `vectors/demo-14.txt`,
+// chain (Sections 2.2, 3.1, 3.2, 3.6, 4 and 6), and `vectors/demo-15.txt`,
 // a thirteen-block chain on the demo network that the node's own tests rebuild
-// byte for byte (copied here as test/vectors/demo-14.txt). The chain is
+// byte for byte (copied here as test/vectors/demo-15.txt). The chain is
 // rebuilt here from its transactions and nonces: every header's target,
 // commitments and hash, the state entries, a filter, and the node's answers
 // to GetThread and GetAddress with their proofs.
@@ -62,9 +62,9 @@ class _Vectors {
 void main() {
   test('genesis hashes match PROTOCOL.md Section 6', () {
     expect(NetworkInfo.whitepaper.genesisHeader().id,
-        '9b9b3449fa5bd25ea4b4dd536a27652d69ea2de76f66930025b4144dae936dfd');
-    expect(NetworkInfo.demo.genesisHeader().id, '60c485775a5e3a56f2a802be8c75ad6b01f3615fb301f53fb518d33cd10fc9a1');
-    expect(NetworkInfo.forGenesis(NetworkInfo.demo.genesisHeader().hash).id, 'murmur-demo-14');
+        'a21d3b3563e9d18366fc3f320b187c054f3ec798046c51b166fcb423c0dde1f1');
+    expect(NetworkInfo.demo.genesisHeader().id, '0e3d5ca1143f29d2ef8a1a9253b93f84c0ac51e369433d05ac09aa08117b0db2');
+    expect(NetworkInfo.forGenesis(NetworkInfo.demo.genesisHeader().hash).id, 'murmur-demo-15');
     expect(NetworkInfo.forGenesis(Uint8List(32)).known, isFalse);
     expect(NetworkInfo.whitepaper.maxBlockBytes, 1000000);
   });
@@ -167,35 +167,35 @@ void main() {
     ];
     expect([for (final tx in txs) tx.bytes.length], [135, 170, 137, 134, 166, 134, 174, 143, 202, 190]);
     expect([for (final tx in txs) tx.id], [
-      'e4364d13c2dcef31b4f5e3214fea03c29cb93cff481cad5912930d807f2d7ffe',
-      'a51312bc0c4ca0a0a6a36e261466bfcc8be9a34c2eb5c13aefd0a53007282dfb',
-      '71beb132b35d878285c4d38caadacd7dcaa3983bfe6bbaeda3e63c5efed90fcd',
-      '9fb343fb9469e923ee3f5e638cea5ba75943b0c43a1e07ab0a74825119fd6b76',
-      '6ee91cc1316fe42e071ac29385fd902f5bd868639320355ef6d5655d760c125d',
-      'cfb85cdb556adeede977dc941d745e3d37b81cc2a16d8bc9eecda08fedcfcbb9',
-      '1931d6620e6796917b85e5d763809c49ba2a95a0730c1c84d1bf61927fc549ef',
-      '4b93bcc5d2c8fd3557ffd207dd0e50ffcb4afe42744ee6e62efb4aca5c013b73',
-      'dc885725ba53a41c59c460e6c2da40e46f555f5abe2aff7383834fb02bca541b',
-      '1e810854b9c283087ee47258a802f83df93ed491ab146094fe04ef1242819037',
+      '55cd0c9567fd98410c22073d005a97dcc72e739d3d8a8b253f00d6e883f1fd08',
+      '7191a816cb9eec6b2659324a438c8912e4bbdec8a1f090ba5383226b2ba4e379',
+      '2997d8ec9411cb41dfa62ab1b2076a695839cf863815a52955a7d03e74df2878',
+      'f427e067f8d195004c3a8ab931b72d113a72220b26fe6849a3b3fc4a32e62bce',
+      'ae7045cc6b21a45dc2f71c66964288903904b29dd76d98b3289e12cbda97d06a',
+      '0bdbb08d9b620de01efdb1da2e17a8f10e1f8de2d787723d7094fc9c81356c4f',
+      '08a3d42ff9f51538bfec85c126d7241af81fa249df538c37a9094dff1bf027fb',
+      'b1e16b0014f8566ae7b836d244f84ffea4b0615086d362d808a8244642356d9f',
+      'b28e5e572142c087238e7fd0da848084e199f04c666bc5127664980a98b50d24',
+      'f91d314e724cabb740a95f51556fbf650bf7235b994a3db9c8e9e8ab87c502bb',
     ]);
     expect(
         toHex(txs[0].bytes),
         '00ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c00a0c21e06c343731700ca16797f96e987'
-        '180093e28b4c653e08efccb4f5fbb91313f56c15005d7d907aeeba35d62d702730474fa0e9340a5533e35e5e218ab01a0a6f'
-        '7d196de238525761ef258f6a536f7f9dd73c186b4ccc2be949a607e48095aca168ad09');
+        '180093e28b4c653e08efccb4f5fbb91313f56c1500938367c0ab4af51526d7932c37528c74057240c6084a5c9f066b05ad14'
+        '1741e8f0c448b18a09b720f47b43926693c4ff28d3fe4ab36da4b88f3e9637fa54f300');
     expect(
         toHex(txs[1].bytes),
         '01ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c01a0c21eb0e32d06c343731700ca16797f'
         '96e987180093e28b4c653e08efccb4f5fbb91313f56c15aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
-        'aaaaaaaaaa0055e5679fc75aa05be1134671377a2c24c56676e485e9ded0afb62579c0703b11360feebb1e8aa3748cd787e0'
-        '0d2a955887688106988279fb40f918543e013c05');
+        'aaaaaaaaaa00dabe3ed310df1e3165addc338bbc4d9ee4a8f93797474534ac69f9d4d0573f140b62772f5148ea9c6df71e0c'
+        '773f14f5b38b1baa702d90855dc238da61e9bc0e');
     expect(
         toHex(txs[8].bytes),
         '01ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c08a0c21eb0e32d06c343731700ca16797f'
         '96e987180093e28b4c653e08efccb4f5fbb91313f56c15aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
-        'aaaaaaaaaa041010101010101010111111111111111112121212121212121313131313131313eeffd16f98e722a5d669a63e'
-        '1b3230037d5fb677d6005fc94c213c9d6bd228200f417b0fd4c9450378704f5b20cbccaa01602ae1dccdb9a683fdfc8d2a4a'
-        '9e00');
+        'aaaaaaaaaa041010101010101010111111111111111112121212121212121313131313131313b94457d7cd7772532bd68f7a'
+        '6163dc71cd30c6282359d2d818cd3ec0344e8851a98de0dbe162771f0a4372a646712c0d1835407cab0871a26c8318a541c8'
+        '3707');
     // A mention costs 8 bytes of weight; four, the heaviest transaction.
     expect(txs[7].weight, txs[0].weight + 8);
     expect(txs[8].weight, txs[1].weight + 32);
@@ -386,10 +386,10 @@ void main() {
     expect(bagged.data.length, 112);
   });
 
-  group('the demo chain of vectors/demo-14.txt', () {
-    final v = _Vectors(File('test/vectors/demo-14.txt').readAsStringSync());
+  group('the demo chain of vectors/demo-15.txt', () {
+    final v = _Vectors(File('test/vectors/demo-15.txt').readAsStringSync());
     const net = NetworkInfo.demo;
-    final alice = fromHex(v.one(0, 'alice')), bob = fromHex(v.one(0, 'bob'));
+    final alice = fromHex(v.one(0, 'alice')), bob = fromHex(v.one(0, 'bob')), dave = fromHex(v.one(0, 'dave'));
 
     Transaction tx(String hex) {
       final r = ByteReader(fromHex(hex));
@@ -428,7 +428,8 @@ void main() {
         target: nextTarget(
             parent: chain.last, grandparent: n >= 2 ? chain[n - 2] : null, timestamp: time, net: net),
         nonce: u64Bytes(int.parse(v.one(n, 'nonce'))),
-        miner: n == 1 ? alice : (n == 2 ? bob : _filled(7)),
+        // Blocks 1, 2 and 14 pay alice, bob and dave; the rest 07 x 32.
+        miner: switch (n) { 1 => alice, 2 => bob, 14 => dave, _ => _filled(7) },
       );
       chain.add(header);
       blocks.add(Block(header, txs));
@@ -446,7 +447,22 @@ void main() {
           seen++;
         }
       }
-      expect(seen, 19);
+      expect(seen, 20);
+    });
+
+    test('an account counts the blocks it mined, and keeps its entry when it has spent everything', () async {
+      expect((await MurmurWallet.fromSeed(_filled(4))).address, dave);
+      AccountEntry daveAfter(int block) =>
+          AccountEntry.parse(fromHex(v.blocks[block]!.firstWhere((l) => l.$1.startsWith('state[account dave]')).$2))!;
+      // Block 14 is his: paid, and counted.
+      expect(daveAfter(14).mined, 1);
+      expect(daveAfter(14).balance, greaterThan(0));
+      // Block 15: he sends it all away, and his entry stays, with its count.
+      expect(daveAfter(15).balance, 0);
+      expect(daveAfter(15).nonce, 1);
+      expect(daveAfter(15).mined, 1);
+      // An 88-byte entry is the old protocol's.
+      expect(AccountEntry.parse(Uint8List(88)), isNull);
     });
 
     test('every block: target, merkle root, filter hash, history root, proof of work and hash', () {

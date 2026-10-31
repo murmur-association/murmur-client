@@ -2030,4 +2030,51 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String get faceIdReason =>
       'Confirme que é você antes de a chave da sua carteira ser usada ou mostrada.';
+
+  @override
+  String get refresh => 'Atualizar';
+
+  @override
+  String get markAllRead => 'Marcar tudo como lido';
+
+  @override
+  String get newAboveLastVisit => 'Acima: novidades desde a sua última visita';
+
+  @override
+  String get publicNameAndPicture => 'Nome público e imagem';
+
+  @override
+  String get publicNameAndPictureSet => 'Definir nome público e imagem';
+
+  @override
+  String get publicNameStandOut =>
+      '**Destaque-se**: um nome e uma imagem que os outros veem junto ao seu endereço.';
+
+  @override
+  String get pictureLarger => 'Ver a imagem maior';
+
+  @override
+  String get keepMessagesAvailable => 'Manter as minhas mensagens disponíveis';
+
+  @override
+  String get keepMessagesAvailableExplain =>
+      '**Enquanto a app está aberta**, quem lê recebe as suas mensagens de si quando os nós já não as guardam. **Só as suas**, nunca as de outros.';
+
+  @override
+  String errBadSignature(int height) {
+    final intl.NumberFormat heightNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String heightString = heightNumberFormat.format(height);
+
+    return 'O bloco $heightString contém uma transação com uma assinatura inválida: a cadeia do nó viola as regras que todos os nós aplicam. Não confie neste nó: ligue-se a outro.';
+  }
+
+  @override
+  String receivedOmitted(String count) {
+    return '**O nó omitiu** parte do que outros fizeram sobre si ($count). É mostrado na mesma, encontrado nos próprios blocos.';
+  }
+
+  @override
+  String get keyringUnavailable =>
+      'O porta-chaves do sistema está bloqueado e não pode pedir a palavra-passe, por isso a carteira não pode ser guardada neste dispositivo. Desbloqueie o porta-chaves (normalmente acontece ao iniciar sessão no ambiente de trabalho) e abra o Murmur de novo.';
 }

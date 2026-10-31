@@ -145,31 +145,36 @@ bool verifyListRange({
   return next == siblings.length;
 }
 
-/// An account's entry: its balance and nonce, and the count and root of
-/// the two lists the state commits to for it. What it sent has `nonce`
-/// entries; what credited it (a transfer to it, a reply in a thread it
-/// started) has `credits`. A block's reward is in neither.
+/// An account's entry: its balance and nonce, the count and root of the
+/// two lists the state commits to for it, and how many blocks it mined.
+/// What it sent has `nonce` entries; what credited it (a transfer to it, a
+/// reply in a thread it started) has `credits`. A block's reward is in
+/// neither list: it counts in `mined` (PROTOCOL.md Sections 3.6 and 5).
 class AccountEntry {
-  const AccountEntry(this.balance, this.nonce, this.sentRoot, this.credits, this.creditRoot);
+  const AccountEntry(this.balance, this.nonce, this.sentRoot, this.credits, this.creditRoot, this.mined);
 
   /// An address the chain has never seen: no entry.
-  static final empty = AccountEntry(0, 0, Uint8List(32), 0, Uint8List(32));
+  static final empty = AccountEntry(0, 0, Uint8List(32), 0, Uint8List(32), 0);
 
   /// `balance:u64le ‖ nonce:u64le ‖ sent_root:32 ‖ credits:u64le ‖
-  /// credit_root:32`, or null if `value` isn't that.
+  /// credit_root:32 ‖ mined:u64le`, or null if `value` isn't that.
   static AccountEntry? parse(Uint8List value) {
-    if (value.length != 88) return null;
+    if (value.length != 96) return null;
     return AccountEntry(
       readU64le(value),
       readU64le(value, 8),
       value.sublist(16, 48),
       readU64le(value, 48),
       value.sublist(56, 88),
+      readU64le(value, 88),
     );
   }
 
   final int balance, nonce, credits;
   final Uint8List sentRoot, creditRoot;
+
+  /// The blocks whose header names this address as `miner`.
+  final int mined;
 }
 
 /// A thread's entry: who started it, and the count and root of its events

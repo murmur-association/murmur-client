@@ -4,12 +4,27 @@ Newest first. Each release is a `vX.Y.Z` tag matching `version` in `pubspec.yaml
 
 ## Unreleased
 
-**Breaking: protocol 16**, on the same network (`murmur-testnet-14`): the app reaches only nodes of release v0.16.0 and later. Nothing to do: wallets, settings and the local copy carry over.
+**Breaking: protocol 17, on a new network** (`murmur-testnet-15`, started 2026-10-31): the app reaches only nodes of release v0.16.0 and later. The testnet starts over: a wallet keeps its seed and works on the new network, but starts with nothing there; the local copy of the old chain is dropped by itself.
+
+- **Added: your messages stay available when nodes delete them.** The app keeps your own messages on this device for good, and gives a node back any of them it no longer has. With **Keep my messages available** (the Wallet tab, on by default), readers who ask a node for one of your messages get it from you, through the node, while the app is open. Only your own messages, never anyone else's.
+- **Added: every transaction's signature is checked.** Signatures follow the same rule every node applies (ZIP 215). A transaction a node relays is shown only once its signature checks out, and a block holding one that doesn't makes the app stop and say not to trust that node.
+- **Added: what others did about you is checked complete over the last day.** The flags against your messages, the answers to your replies and the messages that mention you come from the node's lists, which nothing proves complete. The app now checks the last day of blocks itself, shows anything the node left out, and says so in the Messages tab.
+- **Fixed: on Linux, the app no longer hangs before showing anything when the system keyring is locked and can't ask for its password.** It asks the keyring first: a desktop's own password prompt appears as before, and with nobody to answer it the app starts without a stored wallet and says why it can't save one.
+- **Changed: "Blocks mined" is the address's whole count, proven.** The chain now counts the blocks each address mines, so the count comes with the balance, in one request, however old the chain. It used to be counted from the block headers the app held: it climbed while they arrived, and after a start from a checkpoint it left out every block before it.
 
 - **Changed: the desktop app's own node stays the same size however old the chain.** It still checks every block, then keeps only the latest day of them and the chain's state, where it used to keep every block and every header, which on a chain ten years old would come to several gigabytes on disk and in memory. It no longer keeps an index of threads and addresses either: the app never reads from its own node.
 - **Changed: the app's own node starts in moments.** A new one starts at the newest blocks from the checkpoint the app's release carries, and checks every block from the first in the background, instead of checking them all before it takes part.
 - **Added: the Chain tab shows how far the app's own node has come:** catching up with the chain, and checking the older blocks in the background, each with a bar.
 - **Changed: the Starred tab's lists fit a phone.** "Threads and messages" is now "Messages" (a starred thread is its starred first message), and the underline under a list's name no longer runs past it.
+- **Added: "Mark all as read"** in the Messages tab and in each of the Starred tab's lists.
+- **Changed: the Threads tab has its Refresh button again**, beside pulling the list down, and the search box stays in place while the threads scroll. A refresh turns the arrow and brings the new list in gently.
+- **Changed: a row's time is always shown in full**, under its reply and flag counts (or its amount), where the end of the line used to cut it off.
+- **Added: a starred person's page marks what they wrote since you last opened their row**, with a line under it, when opened from the Starred tab.
+- **Changed: the Wallet tab's "Set public name and picture"** shows your picture as others see it, with a pen on it, and says what it's for.
+- **Added: a tap on the picture on an address's page shows it larger.** A page opened from a picture in a list now grows out of it.
+- **Changed: on a desktop, names in message rows open their page again**, as the picture does. On phones they still don't, being easy to tap by mistake.
+- **Changed: in a thread, the picture and name above a quoted reply open its author's page.** The rest of the quote still goes to the reply.
+- **Changed: dialogs no longer put the cursor in their first field**, so a phone's keyboard doesn't cover them until a field is tapped.
 
 ## v0.9.11: checkpoint refresh (2026-10-30)
 

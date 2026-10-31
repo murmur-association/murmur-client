@@ -344,7 +344,6 @@ Future<void> editAlias(BuildContext context, String address) async {
         const SizedBox(height: 12),
         TextField(
           controller: controller,
-          autofocus: true,
           maxLength: 32,
           decoration: InputDecoration(labelText: l.nameAddress, border: const OutlineInputBorder()),
           onSubmitted: (v) => Navigator.pop(context, v),

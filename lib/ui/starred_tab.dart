@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../protocol/models.dart';
 import '../services/node_client.dart';
 import '../services/starred.dart';
+import '../services/storage.dart';
 import 'common.dart';
 import 'emoji.dart';
 import 'glyphs.dart';
@@ -61,6 +62,15 @@ class _StarredTabState extends State<StarredTab> with SingleTickerProviderStateM
   }
 
   @override
+  void initState() {
+    super.initState();
+    // "Mark all as read" acts on the list in view.
+    _lists.addListener(() {
+      if (!_lists.indexIsChanging) setState(() {});
+    });
+  }
+
+  @override
   void dispose() {
     _lists.dispose();
     super.dispose();
@@ -76,10 +86,20 @@ class _StarredTabState extends State<StarredTab> with SingleTickerProviderStateM
     return AppBuilder(builder: (context, client, _) {
       // Activity newer than when a row was last opened marks it until it is
       // opened again: that activity's time, or null.
-      int? unread(String key) {
+      int? unread(String key, String list) {
         final time = activity.messages[key] ?? activity.people[key];
-        return time != null && prefs.isUnread(key, time) ? time : null;
+        return time != null && prefs.isUnread(key, time, list: list) ? time : null;
       }
+
+      const threadsList = Preferences.starredThreadsList;
+      const peopleList = Preferences.starredPeopleList;
+      // The newest activity still marked in each list, for "Mark all as read".
+      int? newest(Iterable<String> keys, String list) =>
+          keys.map((k) => unread(k, list)).fold<int?>(null, (a, b) => b == null || (a != null && a >= b) ? a : b);
+      final newestThreads = newest(txids, threadsList);
+      final newestPeople = newest(_people, peopleList);
+      final onPeople = _lists.index == _peopleList;
+      final (inView, newestInView) = onPeople ? (peopleList, newestPeople) : (threadsList, newestThreads);
 
       Widget list(List<Widget> rows, String empty) => rows.isEmpty
           ? EmptyState(icon: Glyph.star, text: empty)
@@ -95,18 +115,24 @@ class _StarredTabState extends State<StarredTab> with SingleTickerProviderStateM
           Row(children: [
             Expanded(
               child: TabBar(controller: _lists, tabs: [
-                _ListTab(l.starredThreads, unread: txids.any((t) => unread(t) != null)),
-                _ListTab(l.starredPeople, unread: _people.any((a) => unread(a) != null)),
+                _ListTab(l.starredThreads, unread: newestThreads != null),
+                _ListTab(l.starredPeople, unread: newestPeople != null),
               ]),
             ),
+            MarkAllReadButton(
+                onPressed: newestInView == null ? null : () => prefs.markAllRead(inView, newestInView)),
             const NotificationsButton(),
           ]),
           Expanded(
             child: TabBarView(controller: _lists, children: [
-              list([for (final txid in txids) _StarredTile(txid: txid, client: client, unread: unread(txid))],
-                  l.noStarredThreads),
-              list([for (final address in _people) _PersonTile(address: address, client: client, unread: unread(address))],
-                  l.noStarredPeople),
+              list([
+                for (final txid in txids)
+                  _StarredTile(txid: txid, client: client, unread: unread(txid, threadsList))
+              ], l.noStarredThreads),
+              list([
+                for (final address in _people)
+                  _PersonTile(address: address, client: client, unread: unread(address, peopleList))
+              ], l.noStarredPeople),
             ]),
           ),
         ]),
@@ -176,22 +202,31 @@ class _PersonTile extends StatelessWidget {
         .where((v) => v.confirmed && !client.selfFlagged(v) && !client.isNonText(v))
         .firstOrNull;
     final marked = unread != null;
+    // The page grows out of the picture, which flies to its place there.
+    final heroTag = ('starred person', address);
+    late BuildContext picture;
     return ListTile(
-      leading: _Marked(unread: marked, child: AddressAvatar(address)),
+      leading: _Marked(
+        unread: marked,
+        child: Builder(builder: (context) {
+          picture = context;
+          return Hero(tag: heroTag, child: AddressAvatar(address));
+        }),
+      ),
       tileColor: marked ? highlightTint(context, 1) : null,
       title: Text(nameOf(context, address),
           maxLines: 1, overflow: TextOverflow.ellipsis, style: marked ? const TextStyle(fontWeight: FontWeight.w700) : null),
       // Until one of their messages is found, the name says it all.
-      subtitle: latest == null
-          ? null
-          : MessageText(
-              '${firstLine(messageOrUnavailable(context, latest))} · ${whenOf(context, latest)}',
-              maxLines: 1,
-            ),
-      trailing: StarButton.person(address),
+      subtitle: latest == null ? null : MessageText(firstLine(messageOrUnavailable(context, latest)), maxLines: 1),
+      trailing: latest == null
+          ? StarButton.person(address)
+          : TrailingWhen(when: whenOf(context, latest), child: StarButton.person(address, compact: true)),
       onTap: () {
+        // What they wrote since the row was last read is marked on their
+        // page, this once.
+        final since = marked ? AppScope.of(context).prefs.readSince(address, list: Preferences.starredPeopleList) : null;
         _opened(context, address, unread);
-        openAddress(context, address);
+        openAddress(context, address, from: picture, heroTag: heroTag, newSince: since);
       },
     );
   }
@@ -234,9 +269,12 @@ class _StarredTile extends StatelessWidget {
       leading: _Marked(unread: marked, child: AvatarLink(tx.fromAddress, faded: !view.confirmed)),
       tileColor: marked ? highlightTint(context, 1) : null,
       title: MessageText(text, maxLines: 1, style: marked ? const TextStyle(fontWeight: FontWeight.w700) : null),
-      subtitle: PersonLine(tx.fromAddress, '$kind · ${whenOf(context, view)}'),
+      subtitle: PersonLine(tx.fromAddress, kind),
       trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-        if (isRoot) CountBadges(replies: client.replyCountOf(view), flags: client.flagCountOf(view)),
+        TrailingWhen(
+          when: whenOf(context, view),
+          child: isRoot ? CountBadges(replies: client.replyCountOf(view), flags: client.flagCountOf(view)) : null,
+        ),
         StarButton(txid),
       ]),
       // A thread opens where its reader left off; a message in its thread,

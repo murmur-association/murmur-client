@@ -1,6 +1,6 @@
 # Murmur client
 
-A Flutter light client for the Murmur chain, speaking **protocol 16** (networks `murmur-testnet-14` and `murmur-demo-14`). The node, the whitepaper and the protocol specification live in the [murmur repository](https://gitlab.com/murmur-association/murmur); section numbers below refer to its [PROTOCOL.md](https://gitlab.com/murmur-association/murmur/-/blob/main/PROTOCOL.md). With the client you can:
+A Flutter light client for the Murmur chain, speaking **protocol 17** (networks `murmur-testnet-15` and `murmur-demo-15`). The node, the whitepaper and the protocol specification live in the [murmur repository](https://gitlab.com/murmur-association/murmur); section numbers below refer to its [PROTOCOL.md](https://gitlab.com/murmur-association/murmur/-/blob/main/PROTOCOL.md). With the client you can:
 
 - read threads, newest activity first, each with its replies from the newest down, and see which reply an answer is for;
 - browse blocks, transactions and addresses, and search by height, txid, block hash or address;
@@ -60,7 +60,7 @@ What it shows is checked against those headers, because every header commits to 
 
 - **Balances, nonces, flags, the burn pool and the supply** come as state proofs (`GetState`) against the tip's `state_root`. They're exact at once, without the chain, and a node can't lie about them.
 - **An address's history, and a thread's replies and flags,** are read from the node's index a page at a time (`GetAddress`, `GetThread`, Section 7.6): a history newest first, a thread from its first reply or from where you left off. The state holds each list's length and the root of a Merkle mountain range over its transaction IDs, so every page is proven on its own, wherever it is in the list: a node can't leave an entry out, add one or change their order. Each entry comes with a merkle branch to its block, and a block older than the headers at hand gets its header by proof against the newest block (`GetHeaderProof`). So a thread or a history is complete at once, however old the chain, without downloading its blocks. The node learns which thread or address is read.
-  - **Flags against an address's messages** are the exception: no state entry holds that list, so each flag shown is proven to be on the chain, but not that the node listed them all.
+  - **Flags against an address's messages, answers to its replies and messages that mention it** are the exception: no state entry holds those lists, so each one shown is proven to be on the chain, but not that the node listed them all. For the wallet, the client checks the last day of blocks itself through their filters, and shows what the node left out.
   - **A node that keeps no index** (`--no-index`) is read through block filters instead (`GetFilters`), each checked against its header's `filter_hash`: only the blocks that match are fetched, more slowly, and that node never learns which address the client looks for.
 - **A transaction the client lacks** (a reply's thread, a flagged message, a page opened by id) comes by id (`GetTx`) with a merkle branch to its block.
 - **Lists read newest first** (threads, blocks) fetch blocks newest first, as far as the screen needs, then their message content (`GetContent`), then one more batch.
@@ -79,7 +79,7 @@ The client rolls back on reorgs, follows the blocks and transactions the node re
 - **Thread cost:** a thread (Orphan) burns 10× its fee, so starting one costs 11× the fee. Burned tokens go to a burn pool that pays each block's miner `ceil(pool / K)`.
 - **Fees** are per byte, and a transaction weighs 264 bytes plus its content, so the send form suggests a fee for the message you're writing. The suggestion follows the chain; when it changes, the form points it out ("Use" flashes) rather than changing your fee, and the summary says when your fee isn't the suggestion. A reply pays the thread's author the suggested fee unless you change it.
 
-The client doesn't check the signatures inside blocks, but everything it shows is tied to headers it checked fully (proof of work, time, target and history). Peers aren't authenticated by the transport, so connect to a node you trust; a TLS proxy in front of a node's `--ws-port` gives browsers `wss://`, which the client uses automatically on pages served over HTTPS.
+Every transaction's signature is checked by the rule every node applies (ZIP 215, PROTOCOL.md Section 1), in the background: a transaction a node relays shows only once it checks out, and a block holding one that doesn't stops the client. Everything it shows is tied to headers it checked fully (proof of work, time, target and history). Peers aren't authenticated by the transport, so connect to a node you trust; a TLS proxy in front of a node's `--ws-port` gives browsers `wss://`, which the client uses automatically on pages served over HTTPS.
 
 A page opened with `?node=host:port` (for example `http://localhost:8080/?node=127.0.0.1:7880`) connects to that node or bridge.
 
@@ -111,7 +111,7 @@ Platform notes:
   The bridge binds to localhost only, always dials the one configured node, and accepts only pages served from localhost.
 - **Paths with an apostrophe** (such as `C:\Users\o'brien`) break `flutter test` and web builds, because Flutter pastes the path into generated Dart code. Work around it by mapping a drive letter: `subst M: "C:\Users\o'brien"`, then work from `M:\murmur-client` with `TEMP`/`TMP` set to `M:\AppData\Local\Temp`.
 
-**Which node a fresh install uses:** `127.0.0.1:7878` natively and `127.0.0.1:7880` (the bridge) on the web, until the user picks another. Builds for the public testnet (`murmur-testnet-14`) set their own default:
+**Which node a fresh install uses:** `127.0.0.1:7878` natively and `127.0.0.1:7880` (the bridge) on the web, until the user picks another. Builds for the public testnet (`murmur-testnet-15`) set their own default:
 
 ```
 # Web: the TLS proxy in front of node 1's WebSocket listener
@@ -263,6 +263,6 @@ For how the code works, the rules it keeps, recipes and known gaps, see [AGENTS.
   The Wallet tab says which one protects the key.
 
   If the passkey or the passphrase is lost, only the seed backup restores the wallet.
-- **Cryptography:** digital signatures (Ed25519), hashing, and encryption of the connection to the node (X25519, ChaCha20-Poly1305), all from published open-source libraries. Messages themselves are public by design.
+- **Cryptography:** digital signatures (Ed25519, checked by ZIP 215's rule in the app's own code), hashing, and encryption of the connection to the node (X25519, ChaCha20-Poly1305), all from published open-source libraries. Messages themselves are public by design.
 - **Security issues:** report them privately, as described in [SECURITY.md](SECURITY.md).
 - **Not legal advice.** What a user may post, keep or show depends on where they are.

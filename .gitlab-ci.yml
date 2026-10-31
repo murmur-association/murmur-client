@@ -571,6 +571,9 @@ build-linux:
   - dart run tool/bundle_node.dart
   - dart run tool/package_desktop.dart --tag smoke
   - tool/linux_session.sh dart run tool/desktop_smoke_test.dart --wallet-storage build/desktop-package/murmur-client-smoke-linux-x64
+  # Again with the keyring locked and nobody to answer its prompt: the app
+  # must still start (lib/services/keyring.dart), where it once hung.
+  - MURMUR_KEYRING=locked MURMUR_KEYRING_PROMPT_SECONDS=5 tool/linux_session.sh dart run tool/desktop_smoke_test.dart build/desktop-package/murmur-client-smoke-linux-x64
   - rm dist/murmur-client-smoke-linux-*.tar.gz
   # Then the one that's released: its default node is the testnet's seed.
   - >-

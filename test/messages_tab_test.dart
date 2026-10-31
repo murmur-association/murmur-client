@@ -89,4 +89,56 @@ void main() {
     expect(find.byType(AddressPage), findsOneWidget);
     await tester.pumpWidget(const SizedBox());
   });
+
+  testWidgets('"Mark all as read" clears every mark at once, without opening any row', (tester) async {
+    final thread = txAt(TxKind.orphan, 10, from: alice, text: 'My thread');
+    final first = replyTo(thread, 30, text: 'First news');
+    final second = replyTo(thread, 31, text: 'Second news');
+    final chain = _History([thread, first, second]);
+    final prefs = Preferences()..unreadFrom = 1790208000 + 20 * 2;
+    await _pump(tester, chain, prefs);
+    ListTile row(String text) => tester.widget<ListTile>(find.ancestor(of: find.text(text), matching: find.byType(ListTile)));
+    IconButton button() => tester.widget<IconButton>(
+        find.descendant(of: find.byType(MarkAllReadButton), matching: find.byType(IconButton)));
+
+    expect(row('First news').tileColor, isNotNull);
+    expect(row('Second news').tileColor, isNotNull);
+    await tester.tap(find.byType(MarkAllReadButton));
+    await tester.pumpAndSettle();
+    expect(row('First news').tileColor, isNull);
+    expect(row('Second news').tileColor, isNull);
+    // Kept apart from the rows opened one by one, and nothing left to mark.
+    expect(prefs.opened, isEmpty);
+    expect(prefs.readUpTo[Preferences.messagesList(toHex(alice))], second.blockTime);
+    expect(button().onPressed, isNull);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('on a desktop, the name in a row opens its page too', variant: TargetPlatformVariant.desktop(), (tester) async {
+    final thread = txAt(TxKind.orphan, 10, from: alice, text: 'My thread');
+    final reply = replyTo(thread, 12, text: 'A reply');
+    await _pump(tester, _History([thread, reply]), Preferences()..unreadFrom = 0);
+    await tester.tapOnText(find.textRange.ofSubstring(shortHex(toHex(bob))).first);
+    await tester.pumpAndSettle();
+    expect(find.byType(AddressPage), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+  });
+}
+
+Future<void> _pump(WidgetTester tester, MurmurClient chain, Preferences prefs) async {
+  tester.view.physicalSize = const Size(900, 1400);
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.reset);
+  await tester.pumpWidget(AppScope(
+    client: chain,
+    wallets: WalletController()..wallet = WalletId(alice, Uint8List(32)),
+    prefs: prefs,
+    child: MaterialApp(
+      theme: lightTheme,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: const Scaffold(body: MessagesTab()),
+    ),
+  ));
+  await tester.pumpAndSettle();
 }

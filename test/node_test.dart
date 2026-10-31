@@ -6,6 +6,7 @@
 
 // ignore_for_file: avoid_print
 
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -19,6 +20,7 @@ import 'package:murmur_client/protocol/network.dart';
 import 'package:murmur_client/protocol/profile.dart';
 import 'package:murmur_client/services/invitations.dart';
 import 'package:murmur_client/services/node_client.dart';
+import 'package:murmur_client/services/own_messages.dart';
 import 'package:murmur_client/services/starred.dart';
 import 'package:murmur_client/services/storage.dart' show InviteRecord;
 
@@ -52,6 +54,23 @@ void main() {
   }
 
   group('sync', () {
+    test('the blocks an address mined are proven from its account, every one since genesis, from a checkpoint too',
+        () async {
+      final node = await long();
+      // Started from the checkpoint: the headers below it never came in, and
+      // the count is still the whole chain's (PROTOCOL.md Section 3.6).
+      final c = await node.connect(MurmurClient(checkpoint: checkpointOf(node)));
+      c.blocksMinedBy(miner.addressHex);
+      await until(c, () => c.blocksMinedBy(miner.addressHex) != null);
+      await until(c, () => c.account(miner.addressHex)!.height == c.height);
+      expect(c.blocksMinedBy(miner.addressHex), c.height);
+      // Someone who never mined: none.
+      final other = toHex(await someoneElse());
+      c.blocksMinedBy(other);
+      await until(c, () => c.blocksMinedBy(other) != null);
+      expect(c.blocksMinedBy(other), 0);
+    });
+
     test('starts from a checkpoint and checks back to genesis, keeping none of the headers below it', () async {
       final node = await long();
       final cp = checkpointOf(node);
@@ -397,6 +416,133 @@ void main() {
           wallet: miner, kind: TxKind.raw, to: await someoneElse(), amount: unitsPerToken, fee: minFee);
       expect(next.nonce, sent.nonce + 1);
       await until(second, what: 'the second device\'s transfer mined', () => mined(second, next));
+    }, timeout: const Timeout(Duration(minutes: 3)));
+  }, skip: nodeSkip);
+
+  group('what others did about the wallet, checked complete against filters', () {
+    test('a mention the node leaves out is found in its block, and the lists are known complete', () async {
+      final node = await short(mining: true);
+      final me = await MurmurWallet.generate();
+      final client = await node.connect(MurmurClient());
+      await until(client, () => client.availableTo(miner.addressHex) != null);
+      Future<Transaction> mention(String text) async {
+        await until(client, what: 'proven at the tip', () => client.account(miner.addressHex)?.height == client.height);
+        return client.submit(
+            wallet: miner,
+            kind: TxKind.orphan,
+            fee: 2 * minFee,
+            message: MurmurClient.encodeText(text),
+            mentions: [me.addressHex]);
+      }
+
+      final listed = await mention('hello @you');
+      final hidden = await mention('hello again @you');
+      await until(client, what: 'both mined',
+          () => [listed, hidden].every((t) => client.lookupTx(t.id)?.confirmed ?? false));
+      // A fresh session, as the wallet's device, with a node that leaves one out.
+      final device = MurmurClient()..hideListed = (id) => id == hidden.id;
+      await node.connect(device);
+      device.setOwner(me.addressHex, serve: false);
+      device.watchAddress(me.addressHex, mentions: true);
+      await until(device, what: 'checked complete', () => device.receivedCompleteFrom != null);
+      final ids = device.activityOf(me.addressHex).map((v) => v.tx.id).toSet();
+      expect(ids, containsAll([listed.id, hidden.id]), reason: 'found in its block though the node left it out');
+      expect(device.receivedOmitted, 1);
+      expect(device.receivedCompleteFrom, lessThanOrEqualTo(device.lookupTx(listed.id)!.height!));
+    }, timeout: const Timeout(Duration(minutes: 3)));
+  }, skip: nodeSkip);
+
+  group('authors keep their messages available (PROTOCOL.md Section 7.3, rules 6 and 7)', () {
+    /// A node that mined a thread of the miner's, sent by an author client
+    /// keeping its messages in `kept`, and then lost its content: stopped,
+    /// the content's file deleted, started again with `extra`.
+    Future<(TestNode, Transaction, String)> lostThread(MemoryOwnMessages kept, {List<String> extra = const []}) async {
+      final node = await short(mining: true);
+      final author = await node.connect(MurmurClient());
+      await author.useOwnMessages(kept);
+      author.setOwner(miner.addressHex, serve: false);
+      await until(author, () => author.availableTo(miner.addressHex) != null);
+      final text = 'kept by its author ${DateTime.now().toIso8601String()}';
+      final thread = await author.submit(
+          wallet: miner, kind: TxKind.orphan, fee: 2 * minFee, message: MurmurClient.encodeText(text));
+      expect(kept.kept.map((m) => m.txid), [thread.id], reason: 'kept as it is sent');
+      await until(author, what: 'the thread mined', () => author.lookupTx(thread.id)?.confirmed ?? false);
+      author.disconnect();
+      // The node writes content to its file within moments of the block;
+      // then it's lost.
+      final hash = toHex(thread.messageHash!);
+      final file = File('${node.dir.path}/content/${hash.substring(0, 2)}/$hash');
+      final deadline = DateTime.now().add(const Duration(seconds: 20));
+      while (!file.existsSync() && DateTime.now().isBefore(deadline)) {
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+      }
+      await node.stop();
+      expect(file.existsSync(), isTrue, reason: 'the node stored the content');
+      file.deleteSync();
+      await node.start(mineTo: miner.address, extra: extra);
+      return (node, thread, text);
+    }
+
+    /// A reader that asks the node for `thread`, and what it got, if anything.
+    Future<String?> read(TestNode node, Transaction thread, {Duration wait = const Duration(seconds: 20)}) async {
+      final reader = await node.connect(MurmurClient());
+      reader.requestTx(thread.id);
+      await until(reader, what: 'the thread', () => reader.lookupTx(thread.id) != null);
+      try {
+        await until(reader, timeout: wait, what: 'its text', () => reader.liveContent(reader.lookupTx(thread.id)!) != null);
+      } on TestFailure {
+        return null;
+      }
+      return String.fromCharCodes(messageOf(reader.liveContent(reader.lookupTx(thread.id)!)!));
+    }
+
+    test('a node that lost a message is given it back, and serves it again', () async {
+      final kept = MemoryOwnMessages();
+      final (node, thread, text) = await lostThread(kept);
+      expect(await read(node, thread, wait: const Duration(seconds: 5)), isNull, reason: 'lost, and nobody serving it');
+      // The author's next session: what it kept, given back once synced.
+      final author = MurmurClient();
+      await author.useOwnMessages(kept);
+      author.setOwner(miner.addressHex, serve: false);
+      await node.connect(author);
+      await until(author, what: 'restored', () => author.restoredCount == 1);
+      expect(await read(node, thread), text, reason: 'the node has it again');
+    }, timeout: const Timeout(Duration(minutes: 3)));
+
+    test('with Keep my messages available, a reader gets a lost message from its author, through the node', () async {
+      final kept = MemoryOwnMessages();
+      // A node that keeps no old content refuses Restore, and passes on what
+      // authors give: only Serving can bring the message back.
+      final (node, thread, text) = await lostThread(kept, extra: ['--prune-content', '--serve-from-authors']);
+      final author = MurmurClient();
+      await author.useOwnMessages(kept);
+      author.setOwner(miner.addressHex, serve: false);
+      await node.connect(author);
+      await until(author, what: 'the restore tried', () => author.settled);
+      // Off: the reader gets nothing.
+      expect(await read(node, thread, wait: const Duration(seconds: 8)), isNull, reason: 'not served, and not taken back');
+      // On: the author answers the node, which passes it to the reader.
+      author.setOwner(miner.addressHex, serve: true);
+      expect(await read(node, thread), text);
+      expect(author.servedCount, greaterThan(0));
+    }, timeout: const Timeout(Duration(minutes: 3)));
+
+    test('a withdrawn message is no longer kept', () async {
+      final node = await short(mining: true);
+      final kept = MemoryOwnMessages();
+      final author = await node.connect(MurmurClient());
+      await author.useOwnMessages(kept);
+      author.setOwner(miner.addressHex, serve: true);
+      await until(author, () => author.availableTo(miner.addressHex) != null);
+      final thread = await author.submit(
+          wallet: miner, kind: TxKind.orphan, fee: 2 * minFee, message: MurmurClient.encodeText('soon withdrawn'));
+      await until(author, what: 'the thread mined', () => author.lookupTx(thread.id)?.confirmed ?? false);
+      expect(kept.kept.map((m) => m.txid), [thread.id]);
+      // A flag is checked against the proof that it isn't flagged yet.
+      await until(author, what: 'flag proof', () => author.provenFlagged(miner.addressHex, thread.id) != null);
+      final flag = await author.submit(wallet: miner, kind: TxKind.flag, fee: minFee, reference: thread.id);
+      await until(author, what: 'the flag mined', () => author.lookupTx(flag.id)?.confirmed ?? false);
+      await until(author, what: 'let go', () => kept.kept.isEmpty);
     }, timeout: const Timeout(Duration(minutes: 3)));
   }, skip: nodeSkip);
 

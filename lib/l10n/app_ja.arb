@@ -486,5 +486,17 @@
   "notifyStarredReply": "{name} さんがスター付きのスレッドに返信しました",
   "notifyStarredPerson": "{name} さんから新しいメッセージ",
   "notifyMore": "{count, plural, other{ほかに新しいメッセージが {count} 件}}",
-  "faceIdReason": "ウォレットの鍵を使う前や表示する前に、本人であることを確認してください。"
+  "faceIdReason": "ウォレットの鍵を使う前や表示する前に、本人であることを確認してください。",
+  "refresh": "更新",
+  "markAllRead": "すべて既読にする",
+  "newAboveLastVisit": "ここより上：前回の訪問以降の新着",
+  "publicNameAndPicture": "公開名と画像",
+  "publicNameAndPictureSet": "公開名と画像を設定",
+  "publicNameStandOut": "**自分らしく**：アドレスの横に表示される名前と画像です。",
+  "pictureLarger": "画像を大きく表示",
+  "keepMessagesAvailable": "自分のメッセージを読めるようにしておく",
+  "keepMessagesAvailableExplain": "**アプリを開いている間**、ノードが保存しなくなったあなたのメッセージを、読み手はあなたから受け取れます。**あなたのものだけ**で、他人のものは扱いません。",
+  "errBadSignature": "ブロック {height} に署名が無効なトランザクションがあります。このノードのチェーンは全ノードが守るルールに反しています。このノードは信頼せず、別のノードに接続してください。",
+  "receivedOmitted": "**ノードが省いていました**：他の人があなたに対して行ったことの一部（{count}）。ブロックそのものから見つけたので、表示しています。",
+  "keyringUnavailable": "システムのキーリングがロックされていて、パスワードを尋ねることができないため、この端末にウォレットを保存できません。キーリングのロックを解除して（通常はデスクトップへのログインで解除されます）、Murmur を起動し直してください。"
 }

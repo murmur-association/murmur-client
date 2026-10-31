@@ -128,7 +128,6 @@ Future<void> enterInvitation(BuildContext context) async {
       title: Text(l.haveInvitation),
       content: TextField(
         controller: controller,
-        autofocus: true,
         style: mono,
         decoration: InputDecoration(labelText: l.inviteCodeField, border: const OutlineInputBorder()),
         onSubmitted: (v) => Navigator.pop(context, v),

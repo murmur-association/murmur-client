@@ -2033,4 +2033,51 @@ class AppLocalizationsNl extends AppLocalizations {
   @override
   String get faceIdReason =>
       'Bevestig dat jij het bent voordat de sleutel van je wallet wordt gebruikt of getoond.';
+
+  @override
+  String get refresh => 'Vernieuwen';
+
+  @override
+  String get markAllRead => 'Alles als gelezen markeren';
+
+  @override
+  String get newAboveLastVisit => 'Hierboven: nieuw sinds je laatste bezoek';
+
+  @override
+  String get publicNameAndPicture => 'Openbare naam en afbeelding';
+
+  @override
+  String get publicNameAndPictureSet => 'Openbare naam en afbeelding instellen';
+
+  @override
+  String get publicNameStandOut =>
+      '**Val op**: een naam en een afbeelding die anderen naast je adres zien.';
+
+  @override
+  String get pictureLarger => 'Afbeelding groter tonen';
+
+  @override
+  String get keepMessagesAvailable => 'Mijn berichten beschikbaar houden';
+
+  @override
+  String get keepMessagesAvailableExplain =>
+      '**Zolang de app open is**, krijgen lezers je berichten van jou wanneer knooppunten ze niet meer bewaren. **Alleen de jouwe**, nooit die van anderen.';
+
+  @override
+  String errBadSignature(int height) {
+    final intl.NumberFormat heightNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String heightString = heightNumberFormat.format(height);
+
+    return 'Blok $heightString bevat een transactie met een ongeldige handtekening: de keten van het knooppunt breekt de regels die elk knooppunt toepast. Vertrouw dit knooppunt niet: maak verbinding met een ander.';
+  }
+
+  @override
+  String receivedOmitted(String count) {
+    return '**Het knooppunt liet weg** wat anderen over jou deden ($count). Het wordt toch getoond, gevonden in de blokken zelf.';
+  }
+
+  @override
+  String get keyringUnavailable =>
+      'De sleutelbos van het systeem is vergrendeld en kan niet om zijn wachtwoord vragen, dus de wallet kan niet op dit apparaat worden opgeslagen. Ontgrendel de sleutelbos (inloggen op het bureaublad doet dat meestal) en start Murmur opnieuw.';
 }

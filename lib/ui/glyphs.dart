@@ -269,6 +269,12 @@ enum Glyph {
     _Circle(50, 50, 40),
     _Line([32, 52, 45, 65, 70, 38]),
   ]),
+
+  /// Everything read: two ticks, the second behind the first.
+  readAll([
+    _Line([8, 54, 26, 72, 60, 32]),
+    _Line([46, 66, 52, 72, 92, 30]),
+  ]),
   pending([
     _Circle(50, 50, 40),
     _Line([50, 26, 50, 50, 66, 62]),

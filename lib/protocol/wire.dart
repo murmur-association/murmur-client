@@ -13,7 +13,7 @@ import 'bytes.dart';
 import 'commitments.dart';
 import 'models.dart';
 
-const protocolVersion = 16;
+const protocolVersion = 17;
 
 /// Payloads over this are a protocol violation.
 const maxPayloadBytes = 16 * 1024 * 1024;
@@ -441,6 +441,32 @@ class Snapshot extends Message {
   final int total;
   final int offset;
   final Uint8List data;
+}
+
+// ---- authors' own messages, from a client (Section 7.3, rules 6 and 7) ----------
+//
+// Nodes never send either; both are decoded only because decoding is strict.
+
+/// Addresses per Serving.
+const maxServing = 4;
+
+/// The content of the user's own messages, each by its transaction's txid,
+/// for a node that no longer has it (at most [maxContentRequest]). Never
+/// answered.
+class Restore extends Message {
+  const Restore(this.items);
+
+  /// `hash` is the txid here, not the message hash.
+  final List<MessageContent> items;
+}
+
+/// The addresses whose messages this client can give (at most
+/// [maxServing]; none to stop). The node may then ask it with GetContent,
+/// which it answers with exactly one Content each, in order.
+class Serving extends Message {
+  const Serving(this.addresses);
+
+  final List<Uint8List> addresses;
 }
 
 // ---- transactions and blocks ------------------------------------------------
@@ -905,6 +931,16 @@ Uint8List encodePayload(Message message) {
         ..u64(msg.total)
         ..u64(msg.offset)
         ..vec(msg.data);
+    case final Restore msg:
+      w.u8(34);
+      _encodeContents(w, msg.items);
+    case final Serving msg:
+      w
+        ..u8(35)
+        ..u32(msg.addresses.length);
+      for (final a in msg.addresses) {
+        w.bytes(a);
+      }
     case final GetAddress msg:
       w
         ..u8(30)
@@ -1082,6 +1118,14 @@ Message decodeMessage(Uint8List payload) {
       final data = r.vec();
       if (data.length > maxSnapshotChunk) throw FormatException('${data.length} snapshot bytes exceeds limit');
       msg = Snapshot(tip, total, offset, data);
+    case 34:
+      final items = _decodeContents(r);
+      if (items.length > maxContentRequest) throw FormatException('${items.length} restored items exceeds limit');
+      msg = Restore(items);
+    case 35:
+      final n = r.u32();
+      if (n > maxServing) throw FormatException('$n served addresses exceeds limit');
+      msg = Serving([for (var i = 0; i < n; i++) r.hash32()]);
     default:
       throw FormatException('unknown message tag $tag');
   }

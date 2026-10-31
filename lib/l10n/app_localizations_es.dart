@@ -2033,4 +2033,51 @@ class AppLocalizationsEs extends AppLocalizations {
   @override
   String get faceIdReason =>
       'Confirma que eres tú antes de que se use o se muestre la clave de tu cartera.';
+
+  @override
+  String get refresh => 'Actualizar';
+
+  @override
+  String get markAllRead => 'Marcar todo como leído';
+
+  @override
+  String get newAboveLastVisit => 'Arriba: lo nuevo desde tu última visita';
+
+  @override
+  String get publicNameAndPicture => 'Nombre público e imagen';
+
+  @override
+  String get publicNameAndPictureSet => 'Poner nombre público e imagen';
+
+  @override
+  String get publicNameStandOut =>
+      '**Destaca**: un nombre y una imagen que los demás ven junto a tu dirección.';
+
+  @override
+  String get pictureLarger => 'Ver la imagen más grande';
+
+  @override
+  String get keepMessagesAvailable => 'Mantener mis mensajes disponibles';
+
+  @override
+  String get keepMessagesAvailableExplain =>
+      '**Mientras la app está abierta**, quien lee recibe tus mensajes de ti cuando los nodos ya no los guardan. **Solo los tuyos**, nunca los de otros.';
+
+  @override
+  String errBadSignature(int height) {
+    final intl.NumberFormat heightNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String heightString = heightNumberFormat.format(height);
+
+    return 'El bloque $heightString contiene una transacción cuya firma no es válida: la cadena del nodo incumple las reglas que aplica todo nodo. No confíes en este nodo: conéctate a otro.';
+  }
+
+  @override
+  String receivedOmitted(String count) {
+    return '**El nodo omitió** parte de lo que otros hicieron sobre ti ($count). Se muestra igualmente, encontrado en los propios bloques.';
+  }
+
+  @override
+  String get keyringUnavailable =>
+      'El llavero del sistema está bloqueado y no puede pedir su contraseña, así que la cartera no se puede guardar en este dispositivo. Desbloquea el llavero (suele hacerlo el inicio de sesión en el escritorio) y vuelve a abrir Murmur.';
 }

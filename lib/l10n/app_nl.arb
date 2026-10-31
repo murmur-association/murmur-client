@@ -486,5 +486,17 @@
   "notifyStarredReply": "{name} antwoordde in een draadje met een ster",
   "notifyStarredPerson": "Nieuw bericht van {name}",
   "notifyMore": "{count, plural, =1{Nog 1 nieuw bericht} other{Nog {count} nieuwe berichten}}",
-  "faceIdReason": "Bevestig dat jij het bent voordat de sleutel van je wallet wordt gebruikt of getoond."
+  "faceIdReason": "Bevestig dat jij het bent voordat de sleutel van je wallet wordt gebruikt of getoond.",
+  "refresh": "Vernieuwen",
+  "markAllRead": "Alles als gelezen markeren",
+  "newAboveLastVisit": "Hierboven: nieuw sinds je laatste bezoek",
+  "publicNameAndPicture": "Openbare naam en afbeelding",
+  "publicNameAndPictureSet": "Openbare naam en afbeelding instellen",
+  "publicNameStandOut": "**Val op**: een naam en een afbeelding die anderen naast je adres zien.",
+  "pictureLarger": "Afbeelding groter tonen",
+  "keepMessagesAvailable": "Mijn berichten beschikbaar houden",
+  "keepMessagesAvailableExplain": "**Zolang de app open is**, krijgen lezers je berichten van jou wanneer knooppunten ze niet meer bewaren. **Alleen de jouwe**, nooit die van anderen.",
+  "errBadSignature": "Blok {height} bevat een transactie met een ongeldige handtekening: de keten van het knooppunt breekt de regels die elk knooppunt toepast. Vertrouw dit knooppunt niet: maak verbinding met een ander.",
+  "receivedOmitted": "**Het knooppunt liet weg** wat anderen over jou deden ({count}). Het wordt toch getoond, gevonden in de blokken zelf.",
+  "keyringUnavailable": "De sleutelbos van het systeem is vergrendeld en kan niet om zijn wachtwoord vragen, dus de wallet kan niet op dit apparaat worden opgeslagen. Ontgrendel de sleutelbos (inloggen op het bureaublad doet dat meestal) en start Murmur opnieuw."
 }

@@ -3,6 +3,7 @@
 // display preferences go to plain preferences.
 
 import 'dart:convert';
+import 'dart:math' show max;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart' show Locale;
@@ -16,6 +17,7 @@ import 'activity.dart';
 import 'local_node.dart' show defaultLocalNodeCpu;
 import 'news.dart' show NotifyTopic;
 import 'key_vault.dart';
+import 'keyring.dart';
 import 'transport.dart';
 
 class NodeSettings {
@@ -190,6 +192,11 @@ class Preferences extends ChangeNotifier {
   /// Whether threads this wallet flagged are left out of the Threads tab.
   bool hideFlagged = true;
 
+  /// Whether the client answers readers' requests for the user's own
+  /// messages through the node (Serving, PROTOCOL.md Section 7.3): on unless
+  /// the user turns it off.
+  bool keepMessagesAvailable = true;
+
   /// Names the user gave addresses, by address (hex).
   Map<String, String> aliases = {};
 
@@ -241,6 +248,16 @@ class Preferences extends ChangeNotifier {
   /// How many rows `opened` keeps: the ones opened longest ago go first.
   static const maxOpened = 2000;
 
+  /// Per list ([messagesList], [starredThreadsList], [starredPeopleList]),
+  /// the activity time its "Mark all as read" last covered (Unix seconds):
+  /// read, however many rows that is, without filling [opened].
+  Map<String, int> readUpTo = {};
+
+  /// The Messages tab's list for `address`, in [readUpTo].
+  static String messagesList(String address) => 'messages:$address';
+  static const starredThreadsList = 'starred';
+  static const starredPeopleList = 'people';
+
   /// Per thread (its first message's txid), where its reader left off: the
   /// last reply seen, and its place among the thread's events when the
   /// node's index gave it. The next visit opens there, and marks what is
@@ -250,12 +267,27 @@ class Preferences extends ChangeNotifier {
   /// How many threads `threadsRead` keeps.
   static const maxThreadsRead = 1000;
 
-  /// Whether a row with activity at `time` (Unix seconds) is unread: newer
-  /// than when it was last opened, and than [unreadFrom].
-  bool isUnread(String key, int time) {
+  /// Whether a row of `list` with activity at `time` (Unix seconds) is
+  /// unread: newer than when it was last opened, than [unreadFrom], and than
+  /// the list's last "Mark all as read".
+  bool isUnread(String key, int time, {required String list}) {
     final from = unreadFrom;
-    if (from == null || time <= from) return false;
-    return time > (opened[key] ?? 0);
+    if (from == null) return false;
+    return time > readSince(key, list: list);
+  }
+
+  /// Up to when row `key` of `list` has been read (Unix seconds), by opening
+  /// it or by its list's "Mark all as read": what is newer is new to the
+  /// user.
+  int readSince(String key, {required String list}) =>
+      [unreadFrom ?? 0, readUpTo[list] ?? 0, opened[key] ?? 0].reduce(max);
+
+  /// Marks every row of `list` read, up to activity at `time`.
+  Future<void> markAllRead(String list, int time) async {
+    if ((readUpTo[list] ?? -1) >= time) return;
+    readUpTo = {...readUpTo, list: time};
+    notifyListeners();
+    await (await SharedPreferences.getInstance()).setString('read_up_to', jsonEncode(readUpTo));
   }
 
   /// Marks a row read, up to its activity at `time`.
@@ -286,6 +318,7 @@ class Preferences extends ChangeNotifier {
   Future<void> _loadOwnView(SharedPreferences prefs) async {
     threadLanguages = prefs.getStringList('thread_languages')?.toSet();
     hideFlagged = prefs.getBool('hide_flagged') ?? true;
+    keepMessagesAvailable = prefs.getBool('keep_messages_available') ?? true;
     aliases = _jsonMap(prefs.getString('aliases')).map((k, v) => MapEntry(k, '$v'));
     muted = (prefs.getStringList('muted') ?? const []).toSet();
     starred = (prefs.getStringList('starred') ?? const []).toSet();
@@ -304,6 +337,10 @@ class Preferences extends ChangeNotifier {
     }
     opened = {
       for (final MapEntry(:key, :value) in _jsonMap(prefs.getString('opened')).entries)
+        if (value is int) key: value,
+    };
+    readUpTo = {
+      for (final MapEntry(:key, :value) in _jsonMap(prefs.getString('read_up_to')).entries)
         if (value is int) key: value,
     };
     threadsRead = {
@@ -333,6 +370,12 @@ class Preferences extends ChangeNotifier {
     hideFlagged = value;
     notifyListeners();
     await (await SharedPreferences.getInstance()).setBool('hide_flagged', value);
+  }
+
+  Future<void> setKeepMessagesAvailable(bool value) async {
+    keepMessagesAvailable = value;
+    notifyListeners();
+    await (await SharedPreferences.getInstance()).setBool('keep_messages_available', value);
   }
 
   /// Names `address` (an empty name removes it).
@@ -491,13 +534,13 @@ class InviteRecord {
 ///   link, to print it, or to cancel it (which signs with the card's key).
 class InviteStore extends ChangeNotifier {
   static const _key = 'murmur_invitations';
-  final _storage = const FlutterSecureStorage();
+  final _storage = const _SecureStorage();
 
   /// The vault's record of the cards' key as stored now, if any: what a
   /// new wallet goes alongside.
   static Future<Map<String, String>?> storedVault() async {
     try {
-      final json = await const FlutterSecureStorage().read(key: _key);
+      final json = await const _SecureStorage().read(key: _key);
       final decoded = json == null ? null : jsonDecode(json);
       final key = decoded is Map ? decoded['key'] : null;
       return key is Map ? key.map((k, v) => MapEntry('$k', '$v')) : null;
@@ -620,12 +663,12 @@ class WalletController extends ChangeNotifier {
   /// The vault's record: protection, its parameters, the ciphertext, and
   /// the wallet's address and public key.
   static const _key = 'murmur_wallet';
-  final _storage = const FlutterSecureStorage();
+  final _storage = const _SecureStorage();
 
   /// The vault's record of the wallet as stored now, if any: what the
   /// cards' key goes alongside.
   static Future<Map<String, String>?> storedVault() async =>
-      decodeStored(await const FlutterSecureStorage().read(key: _key));
+      decodeStored(await const _SecureStorage().read(key: _key));
 
   WalletId? wallet;
   Map<String, String>? _stored;
@@ -706,4 +749,30 @@ class WalletController extends ChangeNotifier {
     wallet = null;
     notifyListeners();
   }
+}
+
+/// The platform's secure storage (flutter_secure_storage), unless the
+/// keyring would hang the app (services/keyring.dart): then nothing is read
+/// from it, and storing says why ([KeyringUnavailable]).
+class _SecureStorage {
+  const _SecureStorage();
+
+  static const _plugin = FlutterSecureStorage();
+
+  Future<String?> read({required String key}) async => keyringUsable ? _plugin.read(key: key) : null;
+
+  Future<void> write({required String key, required String? value}) async {
+    if (!keyringUsable) throw const KeyringUnavailable();
+    await _plugin.write(key: key, value: value);
+  }
+
+  Future<void> delete({required String key}) async {
+    if (keyringUsable) await _plugin.delete(key: key);
+  }
+}
+
+/// The system's keyring is locked and can't ask for its password, so the
+/// wallet can't be stored on this device until it's unlocked.
+class KeyringUnavailable implements Exception {
+  const KeyringUnavailable();
 }

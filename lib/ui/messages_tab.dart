@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../services/activity.dart';
 import '../services/node_client.dart';
+import '../services/storage.dart';
+import 'brand.dart';
 import 'common.dart';
 import 'paged_list.dart';
 import 'glyphs.dart';
@@ -30,16 +32,26 @@ class MessagesTab extends StatelessWidget {
         listenable: prefs,
         builder: (context, _) {
           final filters = prefs.messageFilters;
+          final list = Preferences.messagesList(me);
           // Muted addresses' replies and flags stay out of sight here too.
           bool shown(TxView v) =>
               !prefs.muted.contains(v.tx.fromAddress) && messageFiltersOf(v, me, client).any(filters.contains);
+          bool isUnread(TxView v) =>
+              v.confirmed && v.tx.fromAddress != me && prefs.isUnread(v.tx.id, activityTime(v), list: list);
+          // The newest activity among the rows still marked, for "Mark all as
+          // read": looked for in the history held, in memory, newest first.
+          final newestUnread = client
+              .activityOf(me)
+              .take(5000)
+              .where((v) => shown(v) && isUnread(v))
+              .fold<int?>(null, (newest, v) => newest == null || activityTime(v) > newest ? activityTime(v) : newest);
           return PagedList<TxView>(
             // Another wallet or other filters start the list over.
             resetKey: (me, filters.fold(0, (mask, f) => mask | (1 << f.index))),
             fetch: (n) => client.activityOf(me).where(shown).take(n).toList(),
             // What others wrote to it is marked until opened.
             itemBuilder: (context, v) {
-              final unread = v.confirmed && v.tx.fromAddress != me && prefs.isUnread(v.tx.id, activityTime(v));
+              final unread = isUnread(v);
               return TxTile(v,
                   showCounts: true,
                   unread: unread,
@@ -57,10 +69,22 @@ class MessagesTab extends StatelessWidget {
                       onChanged: prefs.setMessageFilters,
                     ),
                   ),
+                  MarkAllReadButton(
+                      onPressed: newestUnread == null ? null : () => prefs.markAllRead(list, newestUnread)),
                   const NotificationsButton(),
                   const SizedBox(width: 8),
                 ]),
               ),
+              // The node's lists left something out that the blocks hold.
+              if (client.receivedOmitted > 0)
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+                    child: InfoPoint(Glyph.warning,
+                        l.receivedOmitted(formatCount(context, client.receivedOmitted)),
+                        color: StatusColors.of(context).pending, style: Theme.of(context).textTheme.bodySmall),
+                  ),
+                ),
             ],
           );
         },

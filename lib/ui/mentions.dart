@@ -165,11 +165,22 @@ class MentionsLine extends StatelessWidget {
       child: Wrap(spacing: 10, runSpacing: 4, crossAxisAlignment: WrapCrossAlignment.center, children: [
         for (final m in tx.mentions)
           if (scope.client.addressOfMention(m, also: known) case final address?)
-            Row(mainAxisSize: MainAxisSize.min, children: [
-              AvatarLink(address, size: 18),
-              const SizedBox(width: 4),
-              Text('@${nameOf(context, address)}', style: copper),
-            ])
+            // The picture and the name open their page, as a quote's author
+            // does; the page grows out of what was tapped.
+            Builder(
+              builder: (context) => InkWell(
+                onTap: () => openAddress(context, address, from: context),
+                borderRadius: BorderRadius.circular(6),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    AddressAvatar(address, size: 18),
+                    const SizedBox(width: 4),
+                    Text('@${nameOf(context, address)}', style: copper),
+                  ]),
+                ),
+              ),
+            )
           else
             Text('@${toHex(m)}', style: mono.copyWith(fontSize: 12, color: theme.colorScheme.onSurfaceVariant)),
       ]),

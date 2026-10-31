@@ -486,5 +486,17 @@
   "notifyStarredReply": "{name} hat in einem markierten Thread geantwortet",
   "notifyStarredPerson": "Neue Nachricht von {name}",
   "notifyMore": "{count, plural, =1{1 weitere neue Nachricht} other{{count} weitere neue Nachrichten}}",
-  "faceIdReason": "Bestätige, dass du es bist, bevor der Schlüssel deiner Wallet verwendet oder angezeigt wird."
+  "faceIdReason": "Bestätige, dass du es bist, bevor der Schlüssel deiner Wallet verwendet oder angezeigt wird.",
+  "refresh": "Aktualisieren",
+  "markAllRead": "Alle als gelesen markieren",
+  "newAboveLastVisit": "Darüber: neu seit deinem letzten Besuch",
+  "publicNameAndPicture": "Öffentlicher Name und Bild",
+  "publicNameAndPictureSet": "Öffentlichen Namen und Bild festlegen",
+  "publicNameStandOut": "**Heb dich ab**: ein Name und ein Bild, die andere neben deiner Adresse sehen.",
+  "pictureLarger": "Bild größer zeigen",
+  "keepMessagesAvailable": "Meine Nachrichten verfügbar halten",
+  "keepMessagesAvailableExplain": "**Solange die App geöffnet ist**, bekommen Leser deine Nachrichten von dir, wenn Knoten sie nicht mehr aufbewahren. **Nur deine**, nie die anderer.",
+  "errBadSignature": "Block {height} enthält eine Transaktion mit ungültiger Signatur: Die Kette des Knotens bricht die Regeln, die jeder Knoten anwendet. Vertraue diesem Knoten nicht: Verbinde dich mit einem anderen.",
+  "receivedOmitted": "**Der Knoten hat ausgelassen**, was andere zu dir getan haben ({count}). Es wird trotzdem angezeigt, gefunden in den Blöcken selbst.",
+  "keyringUnavailable": "Der Schlüsselbund des Systems ist gesperrt und kann nicht nach seinem Passwort fragen, daher lässt sich die Wallet auf diesem Gerät nicht speichern. Entsperre den Schlüsselbund (meist geschieht das beim Anmelden am Desktop) und starte Murmur neu."
 }

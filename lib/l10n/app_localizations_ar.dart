@@ -2052,4 +2052,51 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get faceIdReason => 'أكّد أنك أنت قبل استخدام مفتاح محفظتك أو عرضه.';
+
+  @override
+  String get refresh => 'تحديث';
+
+  @override
+  String get markAllRead => 'تعليم الكل كمقروء';
+
+  @override
+  String get newAboveLastVisit => 'أعلاه: الجديد منذ زيارتك الأخيرة';
+
+  @override
+  String get publicNameAndPicture => 'الاسم العام والصورة';
+
+  @override
+  String get publicNameAndPictureSet => 'تعيين الاسم العام والصورة';
+
+  @override
+  String get publicNameStandOut =>
+      '**تميّز**: اسم وصورة يراهما الآخرون بجانب عنوانك.';
+
+  @override
+  String get pictureLarger => 'عرض الصورة بحجم أكبر';
+
+  @override
+  String get keepMessagesAvailable => 'إبقاء رسائلي متاحة';
+
+  @override
+  String get keepMessagesAvailableExplain =>
+      '**ما دام التطبيق مفتوحًا**، يحصل القرّاء على رسائلك منك عندما لا تعود العُقد تحتفظ بها. **رسائلك فقط**، لا رسائل غيرك أبدًا.';
+
+  @override
+  String errBadSignature(int height) {
+    final intl.NumberFormat heightNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String heightString = heightNumberFormat.format(height);
+
+    return 'الكتلة $heightString تحتوي على معاملة توقيعها غير صالح: سلسلة هذه العقدة تخالف القواعد التي تطبقها كل العقد. لا تثق بهذه العقدة: اتصل بعقدة أخرى.';
+  }
+
+  @override
+  String receivedOmitted(String count) {
+    return '**أغفلت العقدة** بعض ما فعله الآخرون بشأنك ($count). يُعرض رغم ذلك، فقد وُجد في الكتل نفسها.';
+  }
+
+  @override
+  String get keyringUnavailable =>
+      'حلقة مفاتيح النظام مقفلة ولا يمكنها طلب كلمة مرورها، لذا لا يمكن حفظ المحفظة على هذا الجهاز. افتح حلقة المفاتيح (يحدث ذلك عادةً عند تسجيل الدخول إلى سطح المكتب) ثم شغّل Murmur من جديد.';
 }

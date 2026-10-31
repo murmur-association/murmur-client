@@ -450,7 +450,7 @@ class AppDriver {
   Future<ProfilePicture> setPublicName(String name) async {
     await backHome();
     await openTab(l.tabWallet);
-    await press<TextButton>(l.publicNameSet);
+    await press<FilledButton>(l.publicNameAndPictureSet);
     await waitFor(find.text(l.publicNameField), what: 'the public name dialog');
     await type(l.publicNameField, name);
     // What each chooser gave back, in turn.

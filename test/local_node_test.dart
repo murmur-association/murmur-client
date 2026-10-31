@@ -325,7 +325,7 @@ void main() {
       if (DateTime.now().isAfter(synced)) fail('client did not sync');
       await Future<void>.delayed(const Duration(milliseconds: 200));
     }
-    expect(client.network?.id, 'murmur-demo-14');
+    expect(client.network?.id, 'murmur-demo-15');
     print('client synced to height ${client.height} from the app\'s own node');
 
     await node.stop();

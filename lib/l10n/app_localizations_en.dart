@@ -2017,4 +2017,51 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get faceIdReason =>
       'Confirm it\'s you before your wallet\'s key is used or shown.';
+
+  @override
+  String get refresh => 'Refresh';
+
+  @override
+  String get markAllRead => 'Mark all as read';
+
+  @override
+  String get newAboveLastVisit => 'Above: new since your last visit';
+
+  @override
+  String get publicNameAndPicture => 'Public name and picture';
+
+  @override
+  String get publicNameAndPictureSet => 'Set public name and picture';
+
+  @override
+  String get publicNameStandOut =>
+      '**Stand out**: a name and a picture others see beside your address.';
+
+  @override
+  String get pictureLarger => 'Show the picture larger';
+
+  @override
+  String get keepMessagesAvailable => 'Keep my messages available';
+
+  @override
+  String get keepMessagesAvailableExplain =>
+      '**While the app is open**, readers get your messages from you when nodes no longer keep them. **Only yours**, never anyone else\'s.';
+
+  @override
+  String errBadSignature(int height) {
+    final intl.NumberFormat heightNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String heightString = heightNumberFormat.format(height);
+
+    return 'Block $heightString holds a transaction whose signature isn\'t valid: the node\'s chain breaks the rules every node applies. Don\'t trust this node: connect to another.';
+  }
+
+  @override
+  String receivedOmitted(String count) {
+    return '**The node left out** some of what others did about you ($count). It\'s shown all the same, found in the blocks themselves.';
+  }
+
+  @override
+  String get keyringUnavailable =>
+      'The system keyring is locked and can\'t ask for its password, so the wallet can\'t be saved on this device. Unlock the keyring (logging in to the desktop usually does) and start Murmur again.';
 }

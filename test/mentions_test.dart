@@ -14,6 +14,7 @@ import 'package:murmur_client/services/activity.dart';
 import 'package:murmur_client/services/fees.dart';
 import 'package:murmur_client/services/node_client.dart';
 import 'package:murmur_client/services/storage.dart';
+import 'package:murmur_client/ui/address_page.dart';
 import 'package:murmur_client/ui/brand.dart';
 import 'package:murmur_client/ui/common.dart';
 import 'package:murmur_client/ui/compose_page.dart';
@@ -138,7 +139,7 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
-  testWidgets('a message shows whom it mentions, a picture opening their page', (tester) async {
+  testWidgets('a message shows whom it mentions, the picture and the name opening their page', (tester) async {
     final thread = txAt(TxKind.orphan, 1, text: 'Look', from: bob, mentions: [alice, carol, person(40)]);
     final chain = FakeChain([thread, txAt(TxKind.orphan, 2, text: 'Carol was here', from: carol)]);
     await pump(tester, chain, ThreadPage(rootTxid: thread.tx.id), prefs: Preferences());
@@ -146,9 +147,13 @@ void main() {
     expect(line, findsOneWidget);
     // Alice is this wallet, carol wrote here: both known. The third only
     // by the 8 bytes the chain holds.
-    expect(find.descendant(of: line, matching: find.byType(AvatarLink)), findsNWidgets(2));
+    expect(find.descendant(of: line, matching: find.byType(AddressAvatar)), findsNWidgets(2));
     expect(find.descendant(of: line, matching: find.text('@${toHex(mentionOf(person(40)))}')), findsOneWidget);
+    // The name opens the page, not only the picture.
+    await tester.tap(find.descendant(of: line, matching: find.text('@${shortHex(toHex(carol))}')));
     await tester.pumpAndSettle();
+    expect(tester.widget<AddressPage>(find.byType(AddressPage)).address, toHex(carol));
+    await tester.pumpWidget(const SizedBox());
   });
 
   test('Messages lists what others mention the wallet in, unless withdrawn', () {

@@ -486,5 +486,17 @@
   "notifyStarredReply": "{name} ha risposto in una discussione con la stella",
   "notifyStarredPerson": "Nuovo messaggio da {name}",
   "notifyMore": "{count, plural, =1{Un altro messaggio nuovo} other{Altri {count} messaggi nuovi}}",
-  "faceIdReason": "Conferma che sei tu prima che la chiave del tuo portafoglio venga usata o mostrata."
+  "faceIdReason": "Conferma che sei tu prima che la chiave del tuo portafoglio venga usata o mostrata.",
+  "refresh": "Aggiorna",
+  "markAllRead": "Segna tutto come letto",
+  "newAboveLastVisit": "Sopra: le novità dalla tua ultima visita",
+  "publicNameAndPicture": "Nome pubblico e immagine",
+  "publicNameAndPictureSet": "Imposta nome pubblico e immagine",
+  "publicNameStandOut": "**Fatti riconoscere**: un nome e un'immagine che gli altri vedono accanto al tuo indirizzo.",
+  "pictureLarger": "Mostra l'immagine più grande",
+  "keepMessagesAvailable": "Mantieni disponibili i miei messaggi",
+  "keepMessagesAvailableExplain": "**Finché l'app è aperta**, chi legge riceve i tuoi messaggi da te quando i nodi non li conservano più. **Solo i tuoi**, mai quelli degli altri.",
+  "errBadSignature": "Il blocco {height} contiene una transazione con una firma non valida: la catena del nodo viola le regole che ogni nodo applica. Non fidarti di questo nodo: collegati a un altro.",
+  "receivedOmitted": "**Il nodo ha omesso** parte di ciò che altri hanno fatto su di te ({count}). Viene mostrato comunque, trovato nei blocchi stessi.",
+  "keyringUnavailable": "Il portachiavi di sistema è bloccato e non può chiedere la password, quindi il portafoglio non può essere salvato su questo dispositivo. Sblocca il portachiavi (di solito accade all'accesso al desktop) e riavvia Murmur."
 }

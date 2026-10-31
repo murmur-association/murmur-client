@@ -109,13 +109,26 @@ void main() {
         what: 'the replies to be mined and counted');
     final root = app.client.threads().firstWhere((t) => t.root.tx.fromAddress == me).root.tx.id;
 
-    // Pulled down, the list is taken again at the tip: no button for it.
+    // Pulled down, the list is taken again at the tip, and so it is with the
+    // Refresh button beside it (the arrow turns a moment first).
     // "As of block n (": the block the list is as of.
     bool asOf(int height) => find.textContaining('${l.threadsAsOf(height, '', '').split(' (').first} (').evaluate().isNotEmpty;
-    await app.waitUntil(() => !asOf(app.client.height), what: 'a block since the list was taken');
-    final tip = app.client.height;
-    await app.pullDown(find.descendant(of: find.byType(ThreadsTab), matching: find.byType(Scrollable)));
-    expect([for (var h = tip; h <= app.client.height; h++) h].any(asOf), isTrue, reason: 'taken again at the tip');
+    Future<void> takenAgain(Future<void> Function() refresh, String how) async {
+      await app.waitUntil(() => !asOf(app.client.height), what: 'a block since the list was taken');
+      final tip = app.client.height;
+      await refresh();
+      await app.waitUntil(() => [for (var h = tip; h <= app.client.height; h++) h].any(asOf),
+          what: 'the list taken again at the tip, $how');
+    }
+
+    await takenAgain(
+        // The list itself, under its refresh indicator: the search field above
+        // it scrolls too.
+        () => app.pullDown(find.descendant(
+            of: find.descendant(of: find.byType(ThreadsTab), matching: find.byType(RefreshIndicator)),
+            matching: find.byType(Scrollable))),
+        'pulled down');
+    await takenAgain(() => app.press<TextButton>(l.refresh), 'with the button');
 
     // The thread remembers how far it was read, and opens there again.
     final left = app.prefs.threadsRead[root];
@@ -200,7 +213,7 @@ void main() {
     // wouldn't drop it.
     final me = app.wallets.wallet!.addressHex;
     await app.waitUntil(() => app.showsPicture(me), what: "the wallet's picture, read again from the chain");
-    await app.press<TextButton>(l.publicNameSet);
+    await app.press<FilledButton>(l.publicNameAndPictureSet);
     await app.waitFor(find.text(l.pictureRemove), what: 'the published picture, kept in the dialog');
     expect(app.fieldText(l.publicNameField), publicName);
     await app.press<TextButton>(l.cancel);

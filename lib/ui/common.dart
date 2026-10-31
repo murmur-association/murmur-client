@@ -1,8 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
+import 'dart:ui' show lerpDouble;
 
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform;
 import 'package:flutter/gestures.dart' show TapGestureRecognizer;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -313,27 +314,42 @@ TextStyle? _subtitleStyle(BuildContext context) {
   return theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant);
 }
 
-/// A row's subtitle: the person first, in copper, then the rest. For thread
-/// and message lists, where the row's picture ([AvatarLink]) opens the
-/// person's page: a name in a line of small text was too easy to tap by
-/// mistake.
+/// Whether the app runs on a desktop system, natively or in its browser:
+/// where a mouse points precisely enough for small links. On the web, this
+/// is the system the browser runs on.
+bool get pointerFirst => switch (defaultTargetPlatform) {
+      TargetPlatform.windows || TargetPlatform.linux || TargetPlatform.macOS => true,
+      _ => false,
+    };
+
+/// A row's subtitle: the person first, in copper, then the rest (if any).
+/// For thread and message lists, where the row's picture ([AvatarLink])
+/// opens the person's page. The name is a link too on a desktop
+/// ([pointerFirst]); on a phone it was too easy to tap by mistake.
 class PersonLine extends StatelessWidget {
-  const PersonLine(this.address, this.rest, {super.key});
+  const PersonLine(this.address, [this.rest, Key? key]) : super(key: key);
 
   final String address;
-  final String rest;
+  final String? rest;
 
   @override
-  Widget build(BuildContext context) => Emphasized(
-        '${Emphasized.mark(nameOf(context, address))} · ${Emphasized.safe(rest)}',
-        style: _subtitleStyle(context),
-        maxLines: 1,
-        weight: FontWeight.w600,
-      );
+  Widget build(BuildContext context) {
+    final name = nameOf(context, address);
+    final who = pointerFirst ? Emphasized.link(name, 0) : Emphasized.mark(name);
+    return Emphasized(
+      rest == null ? who : '$who · ${Emphasized.safe(rest!)}',
+      links: pointerFirst ? [address] : const [],
+      style: _subtitleStyle(context),
+      maxLines: 1,
+      weight: FontWeight.w600,
+    );
+  }
 }
 
 /// An address's picture that opens its page: what a list row leads with.
-class AvatarLink extends StatelessWidget {
+/// The page grows out of the picture, which flies to its place on it, so it
+/// reads as what the tap opened.
+class AvatarLink extends StatefulWidget {
   const AvatarLink(this.address, {super.key, this.size = 40, this.faded = false});
 
   final String address;
@@ -343,14 +359,80 @@ class AvatarLink extends StatelessWidget {
   final bool faded;
 
   @override
+  State<AvatarLink> createState() => _AvatarLinkState();
+}
+
+class _AvatarLinkState extends State<AvatarLink> {
+  /// This picture's own flight: a list may show the same address many times.
+  final _tag = Object();
+
+  @override
   Widget build(BuildContext context) => Tooltip(
-        message: nameOf(context, address),
+        message: nameOf(context, widget.address),
         child: InkResponse(
-          onTap: () => openAddress(context, address),
-          radius: size * 0.7,
-          child: Opacity(opacity: faded ? 0.5 : 1, child: AddressAvatar(address, size: size)),
+          onTap: () => openAddress(context, widget.address, from: context, heroTag: _tag),
+          radius: widget.size * 0.7,
+          child: Opacity(
+            opacity: widget.faded ? 0.5 : 1,
+            child: Hero(tag: _tag, child: AddressAvatar(widget.address, size: widget.size)),
+          ),
         ),
       );
+}
+
+/// "Mark all as read" for a list of rows marked until opened; disabled
+/// (null `onPressed`) while none is.
+class MarkAllReadButton extends StatelessWidget {
+  const MarkAllReadButton({super.key, required this.onPressed});
+
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) => IconButton(
+        icon: const MurmurIcon(Glyph.readAll),
+        tooltip: context.l10n.markAllRead,
+        onPressed: onPressed,
+      );
+}
+
+/// A row's end: what it shows there (counts, a star, an amount), and under
+/// it when the row happened, always in full: at the end of the subtitle it
+/// was the first thing cut on a narrow screen.
+class TrailingWhen extends StatelessWidget {
+  const TrailingWhen({super.key, this.child, required this.when, this.tooltip, this.extra});
+
+  final Widget? child;
+  final String when;
+
+  /// The fuller wording of [when], if any.
+  final String? tooltip;
+
+  /// A line between the two (a balance before and after, say).
+  final Widget? extra;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final time = Text(when,
+        maxLines: 1,
+        style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant));
+    // A row's end has the row's height at most: in a short row (large text,
+    // say) all of it shrinks a little rather than spill out.
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      alignment: AlignmentDirectional.centerEnd,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          if (child != null) child!,
+          if (extra != null) extra!,
+          if (child != null && extra == null) const SizedBox(height: 4),
+          tooltip == null ? time : Tooltip(message: tooltip!, child: time),
+        ],
+      ),
+    );
+  }
 }
 
 /// A highlight that draws the eye for a moment and fades: at full strength
@@ -467,16 +549,19 @@ class InfoPoint extends StatelessWidget {
 /// Or a person, by their address ([StarButton.person]): followed in the
 /// Starred tab.
 class StarButton extends StatelessWidget {
-  const StarButton(this.txid, {super.key}) : person = false;
+  const StarButton(this.txid, {super.key, this.compact = false}) : person = false;
 
   /// For the person at an address.
-  const StarButton.person(String address, {super.key})
+  const StarButton.person(String address, {super.key, this.compact = false})
       : txid = address,
         person = true;
 
   /// The txid, or with [person] the address.
   final String txid;
   final bool person;
+
+  /// Tighter, to leave room for a line under it in a row's end.
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -486,6 +571,8 @@ class StarButton extends StatelessWidget {
       builder: (context, _) {
         final starred = (person ? prefs.starredPeople : prefs.starred).contains(txid);
         return IconButton(
+          padding: compact ? const EdgeInsets.all(4) : null,
+          constraints: compact ? const BoxConstraints.tightFor(width: 34, height: 34) : null,
           // Starred: a solid copper star, unmistakable next to an outline.
           icon: MurmurIcon(Glyph.star, filled: starred, color: starred ? Theme.of(context).colorScheme.primary : null),
           tooltip: starred ? context.l10n.unstar : context.l10n.star,
@@ -574,8 +661,77 @@ class InfoRow extends StatelessWidget {
   }
 }
 
-void openAddress(BuildContext context, String address) =>
-    Navigator.of(context).push(MaterialPageRoute(builder: (_) => AddressPage(address: address)));
+/// Opens the page of `address`. Opened `from` a picture (its context), the
+/// page grows out of it, and the picture flies to the page's own under
+/// `heroTag`. With `newSince` (Unix seconds), the page marks what the
+/// person wrote after it: what made their starred row light up.
+void openAddress(BuildContext context, String address, {BuildContext? from, Object? heroTag, int? newSince}) {
+  final page = AddressPage(address: address, heroTag: heroTag, newSince: newSince);
+  final box = from?.findRenderObject();
+  final origin = box is RenderBox && box.hasSize ? box.localToGlobal(Offset.zero) & box.size : null;
+  final Route<void> route = origin == null ? MaterialPageRoute(builder: (_) => page) : _GrowRoute(origin, page);
+  Navigator.of(context).push(route);
+}
+
+/// A page that grows out of the rectangle it was opened from (a picture in a
+/// list), its corners rounding off as it fills the screen, and shrinks back
+/// into it when closed.
+class _GrowRoute extends PageRouteBuilder<void> {
+  _GrowRoute(this.origin, Widget page)
+      : super(
+          transitionDuration: const Duration(milliseconds: 420),
+          reverseTransitionDuration: const Duration(milliseconds: 320),
+          pageBuilder: (_, __, ___) => page,
+        );
+
+  /// Where it grows from, in global coordinates.
+  final Rect origin;
+
+  @override
+  Widget buildTransitions(
+      BuildContext context, Animation<double> animation, Animation<double> secondaryAnimation, Widget child) {
+    final grow = CurvedAnimation(
+        parent: animation, curve: Curves.easeInOutCubicEmphasized, reverseCurve: Curves.easeInOutCubic);
+    // The page's content shows once there is room for it.
+    final fade = CurvedAnimation(parent: animation, curve: const Interval(0.15, 0.6, curve: Curves.easeOut));
+    return LayoutBuilder(builder: (context, constraints) {
+      final full = Offset.zero & constraints.biggest;
+      return AnimatedBuilder(
+        animation: grow,
+        builder: (context, _) {
+          final t = grow.value;
+          final rect = Rect.lerp(origin, full, t)!;
+          final radius = Radius.circular(lerpDouble(origin.shortestSide * 0.22, 0, t)!);
+          return Stack(children: [
+            // The page behind dims a little as this one comes over it.
+            Positioned.fill(
+              child: IgnorePointer(child: ColoredBox(color: Colors.black.withValues(alpha: 0.18 * t))),
+            ),
+            Positioned.fromRect(
+              rect: rect,
+              child: ClipRRect(
+                borderRadius: BorderRadius.all(radius),
+                child: ColoredBox(
+                  color: Theme.of(context).colorScheme.surface,
+                  // Laid out at full size throughout, so nothing reflows as it grows.
+                  child: FittedBox(
+                    fit: BoxFit.cover,
+                    alignment: Alignment.topCenter,
+                    clipBehavior: Clip.hardEdge,
+                    child: SizedBox.fromSize(
+                      size: full.size,
+                      child: FadeTransition(opacity: fade, child: child),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ]);
+        },
+      );
+    });
+  }
+}
 
 void openTx(BuildContext context, String txid) =>
     Navigator.of(context).push(MaterialPageRoute(builder: (_) => TxPage(txid: txid)));
@@ -668,47 +824,41 @@ class TxTile extends StatelessWidget {
         ? l.replyNotThreaded
         : kindLabel(context, tx.kind);
     // Who: the names in copper, each a link to its address, except in a
-    // message list, where the author's picture is the link.
+    // message list on a phone, where the author's picture is the link
+    // (a small name was too easy to tap by mistake there).
     // A reply pays its thread's author, whoever it answers.
     final paid = client.creditedBy(tx);
-    final people = showCounts ? const <String>[] : [tx.fromAddress, if (paid != null) paid];
+    final linked = !showCounts || pointerFirst;
+    final people = linked ? [tx.fromAddress, if (paid != null) paid] : const <String>[];
     String who(String address, int i) =>
-        showCounts ? Emphasized.mark(nameOf(context, address)) : Emphasized.link(nameOf(context, address), i);
+        linked ? Emphasized.link(nameOf(context, address), i) : Emphasized.mark(nameOf(context, address));
     final route = paid == null ? l.routeFrom(who(tx.fromAddress, 0)) : l.routeFromTo(who(tx.fromAddress, 0), who(paid, 1));
 
-    Widget? trailing;
+    Widget? end;
+    Widget? balance;
     if (showCounts) {
       if (tx.kind == TxKind.orphan || tx.kind == TxKind.reply) {
-        trailing = CountBadges(replies: client.replyCountOf(view), flags: client.flagCountOf(view));
+        end = CountBadges(replies: client.replyCountOf(view), flags: client.flagCountOf(view));
       }
     } else if (perspective != null) {
       final delta = client.balanceChange(tx, perspective!);
       final after = view.balanceAfter;
-      final change = Text(
+      end = Text(
         formatSigned(context, delta),
         style: TextStyle(color: delta >= 0 ? status.success : status.danger, fontWeight: FontWeight.w600),
       );
-      trailing = after == null
-          ? change
-          : Tooltip(
-              message: l.balanceBeforeAfterTooltip(formatAmount(context, after - delta), formatAmount(context, after)),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  change,
-                  Text(
-                    l.balanceBeforeAfter(formatAmount(context, after - delta), formatAmount(context, after)),
-                    style: Theme.of(context)
-                        .textTheme
-                        .bodySmall
-                        ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
-                  ),
-                ],
-              ),
-            );
+      if (after != null) {
+        balance = Tooltip(
+          message: l.balanceBeforeAfterTooltip(formatAmount(context, after - delta), formatAmount(context, after)),
+          child: Text(
+            l.balanceBeforeAfter(formatAmount(context, after - delta), formatAmount(context, after)),
+            style:
+                Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
+          ),
+        );
+      }
     } else if (tx.amount > 0) {
-      trailing = Text(formatAmount(context, tx.amount), style: const TextStyle(fontWeight: FontWeight.w600));
+      end = Text(formatAmount(context, tx.amount), style: const TextStyle(fontWeight: FontWeight.w600));
     }
 
     return ListTile(
@@ -718,9 +868,9 @@ class TxTile extends StatelessWidget {
       tileColor: unread ? highlightTint(context, 1) : null,
       title: MessageText(title,
           maxLines: 2, style: unread ? const TextStyle(fontWeight: FontWeight.w700) : null),
-      subtitle: Emphasized('${Emphasized.safe(label)} · $route · ${whenOf(context, view)}',
+      subtitle: Emphasized('${Emphasized.safe(label)} · $route',
           links: people, style: _subtitleStyle(context), maxLines: 1, weight: FontWeight.w600),
-      trailing: trailing,
+      trailing: TrailingWhen(extra: balance, when: whenOf(context, view), child: end),
       onTap: () {
         onOpen?.call();
         showCounts ? openMessage(context, view) : openTx(context, tx.id);

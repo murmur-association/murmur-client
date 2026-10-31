@@ -39,6 +39,7 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 
 import '../crypto/wallet.dart';
+import '../crypto/zip215.dart';
 import '../protocol/alias.dart' as protocol_alias;
 import '../protocol/bytes.dart';
 import '../protocol/commitments.dart';
@@ -51,6 +52,7 @@ import '../protocol/wire.dart';
 import 'aliases.dart';
 import 'chain_cache.dart';
 import 'fees.dart';
+import 'own_messages.dart';
 import 'secure_channel.dart';
 import 'threads.dart';
 import 'transport.dart';
@@ -74,6 +76,7 @@ enum LinkErrorKind {
   tampered,
   stateMismatch,
   checkpointMismatch,
+  badSignature,
   other,
 }
 
@@ -90,7 +93,8 @@ class LinkError implements Exception {
 
   /// The block whose state didn't match, for [LinkErrorKind.stateMismatch],
   /// or the checkpoint the chain doesn't lead to, for
-  /// [LinkErrorKind.checkpointMismatch].
+  /// [LinkErrorKind.checkpointMismatch], or the block holding a transaction
+  /// whose signature is invalid, for [LinkErrorKind.badSignature].
   final int height;
 
   /// What made a sync fail, for [LinkErrorKind.syncFailed].
@@ -166,12 +170,15 @@ class TxView {
 
 /// An account as proven against a header's state root.
 class AccountState {
-  const AccountState(this.balance, this.nonce, this.height);
+  const AccountState(this.balance, this.nonce, this.height, {this.mined = 0});
 
   final int balance;
 
   /// Transactions the account has sent: the nonce its next one must carry.
   final int nonce;
+
+  /// Blocks the account mined, since genesis (PROTOCOL.md Section 3.6).
+  final int mined;
 
   /// The block whose state this is.
   final int height;
@@ -316,7 +323,12 @@ class _FlagRead {
   bool unavailable = false;
 
   /// The entries read, by txid: where each is (height, index in its block).
+  /// Those found in blocks by the completeness check (`_checkReceived`) are
+  /// among them.
   final Map<String, (int, int)> entries = {};
+
+  /// The txids the node itself listed.
+  final Set<String> byNode = {};
 }
 
 /// Fetched blocks by index (index i is height i + 1), kept only where there
@@ -772,7 +784,7 @@ class MurmurClient extends ChangeNotifier {
     final p = _watchKey(accountKey(fromHex(address)));
     if (p == null) return null;
     final entry = _accountEntry(p);
-    return entry == null ? null : AccountState(entry.balance, entry.nonce, p.height);
+    return entry == null ? null : AccountState(entry.balance, entry.nonce, p.height, mined: entry.mined);
   }
 
   /// What a proven account key holds: the entry, an empty one for an address
@@ -812,27 +824,10 @@ class MurmurClient extends ChangeNotifier {
     return p == null ? null : p.value != null;
   }
 
-  /// Blocks `address` mined, among the headers known (all of them, unless
-  /// the session started from a checkpoint and the headers below it aren't
-  /// in yet). Counted on, block by block, as the chain grows.
-  int blocksMinedBy(String address) {
-    final last = _minedCounts[address];
-    var from = _low, count = 0;
-    if (last != null && last.$1 == _low && last.$2 == _reorgs && last.$3 <= height) {
-      from = last.$3 + 1;
-      count = last.$4;
-    }
-    final miner = fromHex(address);
-    for (var h = from; h <= height; h++) {
-      if (_headers.minedBy(h - 1, miner)) count++;
-    }
-    _minedCounts[address] = (_low, _reorgs, height, count);
-    return count;
-  }
-
-  /// Address -> (lowest header, reorganizations, height, blocks mined) as of
-  /// the last count.
-  final Map<String, (int, int, int, int)> _minedCounts = {};
+  /// Blocks `address` mined since genesis, proven with its balance by its
+  /// account entry (PROTOCOL.md Section 3.6), at any age of the chain; null
+  /// until the proof arrives.
+  int? blocksMinedBy(String address) => account(address)?.mined;
 
   /// Whether a pending transaction may still be mined: the node didn't
   /// answer that it's invalid or refused it (a refused one isn't in its
@@ -1673,6 +1668,235 @@ class MurmurClient extends ChangeNotifier {
     _wake();
   }
 
+  // ---- signatures (PROTOCOL.md Section 1, ZIP 215) ------------------------------
+  //
+  // Every transaction the client takes is checked by the rule every node
+  // applies (crypto/zip215.dart), in the background, a slice at a time: a
+  // check takes milliseconds, and a block can hold thousands. A mined one
+  // that fails (in a block, or proven into one) means the node's chain holds
+  // an invalid block: the client stops, as for a checkpoint mismatch. A
+  // pending one the node relayed has no proof at all, so it isn't shown
+  // until it's checked, and one that fails is dropped.
+
+  /// Mined transactions waiting for their check: txid -> its block's height.
+  final Map<String, int> _toCheck = {};
+
+  /// Relayed pending transactions waiting for their check, by txid.
+  final Map<String, NewTx> _relayedUnchecked = {};
+
+  /// How long one slice of checking may run before the worker yields.
+  static const _checkSlice = Duration(milliseconds: 12);
+
+  /// Transactions checked this session, and found invalid (pending ones).
+  int signaturesChecked = 0;
+  int relayedRefused = 0;
+
+  bool _signatureValid(Transaction tx) =>
+      verifyZip215(Uint8List.fromList([...network!.tag, ...tx.body]), tx.signature, tx.pubkey);
+
+  /// Notes a mined transaction for its check (not one signed here).
+  void _checkLater(Transaction tx, int h) {
+    if (!_sentHere.contains(tx.id)) _toCheck[tx.id] = h;
+  }
+
+  /// Checks signatures for one slice; whether there was any to check.
+  Future<bool> _checkSignatures(int gen) async {
+    if ((_toCheck.isEmpty && _relayedUnchecked.isEmpty) || network == null) return false;
+    final watch = Stopwatch()..start();
+    var relayed = false;
+    while (watch.elapsed < _checkSlice && _relayedUnchecked.isNotEmpty) {
+      final id = _relayedUnchecked.keys.first;
+      final m = _relayedUnchecked.remove(id)!;
+      signaturesChecked++;
+      if (_signatureValid(m.tx)) {
+        _acceptRelayed(m);
+        relayed = true;
+      } else {
+        relayedRefused++;
+      }
+    }
+    while (watch.elapsed < _checkSlice && _toCheck.isNotEmpty) {
+      final id = _toCheck.keys.first;
+      final h = _toCheck.remove(id)!;
+      final tx = lookupTx(id)?.tx;
+      if (tx == null) continue; // let go meanwhile, or dropped by a reorganization
+      signaturesChecked++;
+      if (!_signatureValid(tx)) throw LinkError(LinkErrorKind.badSignature, height: h);
+    }
+    if (relayed) notifyListeners();
+    // Lets the interface draw between slices.
+    await Future<void>.delayed(Duration.zero);
+    if (gen != _generation) throw _Aborted();
+    return true;
+  }
+
+  // ---- the user's own messages (PROTOCOL.md Section 7.3, rules 6 and 7) ---------
+  //
+  // The salted content of what the user's wallet sent is kept for good
+  // (services/own_messages.dart), whatever nodes delete. Once per connection
+  // the client gives a node back what it no longer has (Restore); with
+  // Serving on, it answers readers' requests the node passes on (GetContent
+  // from the node, one Content each, in order). Only the user's own
+  // messages, never anyone else's: serving one's own words isn't hosting
+  // anyone's (the app's legal posture rests on it).
+
+  OwnMessageStore? _ownStore;
+
+  /// The user's messages' content held, by message hash (hex).
+  final Map<String, OwnMessage> _own = {};
+
+  /// The wallet whose messages are the user's (hex), and whether to serve
+  /// them (`Preferences.keepMessagesAvailable`).
+  String? _owner;
+  bool _serve = false;
+
+  /// This connection: whether Serving was sent (from then on every GetContent
+  /// is answered, even after serving stops, since the node matches answers by
+  /// order), and whether Restore has run.
+  bool _servingSent = false;
+
+  /// Whether this connection's Hello was sent: nothing else may go before it.
+  bool _greeted = false;
+  bool _restoreDone = false;
+
+  /// What this session gave: messages restored to nodes, and readers'
+  /// requests answered with content.
+  int restoredCount = 0;
+  int servedCount = 0;
+
+  /// At most this many messages are restored per connection (the node takes
+  /// 1,024 an hour from one).
+  static const maxRestoredPerConnection = 1024;
+
+  /// Starts keeping the user's messages' content in `store`, and takes what
+  /// it holds: their text shows without asking a node.
+  Future<void> useOwnMessages(OwnMessageStore? store) async {
+    _ownStore = store;
+    if (store == null) return;
+    final List<OwnMessage> kept;
+    try {
+      kept = await store.load();
+    } catch (e) {
+      debugPrint('own messages: $e');
+      return;
+    }
+    for (final m in kept) {
+      if (m.hash.length != 64) continue;
+      _own[m.hash] = m;
+      _contents.putIfAbsent(m.hash, () => m.content);
+    }
+    notifyListeners();
+  }
+
+  /// Whose messages are the user's (the wallet's address, hex; null for no
+  /// wallet), and whether to serve them to readers through the node.
+  void setOwner(String? address, {required bool serve}) {
+    final newOwner = address != _owner;
+    if (!newOwner && serve == _serve) return;
+    _owner = address;
+    _serve = serve;
+    if (newOwner) {
+      _sweepOwn();
+      // Another wallet's messages may want restoring on this connection too.
+      _restoreDone = false;
+      _wake();
+    }
+    // Only once our Hello is out: a message before it breaks the handshake.
+    if (_greeted) _announceServing();
+  }
+
+  /// Tells the node which addresses this client serves: the owner's with
+  /// serving on, none to stop. Nothing before the first, while there's none.
+  void _announceServing() {
+    final owner = _owner;
+    final addresses = _serve && owner != null ? [fromHex(owner)] : <Uint8List>[];
+    if (addresses.isEmpty && !_servingSent) return;
+    _send(Serving(addresses));
+    _servingSent = true;
+  }
+
+  /// Keeps `content` if `tx` is the owner's message (and not withdrawn).
+  void _keepOwn(Transaction tx, Uint8List content) {
+    final owner = _owner;
+    final hash = tx.messageHash;
+    if (owner == null || hash == null || tx.fromAddress != owner) return;
+    final key = toHex(hash);
+    if (_own.containsKey(key) || _withdrawnContent.contains(key) || !tx.isContent(content)) return;
+    final m = OwnMessage(txid: tx.id, author: owner, content: content, keptAt: DateTime.now().millisecondsSinceEpoch);
+    _own[key] = m;
+    _ownStore?.add([m]).catchError((Object e) => debugPrint('own messages: $e'));
+  }
+
+  /// Keeps the owner's messages whose content is at hand (from blocks, the
+  /// local copy, or another device's sending), however it came.
+  void _sweepOwn() {
+    final owner = _owner;
+    if (owner == null) return;
+    for (final v in messagesBy(owner)) {
+      final content = liveContent(v);
+      if (content != null) _keepOwn(v.tx, content);
+    }
+  }
+
+  /// The node asks for messages a reader wants, after Serving: one Content
+  /// for each request, in order, straight from here (the node holds the
+  /// reader's answer only a few seconds). Only the owner's messages, not
+  /// withdrawn; empty when there's nothing, so the node stops waiting.
+  void _answerForAuthor(GetContent request) {
+    // Never sent Serving: the node doesn't ask, and an answer would be
+    // content it never asked for.
+    if (!_servingSent) return;
+    final owner = _owner;
+    final items = <MessageContent>[];
+    if (_serve && owner != null) {
+      for (final h in request.hashes) {
+        final m = _own[toHex(h)];
+        if (m != null && m.author == owner && !_withdrawnContent.contains(m.hash)) {
+          items.add(MessageContent(h, m.content));
+        }
+      }
+    }
+    _send(Content(items));
+    if (items.isNotEmpty) {
+      servedCount += items.length;
+      notifyListeners();
+    }
+  }
+
+  /// Once per connection, after syncing: asks the node for the owner's
+  /// messages' content, newest first, and gives back what it lacks
+  /// (Restore), up to [maxRestoredPerConnection]. Withdrawn messages are
+  /// left out: the user asked for them to go. Nothing comes back, and what
+  /// the node refuses isn't tried again on this connection.
+  Future<bool> _restoreOwn(int gen) async {
+    if (_restoreDone || _owner == null || state != LinkState.live) return false;
+    _restoreDone = true;
+    _sweepOwn();
+    final owner = _owner!;
+    final mine = [
+      for (final m in _own.values)
+        if (m.author == owner && !_withdrawnContent.contains(m.hash) && !_pending.containsKey(m.txid)) m,
+    ]..sort((a, b) => b.keptAt.compareTo(a.keptAt));
+    if (mine.isEmpty) return false;
+    var given = 0;
+    for (var i = 0; i < mine.length && given < maxRestoredPerConnection; i += maxContentRequest) {
+      final batch = mine.sublist(i, min(i + maxContentRequest, mine.length));
+      final items = await _getContent([for (final m in batch) fromHex(m.hash)]);
+      if (gen != _generation) throw _Aborted();
+      final has = {for (final item in items) toHex(item.hash)};
+      final missing =
+          [for (final m in batch) if (!has.contains(m.hash)) m].take(maxRestoredPerConnection - given).toList();
+      if (missing.isEmpty) continue;
+      _send(Restore([for (final m in missing) MessageContent(fromHex(m.txid), m.content)]));
+      given += missing.length;
+    }
+    if (given > 0) {
+      restoredCount += given;
+      notifyListeners();
+    }
+    return true;
+  }
+
   // ---- cache --------------------------------------------------------------------
 
   /// Starts (or, with null, stops) keeping what's fetched in `cache`. What's
@@ -1884,6 +2108,7 @@ class MurmurClient extends ChangeNotifier {
     this.port = port;
     error = null;
     state = LinkState.connecting;
+    _greeted = false;
     notifyListeners();
     try {
       final hello = await _handshake(host, port, gen);
@@ -1903,6 +2128,12 @@ class MurmurClient extends ChangeNotifier {
         work: BigInt.zero, // so the node never tries to sync from us
       ));
       _pingTimer = Timer.periodic(_pingInterval, (_) => _send(const Ping()));
+      // A new connection: say again what this client serves, and give back
+      // what the node lacks once synced.
+      _servingSent = false;
+      _greeted = true;
+      _restoreDone = false;
+      _announceServing();
       // The genesis header: derived for the built-in networks, else fetched.
       if (_genesisHeader == null) {
         final known = network!.known ? network!.genesisHeader() : null;
@@ -2184,6 +2415,9 @@ class MurmurClient extends ChangeNotifier {
       case final Address msg:
         _complete(_addressWaiter, msg);
         _addressWaiter = null;
+      // A reader wants one of the user's messages (after Serving).
+      case final GetContent msg:
+        _answerForAuthor(msg);
       case final TxStatus msg:
         _statuses[toHex(msg.txid)] = msg;
         notifyListeners();
@@ -2191,7 +2425,6 @@ class MurmurClient extends ChangeNotifier {
       // and unsolicited light-client replies are ignored (Section 7.6).
       case GetHeaders() ||
             GetBlocks() ||
-            GetContent() ||
             GetAddr() ||
             Addr() ||
             Ping() ||
@@ -2212,6 +2445,9 @@ class MurmurClient extends ChangeNotifier {
       // Snapshots start a pruned node from a checkpoint (Section 7.10). The
       // client never asks for one, and serves none.
       case GetSnapshot() || Snapshot():
+        break;
+      // From clients to nodes only (Section 7.3, rules 6 and 7).
+      case Restore() || Serving():
         break;
     }
   }
@@ -2275,6 +2511,9 @@ class MurmurClient extends ChangeNotifier {
       await _syncHeaders(gen);
       return true;
     }
+    // Signatures, a slice per pass beside the rest (what the node relayed
+    // waits for its check to be shown).
+    final checking = await _checkSignatures(gen);
     // What's on screen: proven balances and flags first.
     if (await _proveWatched(gen)) return true;
     // Then the text of what's already fetched, before fetching more: each
@@ -2310,16 +2549,20 @@ class MurmurClient extends ChangeNotifier {
     }
     _wantOlder = false;
     _settled = true;
+    // The user's messages a node no longer has: given back, once per connection.
+    if (await _restoreOwn(gen)) return true;
     // Started from a checkpoint: check the headers back to genesis.
     if (await _backfillHeaders(gen)) return true;
     // Histories and threads being followed: filters, then matching blocks.
     if (await _scanFilters(gen)) return true;
+    // What others did about the wallet, checked complete over the last day.
+    if (await _checkReceived(gen)) return true;
     if (_prefetch > 0 && _olderBatch().isNotEmpty) {
       _prefetch--;
       await _fetchBlocks(_olderBatch(), gen);
       return true;
     }
-    return false;
+    return checking;
   }
 
   /// The next batch below the newest stretch, newest first (not below the
@@ -2680,6 +2923,7 @@ class MurmurClient extends ChangeNotifier {
     for (var i = 0; i < b.transactions.length; i++) {
       final tx = b.transactions[i];
       _txIndex[tx.id] = (h, i);
+      _checkLater(tx, h);
       // A new name for its sender: the one proven before is asked again now,
       // not at its next slow turn.
       if (tx.kind == TxKind.name) _stateAsked.remove(toHex(nameKey(tx.from)));
@@ -2698,11 +2942,16 @@ class MurmurClient extends ChangeNotifier {
         _withdraw(tx);
         continue;
       }
-      if (_contents.containsKey(key)) continue;
+      final held = _contents[key];
+      if (held != null) {
+        _keepOwn(tx, held);
+        continue;
+      }
       final content = byHash[key] ?? pending?.content;
       if (content != null && tx.isContent(content)) {
         _contents[key] = content;
         if (save) _unsavedContents[key] = content;
+        _keepOwn(tx, content);
       } else {
         _wantContent(tx, h);
       }
@@ -2774,6 +3023,9 @@ class MurmurClient extends ChangeNotifier {
     _unsavedContents.remove(key);
     _missingContent.remove(key);
     _unsavedRemovals.add(key);
+    // Withdrawn by its author: not kept, restored or served any more.
+    final own = _own.remove(key);
+    if (own != null) _ownStore?.remove({own.txid}).catchError((Object e) => debugPrint('own messages: $e'));
   }
 
   /// How many fetched blocks, and transactions in them, a session holds
@@ -2906,6 +3158,13 @@ class MurmurClient extends ChangeNotifier {
     for (final read in [..._threadReads.values, ..._addressReads.values]) {
       read.entries.removeWhere((_, at) => at.$1 > h);
     }
+    // And of what others did about the wallet: checked again above the fork.
+    for (final read in _flagReads.values) {
+      read.entries.removeWhere((_, at) => at.$1 > h);
+    }
+    _receivedTested.removeWhere((at, _) => at > h);
+    _receivedFound.removeWhere((id, _) => _flagReads.values.every((read) => !read.entries.containsKey(id)));
+    receivedCompleteFrom = null;
     _missingContent.removeWhere((_, e) => e.$1 > h);
     _proven.clear();
     _stateAsked.clear();
@@ -2969,10 +3228,12 @@ class MurmurClient extends ChangeNotifier {
     _txUnknown.clear();
     _deferredTxids.clear();
     _nameContent.clear();
-    _minedCounts.clear();
     _threadReads.clear();
     _addressReads.clear();
     _flagReads.clear();
+    _receivedTested.clear();
+    _receivedFound.clear();
+    receivedCompleteFrom = null;
     _headersUnproven.clear();
     _pending.clear();
     _wantedHeights.clear();
@@ -3044,7 +3305,13 @@ class MurmurClient extends ChangeNotifier {
       top--;
     }
     if (top < from) return false;
-    final start = max(from, top - maxFilters + 1);
+    await _getFilters(max(from, top - maxFilters + 1), top, gen);
+    return true;
+  }
+
+  /// Fetches the filters of blocks `start` to `top`, each checked against
+  /// its header.
+  Future<void> _getFilters(int start, int top, int gen) async {
     final reply = await _request(_filtersWaiter = Completer<Filters>(), GetFilters(start, top - start + 1));
     if (gen != _generation) throw _Aborted();
     if (reply.start != start || reply.filters.isEmpty) {
@@ -3058,6 +3325,114 @@ class MurmurClient extends ChangeNotifier {
       }
       _filters[h] = reply.filters[i];
     }
+  }
+
+  // ---- what others did about the wallet, checked complete (gap 5) ---------------
+  //
+  // The flags against an address's messages, the answers to its replies and
+  // the messages that mention it come from the node's index (lists 2 to 4),
+  // which no state entry commits to: a node could leave some out. Filters
+  // are committed to by headers, and hold each of those as an item (a flag's
+  // target, an answer's thread, a mention's prefix), so over a stretch of
+  // blocks the client can be sure: it tests every filter there, reads every
+  // block that may hold one, and adds what the node left out (each is proven
+  // by its block). For the wallet only, over the last [receivedCheckBlocks].
+  // Flags are found against the messages at hand.
+
+  /// How far back from the tip the wallet's lists are checked: a day of
+  /// blocks on the testnet.
+  int receivedCheckBlocks = 2880;
+
+  /// The lowest block from which the wallet's flags, answers and mentions
+  /// are known complete, up to the tip; null until the check gets there.
+  int? receivedCompleteFrom;
+
+  /// Entries found in blocks that the node's lists left out (and are shown
+  /// all the same).
+  int get receivedOmitted {
+    final owner = _owner;
+    if (owner == null) return 0;
+    return _receivedFound.entries
+        .where((e) => !(_flagReads['$owner:${_othersLists[e.value].index}']?.byNode.contains(e.key) ?? true))
+        .length;
+  }
+
+  /// Tests only: entries of the node's lists 2 to 4 to act as if it left out.
+  @visibleForTesting
+  bool Function(String txid)? hideListed;
+
+  /// What the check found in blocks: txid -> which of [_othersLists].
+  final Map<String, int> _receivedFound = {};
+
+  /// Per block, the items it was last examined for.
+  final Map<int, int> _receivedTested = {};
+
+  Future<bool> _checkReceived(int gen) async {
+    final owner = _owner;
+    if (owner == null || height == 0) return false;
+    final reads = [for (final list in _othersLists) _flagReads['$owner:${list.index}']];
+    // Only once the node's lists are read: what's checked is what they say.
+    if (reads.any((r) => r == null || r.total == null || r.unavailable)) return false;
+    final mine = [for (final v in messagesBy(owner)) if (v.confirmed) v.tx];
+    final ownIds = {for (final t in mine) t.id};
+    final threads = {for (final t in mine) if (t.kind == TxKind.reply && t.threadId != null) t.threadId!};
+    final items = [
+      mentionItem(mentionOf(fromHex(owner))),
+      for (final id in ownIds) fromHex(id),
+      for (final t in threads) fromHex(t),
+    ];
+    final key = Object.hashAll([for (final i in items) toHex(i)]);
+    final from = max(_low, height - receivedCheckBlocks + 1);
+    final who = fromHex(owner);
+    var complete = true;
+    for (var h = height; h >= from; h--) {
+      if (_receivedTested[h] == key) continue;
+      final block = _blocks[h - 1];
+      if (block != null) {
+        // Read: whatever is in it about the wallet is in the lists now.
+        for (var i = 0; i < block.transactions.length; i++) {
+          final tx = block.transactions[i];
+          final list = tx.kind == TxKind.flag && ownIds.contains(tx.referenceId)
+              ? 0
+              : tx.answers != null && answersTo(tx, owner)
+                  ? 1
+                  : tx.mentionsAddress(who)
+                      ? 2
+                      : null;
+          if (list == null) continue;
+          reads[list]!.entries.putIfAbsent(tx.id, () => (h, i));
+          _receivedFound[tx.id] = list;
+        }
+        _receivedTested[h] = key;
+        continue;
+      }
+      final filter = _filters[h];
+      if (filter == null) {
+        complete = false;
+        continue;
+      }
+      if (filterMatchesAny(filter, _headers.prevHashAt(h - 1)!, items) ?? true) {
+        // May hold one: read it.
+        _wantedHeights.add(h);
+        complete = false;
+      } else {
+        _receivedTested[h] = key;
+      }
+    }
+    if (complete) {
+      final was = receivedCompleteFrom;
+      receivedCompleteFrom = from;
+      if (was != from) notifyListeners();
+      return false;
+    }
+    if (_wantedHeights.isNotEmpty) return true;
+    // The newest stretch without filters.
+    var top = height;
+    while (top >= from && (_blocks[top - 1] != null || _filters.containsKey(top))) {
+      top--;
+    }
+    if (top < from) return false;
+    await _getFilters(max(from, top - maxFilters + 1), top, gen);
     return true;
   }
 
@@ -3142,6 +3517,7 @@ class MurmurClient extends ChangeNotifier {
     _pending.remove(id);
     if (_txIndex.containsKey(id)) return;
     _loose[id] = _LooseTx(tx, h, index);
+    _checkLater(tx, h);
     if (tx.kind == TxKind.flag && tx.referenceId != null) {
       _flagKeys.add('${tx.fromAddress}:${tx.referenceId}');
       final target = lookupTx(tx.referenceId!)?.tx;
@@ -3296,7 +3672,11 @@ class MurmurClient extends ChangeNotifier {
     if (page.entries.any((e) => !fits(e.tx))) {
       throw FormatException('the node listed something that is not in its ${read.list.name} list');
     }
-    await _takeEntries(page.entries, read.entries, gen);
+    // A node that leaves entries out, for tests (`hideListed`).
+    final hide = hideListed;
+    final listed = hide == null ? page.entries : [for (final e in page.entries) if (!hide(e.tx.id)) e];
+    await _takeEntries(listed, read.entries, gen);
+    read.byNode.addAll([for (final e in listed) e.tx.id]);
     if (back) {
       read.low = page.start;
       return;
@@ -3466,7 +3846,18 @@ class MurmurClient extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// A transaction the node relays: shown once its signature is checked
+  /// (`_checkSignatures`), since nothing else proves it.
   void _onNewTx(NewTx m) {
+    final id = m.tx.id;
+    if (_txIndex.containsKey(id) || _pending.containsKey(id)) return;
+    // Bounded like the pending ones: a node can relay without end.
+    if (_relayedUnchecked.length >= _maxGossipPending) return;
+    _relayedUnchecked[id] = m;
+    _wake();
+  }
+
+  void _acceptRelayed(NewTx m) {
     final id = m.tx.id;
     if (_txIndex.containsKey(id) || _pending.containsKey(id)) return;
     var content = m.content;
@@ -3518,6 +3909,7 @@ class MurmurClient extends ChangeNotifier {
           : isNameContentSize(item.content.length) && toHex(sha256Bytes(item.content)) == key;
       if (!valid) continue;
       _contents[key] = item.content;
+      if (tx != null) _keepOwn(tx, item.content);
       _unsavedContents[key] = item.content;
     }
     // 256 contents are at most 266 KB, well under the reply's 8 MiB cap, so
@@ -3739,6 +4131,7 @@ class MurmurClient extends ChangeNotifier {
       throw const TxProblem(TxProblemKind.duplicate);
     }
     _send(SubmitTx(tx, content));
+    if (content != null) _keepOwn(tx, content);
     _pending[tx.id] = PendingTx(tx, content, mine: true, sentAtHeight: height);
     _sentHere.add(tx.id);
     notifyListeners();

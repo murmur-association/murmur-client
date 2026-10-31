@@ -182,7 +182,6 @@ Future<Uint8List?> askSeed(BuildContext context) {
             const SizedBox(height: 12),
             TextField(
               controller: controller,
-              autofocus: true,
               style: mono,
               textDirection: TextDirection.ltr,
               // Room for 24 words, but one entry, not a text of several

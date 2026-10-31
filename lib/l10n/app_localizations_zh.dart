@@ -1936,4 +1936,50 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get faceIdReason => '在使用或显示你的钱包密钥之前，请确认是你本人。';
+
+  @override
+  String get refresh => '刷新';
+
+  @override
+  String get markAllRead => '全部标为已读';
+
+  @override
+  String get newAboveLastVisit => '以上：自你上次查看以来的新内容';
+
+  @override
+  String get publicNameAndPicture => '公开名字和图片';
+
+  @override
+  String get publicNameAndPictureSet => '设置公开名字和图片';
+
+  @override
+  String get publicNameStandOut => '**与众不同**：别人会在你的地址旁看到的名字和图片。';
+
+  @override
+  String get pictureLarger => '放大查看图片';
+
+  @override
+  String get keepMessagesAvailable => '让我的消息保持可读';
+
+  @override
+  String get keepMessagesAvailableExplain =>
+      '**应用打开时**，节点不再保存你的消息后，读者可以从你这里获取。**只限你自己的**，从不涉及他人的。';
+
+  @override
+  String errBadSignature(int height) {
+    final intl.NumberFormat heightNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String heightString = heightNumberFormat.format(height);
+
+    return '区块 $heightString 中有一笔签名无效的交易：该节点的链违反了所有节点都遵守的规则。不要信任这个节点，请连接其他节点。';
+  }
+
+  @override
+  String receivedOmitted(String count) {
+    return '**节点漏掉了**他人对你所做的部分内容（$count）。已从区块本身找到，照常显示。';
+  }
+
+  @override
+  String get keyringUnavailable =>
+      '系统密钥环已锁定且无法询问密码，因此无法在此设备上保存钱包。请解锁密钥环（通常登录桌面时会解锁），然后重新启动 Murmur。';
 }

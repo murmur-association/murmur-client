@@ -1959,4 +1959,50 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get faceIdReason => 'ウォレットの鍵を使う前や表示する前に、本人であることを確認してください。';
+
+  @override
+  String get refresh => '更新';
+
+  @override
+  String get markAllRead => 'すべて既読にする';
+
+  @override
+  String get newAboveLastVisit => 'ここより上：前回の訪問以降の新着';
+
+  @override
+  String get publicNameAndPicture => '公開名と画像';
+
+  @override
+  String get publicNameAndPictureSet => '公開名と画像を設定';
+
+  @override
+  String get publicNameStandOut => '**自分らしく**：アドレスの横に表示される名前と画像です。';
+
+  @override
+  String get pictureLarger => '画像を大きく表示';
+
+  @override
+  String get keepMessagesAvailable => '自分のメッセージを読めるようにしておく';
+
+  @override
+  String get keepMessagesAvailableExplain =>
+      '**アプリを開いている間**、ノードが保存しなくなったあなたのメッセージを、読み手はあなたから受け取れます。**あなたのものだけ**で、他人のものは扱いません。';
+
+  @override
+  String errBadSignature(int height) {
+    final intl.NumberFormat heightNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String heightString = heightNumberFormat.format(height);
+
+    return 'ブロック $heightString に署名が無効なトランザクションがあります。このノードのチェーンは全ノードが守るルールに反しています。このノードは信頼せず、別のノードに接続してください。';
+  }
+
+  @override
+  String receivedOmitted(String count) {
+    return '**ノードが省いていました**：他の人があなたに対して行ったことの一部（$count）。ブロックそのものから見つけたので、表示しています。';
+  }
+
+  @override
+  String get keyringUnavailable =>
+      'システムのキーリングがロックされていて、パスワードを尋ねることができないため、この端末にウォレットを保存できません。キーリングのロックを解除して（通常はデスクトップへのログインで解除されます）、Murmur を起動し直してください。';
 }

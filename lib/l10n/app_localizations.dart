@@ -3033,6 +3033,78 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Confirm it\'s you before your wallet\'s key is used or shown.'**
   String get faceIdReason;
+
+  /// Threads tab: takes the list again at the newest block
+  ///
+  /// In en, this message translates to:
+  /// **'Refresh'**
+  String get refresh;
+
+  /// Messages and Starred tabs: a button that marks every row of the list as read
+  ///
+  /// In en, this message translates to:
+  /// **'Mark all as read'**
+  String get markAllRead;
+
+  /// Address page opened from a marked starred person: a line under their new messages
+  ///
+  /// In en, this message translates to:
+  /// **'Above: new since your last visit'**
+  String get newAboveLastVisit;
+
+  /// Wallet tab: the heading of the wallet's public name and picture; also the dialog that sets them
+  ///
+  /// In en, this message translates to:
+  /// **'Public name and picture'**
+  String get publicNameAndPicture;
+
+  /// Wallet tab: the button that opens the public name and picture dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Set public name and picture'**
+  String get publicNameAndPictureSet;
+
+  /// Wallet tab: what setting a public name and picture does; **…** marks the key words
+  ///
+  /// In en, this message translates to:
+  /// **'**Stand out**: a name and a picture others see beside your address.'**
+  String get publicNameStandOut;
+
+  /// Address page: tooltip of the picture, which a tap shows larger
+  ///
+  /// In en, this message translates to:
+  /// **'Show the picture larger'**
+  String get pictureLarger;
+
+  /// Wallet tab: switch that lets readers get the user's own messages from this device, through the node, when nodes no longer keep them
+  ///
+  /// In en, this message translates to:
+  /// **'Keep my messages available'**
+  String get keepMessagesAvailable;
+
+  /// Wallet tab: what Keep my messages available does; **…** marks the key words
+  ///
+  /// In en, this message translates to:
+  /// **'**While the app is open**, readers get your messages from you when nodes no longer keep them. **Only yours**, never anyone else\'s.'**
+  String get keepMessagesAvailableExplain;
+
+  /// Connection error: a transaction in a block the node served has an invalid signature (PROTOCOL.md Section 1)
+  ///
+  /// In en, this message translates to:
+  /// **'Block {height} holds a transaction whose signature isn\'t valid: the node\'s chain breaks the rules every node applies. Don\'t trust this node: connect to another.'**
+  String errBadSignature(int height);
+
+  /// Messages tab: the node's lists of flags, answers and mentions left entries out, which the client found in blocks; **…** marks the key words
+  ///
+  /// In en, this message translates to:
+  /// **'**The node left out** some of what others did about you ({count}). It\'s shown all the same, found in the blocks themselves.'**
+  String receivedOmitted(String count);
+
+  /// Linux: saving a wallet failed because the system keyring is locked and has no password prompt
+  ///
+  /// In en, this message translates to:
+  /// **'The system keyring is locked and can\'t ask for its password, so the wallet can\'t be saved on this device. Unlock the keyring (logging in to the desktop usually does) and start Murmur again.'**
+  String get keyringUnavailable;
 }
 
 class _AppLocalizationsDelegate

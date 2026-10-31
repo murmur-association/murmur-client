@@ -3,10 +3,12 @@ import 'dart:ui' show AppExitResponse;
 import 'package:flutter/material.dart';
 
 import 'services/chain_cache.dart';
+import 'services/keyring.dart';
 import 'services/local_node.dart';
 import 'services/local_node_link.dart';
 import 'services/node_client.dart';
 import 'services/notifier.dart';
+import 'services/own_messages.dart';
 import 'services/storage.dart';
 import 'ui/address_page.dart';
 import 'ui/brand.dart';
@@ -19,6 +21,9 @@ import 'ui/thread_page.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // On Linux, a locked keyring that can't ask would hang the app at its
+  // first use: checked first (services/keyring.dart).
+  await checkKeyring();
   final prefs = Preferences();
   await prefs.load();
   final client = MurmurClient();
@@ -28,7 +33,14 @@ Future<void> main() async {
   prefs.addListener(() => client.setStarred(prefs.starred));
   // With consent, the chain downloaded in earlier sessions is the starting point.
   if (prefs.storageConsent == StorageConsent.allowed) client.useCache(await ChainCache.open());
+  // The user's own messages are kept for good, and given back to nodes that
+  // lost them; served to readers through the node unless the user said no.
+  await client.useOwnMessages(await OwnMessageStore.open());
   final wallets = WalletController();
+  void owner() => client.setOwner(wallets.wallet?.addressHex, serve: prefs.keepMessagesAvailable);
+  owner();
+  wallets.addListener(owner);
+  prefs.addListener(owner);
   // Desktop builds with the node program beside them can run a node of
   // their own; it's stopped when the app closes.
   final localNode = LocalNode();

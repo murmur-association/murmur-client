@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:murmur_client/protocol/models.dart';
 import 'package:murmur_client/protocol/quote.dart';
 import 'package:murmur_client/services/storage.dart';
+import 'package:murmur_client/ui/address_page.dart';
 import 'package:murmur_client/ui/brand.dart';
 import 'package:murmur_client/ui/common.dart';
 import 'package:murmur_client/ui/thread_page.dart';
@@ -99,6 +100,41 @@ void main() {
     // For a moment: the mark fades.
     await tester.pumpAndSettle();
     expect(cardOf('The first reply\nwith a second line'), isNull);
+  });
+
+  testWidgets("a quote's author, picture or name, opens their page", (tester) async {
+    final thread = txAt(TxKind.orphan, 1, text: 'A thread');
+    final first = replyTo(thread, 2, from: bob, text: 'The first reply');
+    final answer = replyTo(thread, 3, from: carol, text: '${quoteLine(first.tx.id)}An answer to it');
+    await tester.pumpWidget(AppScope(
+      client: FakeChain([thread, first, answer]),
+      wallets: WalletController(),
+      prefs: Preferences(),
+      child: MaterialApp(
+        theme: lightTheme,
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: ThreadPage(rootTxid: thread.tx.id),
+      ),
+    ));
+    await tester.pumpAndSettle();
+    // The quote's own picture is the small one; its name sits beside it.
+    final picture = find.byWidgetPredicate((w) => w is AddressAvatar && w.size == 16);
+    final name = find.descendant(
+        of: find.ancestor(of: picture, matching: find.byType(Row)).first, matching: find.byType(Text));
+    for (final target in [picture, name]) {
+      await tester.tap(target);
+      await tester.pumpAndSettle();
+      final page = tester.widget<AddressPage>(find.byType(AddressPage));
+      expect(page.address, first.tx.fromAddress);
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+    }
+    // The rest of the quote still goes to the reply, opening nothing.
+    await tester.tap(find.text('The first reply').last);
+    await tester.pumpAndSettle();
+    expect(find.byType(AddressPage), findsNothing);
+    await tester.pumpWidget(const SizedBox());
   });
 
   testWidgets('replies run from the oldest down, under the first message', (tester) async {
