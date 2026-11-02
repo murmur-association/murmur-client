@@ -99,10 +99,7 @@ class NetworkInfo {
     halvingInterval: 4200000,
     maxBlockBytes: 1000000,
     burnPayoutBlocks: 2880,
-    // No checkpoint while the network is under a day old: sessions start
-    // from genesis. tool/refresh_checkpoint.dart puts the first in place of
-    // these lines, and refreshes it with every release (AGENTS.md, Recipes).
-    // checkpoint: none yet
+    checkpoint: Checkpoint(2200, '000001c4a11ec6b21001f48491284e172d057a748914a57852a3987e3a92037f'),
   );
 
   static const demo = NetworkInfo(

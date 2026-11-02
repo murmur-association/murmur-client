@@ -2,6 +2,12 @@
 
 Newest first. Each release is a `vX.Y.Z` tag matching `version` in `pubspec.yaml`; see [README](README.md#releases-and-deployment). Entries marked **Breaking** need action from users.
 
+## v0.10.1: checkpoint refresh (2026-11-02)
+
+No protocol or network change.
+
+- **Changed: the testnet checkpoint** is now block 2,200, refreshed from the live network by the scheduled release.
+
 ## v0.10.0: protocol 17, signatures checked, your messages kept available (2026-10-31)
 
 **Breaking: protocol 17, on a new network** (`murmur-testnet-15`, started 2026-10-31): the app reaches only nodes of release v0.16.0 and later. The testnet starts over: a wallet keeps its seed and works on the new network, but starts with nothing there; the local copy of the old chain is dropped by itself.
