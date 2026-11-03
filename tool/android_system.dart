@@ -147,28 +147,55 @@ class AndroidSystem {
   Future<bool> pickPicture({Duration timeout = const Duration(minutes: 3)}) async {
     if (await _chooser() == null) return false;
     final deadline = DateTime.now().add(timeout);
-    // What the chooser showed, for a failure's report.
-    var last = '';
+    // What the chooser showed, for a failure's report: every element, since
+    // a file may be named in its description rather than its text.
+    var last = <ScreenNode>[];
+    // Downloads is tapped once: tapping it again while its list loads
+    // started the list over (GitHub's runner, 2026-11-03).
+    var openedDownloads = false;
+    final stem = pictureName.substring(0, pictureName.lastIndexOf('.'));
     while (DateTime.now().isBefore(deadline)) {
       final now = await screen();
-      last = [for (final n in now) if ((n.attributes['text'] ?? '').isNotEmpty) n.attributes['text']].join(' | ');
-      final byName = find(now, texts: const [pictureName]);
+      if (now.isNotEmpty) last = now;
+      // By name, with or without its extension (Files may leave it out),
+      // in the element's text or its description.
+      final byName = now.where((n) =>
+          (n.attributes['text'] ?? '').startsWith(stem) || (n.attributes['content-desc'] ?? '').startsWith(stem)).firstOrNull;
       final photo = now.where((n) =>
           (n.attributes['resource-id'] ?? '').endsWith(':id/icon_thumbnail') ||
           (n.attributes['content-desc'] ?? '').startsWith('Photo taken')).firstOrNull;
       final roots = now.where((n) => n.attributes['content-desc'] == 'Show roots').firstOrNull;
       final downloads = find(now, texts: const ['Downloads']);
+      // The device's storage in the side panel (its summary says how much is
+      // free), and the Download folder in it: Files' "Downloads" lists only
+      // what the system took as a download, which a pushed file may not be
+      // (GitHub's runner showed it empty, 2026-11-03).
+      final storage = now.where((n) => RegExp(r'\bfree$').hasMatch(n.attributes['text'] ?? '')).firstOrNull;
+      final folder = find(now, texts: const ['Download']);
+      final late = DateTime.now().isAfter(deadline.subtract(timeout - const Duration(seconds: 20)));
       if (byName ?? photo case final n?) {
         await tap(n);
         return true;
-      } else if (downloads != null) {
+      } else if (!late && downloads != null && !openedDownloads) {
+        openedDownloads = true;
         await tap(downloads);
-      } else if (roots != null) {
+      } else if (!late && roots != null && !openedDownloads) {
+        await tap(roots);
+      } else if (late && folder != null) {
+        await tap(folder);
+      } else if (late && storage != null) {
+        await tap(storage);
+      } else if (late && roots != null) {
         await tap(roots);
       }
       await Future<void>.delayed(const Duration(seconds: 2));
     }
-    print('android: the picture was not found in the chooser; it last showed: $last');
+    print('android: the picture was not found in the chooser; it last showed:');
+    for (final n in last) {
+      final a = n.attributes;
+      if ((a['text'] ?? '').isEmpty && (a['content-desc'] ?? '').isEmpty && (a['resource-id'] ?? '').isEmpty) continue;
+      print('  ${a['resource-id']} text="${a['text']}" desc="${a['content-desc']}" class=${a['class']}');
+    }
     return false;
   }
 

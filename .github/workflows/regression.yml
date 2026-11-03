@@ -160,10 +160,13 @@ jobs:
       run: tail -n 60 /tmp/murmur-emulator.log || true
 
   # In an iPhone simulator (tool/ios_simulator.sh boots one), against the
-  # node's macOS build.
+  # node's macOS build (universal: Intel and Apple silicon). Both Apple jobs
+  # run on Intel Macs for now: on 2026-11-03 GitHub's Apple silicon runners
+  # took no job twice in a row ("capacity constraints"); back to
+  # macos-latest once they do.
   acceptance-ios:
     name: 'acceptance: [ios]'
-    runs-on: macos-latest
+    runs-on: macos-15-intel
     timeout-minutes: 60
     steps:
     - uses: actions/checkout@v4
@@ -187,7 +190,7 @@ jobs:
   # notification centre.
   acceptance-macos:
     name: 'acceptance: [macos]'
-    runs-on: macos-latest
+    runs-on: macos-15-intel
     timeout-minutes: 60
     env:
       ACCEPTANCE_NO_NOTIFICATIONS: "1"
