@@ -239,10 +239,14 @@ void main() {
     print('flutter ${args.where((a) => !a.contains('ACCEPTANCE_SEED')).join(' ')}');
     // Not with what `flutter test` sets for the tests it runs itself, this
     // one included: FONTCONFIG_FILE hides the system's fonts, and the app
-    // then can't measure a line of monospace text.
+    // then can't measure a line of monospace text. Nor with GITHUB_ACTIONS:
+    // under it `flutter test` picks its GitHub reporter, which holds a
+    // test's output until the test ends, and the requests the app prints for
+    // this runner to answer (the system's chooser, Android's screens) came
+    // only after the test had timed out waiting for them.
     final environment = {
       for (final MapEntry(:key, :value) in _env.entries)
-        if (key != 'FONTCONFIG_FILE' && key != 'FLUTTER_TEST') key: value,
+        if (key != 'FONTCONFIG_FILE' && key != 'FLUTTER_TEST' && key != 'GITHUB_ACTIONS') key: value,
       if (ownNodeData != null) ...{'MURMUR_NODE_BIN': nodeBinary!, 'MURMUR_NODE_DATA': ownNodeData.path},
       if (passkey) 'ACCEPTANCE_PASSKEY': '1',
       // The file a browser's driver gives the page's file input.

@@ -152,7 +152,9 @@ jobs:
     - run: dart run tool/bundle_node.dart --for-tests
     - name: Acceptance tests
       run: |
-        export ACCEPTANCE_DEVICE=$(tool/android_emulator.sh)
+        # Assigned apart from export, so a failed boot stops the step.
+        device=$(tool/android_emulator.sh)
+        export ACCEPTANCE_DEVICE=$device
         flutter test tool/acceptance_test.dart
     - if: always()
       run: tail -n 60 /tmp/murmur-emulator.log || true
@@ -175,7 +177,8 @@ jobs:
     - run: dart run tool/bundle_node.dart --for-tests
     - name: Acceptance tests
       run: |
-        export ACCEPTANCE_DEVICE=$(tool/ios_simulator.sh)
+        device=$(tool/ios_simulator.sh)
+        export ACCEPTANCE_DEVICE=$device
         flutter test tool/acceptance_test.dart
 
   # The Mac app, with its own node (the node's macOS build) as on Windows
