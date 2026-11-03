@@ -358,13 +358,13 @@ class AppDriver {
     }
     await openTab(l.tabMessages);
     await tap(find.byTooltip(l.notifications), what: 'the notifications bell');
-    final wasOn = prefs.notifyTopics.contains(topic);
+    final wasOn = prefs.notifyTopics.isNotEmpty;
     await flip(topic);
     // Switched on, it's on only once the system has answered: Android's
     // permission prompt stays up until the runner taps "Allow", and closing
     // the sheet before then left the topic off. (Flipped again, it goes
     // off, which asks nothing.)
-    await waitUntil(() => prefs.notifyTopics.contains(topic) != wasOn,
+    await waitUntil(() => prefs.notifyTopics.isNotEmpty != wasOn,
         what: wasOn ? 'the topic to go off' : 'the system to allow notifications');
     // Android's background check, scheduled now: the runner runs it as
     // Android would, and checks its Dart side ran.
