@@ -11,6 +11,11 @@ const androidClickRequest = 'ACCEPTANCE CLICK NOTIFICATION: ';
 /// and check its Dart side ran (`backgroundCheckLog` in its log).
 const androidBackgroundJobRequest = 'ACCEPTANCE RUN BACKGROUND JOB';
 
+/// The file the runner writes into the app's own folder once it has run the
+/// background job (whatever came of it): the app waits for it before it
+/// switches notifications off, which cancels the job.
+const androidBackgroundJobDone = 'acceptance-background-job-done';
+
 /// Asks the runner to pick its picture file in the system's chooser that
 /// the app is about to open, for the source that follows (`photos` or
 /// `files`, as `PictureSource` names them): on Android, Linux and Windows

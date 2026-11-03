@@ -268,9 +268,12 @@ void main() {
           final title = line.substring(click + androidClickRequest.length).trim();
           android.clickNotification(title).then((done) => print('android: clicked "$title": $done'));
         } else if (line.contains(androidBackgroundJobRequest)) {
-          _runBackgroundJob(android).then((ran) {
+          _runBackgroundJob(android).then((ran) async {
             backgroundJobRan = ran;
             print('android: the background job ran: $ran');
+            // The app waits for this before it switches notifications off,
+            // which cancels the job.
+            await android.tellApp(androidBackgroundJobDone);
           });
         }
       });

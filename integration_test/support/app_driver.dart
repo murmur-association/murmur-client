@@ -33,6 +33,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'acceptance_protocol.dart';
 import 'passkey_io.dart' if (dart.library.js_interop) 'passkey_web.dart';
+import 'runner_signal_io.dart' if (dart.library.js_interop) 'runner_signal_web.dart';
 
 /// `host:port` of the demo node the app connects to.
 const acceptanceNode = String.fromEnvironment('ACCEPTANCE_NODE');
@@ -359,6 +360,15 @@ class AppDriver {
     await openTab(l.tabMessages);
     await tap(find.byTooltip(l.notifications), what: 'the notifications bell');
     final wasOn = prefs.notifyTopics.isNotEmpty;
+    // Switching off cancels Android's background check: first the runner
+    // runs it, as asked when it was switched on, and says so.
+    if (wasOn && !kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+      final deadline = DateTime.now().add(_scaled(const Duration(minutes: 5)));
+      while (!await runnerSaid(androidBackgroundJobDone)) {
+        if (DateTime.now().isAfter(deadline)) fail('timed out waiting for the runner to run the background check');
+        await tester.pump(const Duration(milliseconds: 500));
+      }
+    }
     await flip(topic);
     // Switched on, it's on only once the system has answered: Android's
     // permission prompt stays up until the runner taps "Allow", and closing

@@ -250,6 +250,12 @@ class AndroidSystem {
     return RegExp('JOB #\\S+/(\\d+): \\S+ ${RegExp.escape(package)}/androidx\\.work').firstMatch(jobs)?.group(1);
   }
 
+  /// Leaves the app a word: the file `name` in its own folder (where
+  /// path_provider's support directory is), which only a debuggable app's
+  /// `run-as` reaches.
+  Future<void> tellApp(String name) =>
+      adb(['shell', "run-as $package sh -c 'mkdir -p files && touch files/$name'"]);
+
   /// Runs the app's background job now, as the system would; whether the
   /// app's log then shows its Dart side ran (`marker`, within `timeout`).
   Future<bool> runBackgroundJob(String job, String marker, {Duration timeout = const Duration(minutes: 3)}) async {
