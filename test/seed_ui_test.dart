@@ -132,6 +132,14 @@ void main() {
     await tester.tap(find.text(l.copyCharacters));
     await tester.pump();
     expect(copied, [seedPhrase(_seed), toHex(_seed)]);
+    // "Copied" shows above the dialog, not as a snack bar on the page's
+    // scaffold behind its barrier, and goes by itself.
+    expect(find.text(l.copied), findsOneWidget);
+    expect(find.byType(SnackBar), findsNothing);
+    expect(find.descendant(of: find.byType(Scaffold), matching: find.text(l.copied)), findsNothing);
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pumpAndSettle();
+    expect(find.text(l.copied), findsNothing);
     expect(find.byType(ShareButton), findsNothing, reason: 'the seed is never offered to other apps');
     // Enter closes it: its button is the copper one.
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);

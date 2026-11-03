@@ -314,25 +314,37 @@ void main() {
     expect(amountText(es, 1234500000), '1234,5');
     // And back: what a field holds, in units.
     expect(parseAmount(en, '0.5'), 500000);
-    expect(parseAmount(en, ' 1,234.000001 '), 1234000001);
-    expect(parseAmount(es, '1.234,5'), 1234500000);
+    expect(parseAmount(en, ' 1234.000001 '), 1234000001);
+    expect(parseAmount(es, '1234,5'), 1234500000);
     expect(parseAmount(es, '0,5'), 500000);
     expect(parseAmount(en, '25'), 25000000);
+    // A point or a comma is the decimal separator in every language: a
+    // Spanish phone's numeric keyboard has no point, whatever the app's
+    // language. Fields hold no grouping, so neither is a thousands mark.
+    expect(parseAmount(en, '0,5'), 500000);
+    expect(parseAmount(es, '0.5'), 500000);
+    expect(parseAmount(es, '1.234'), 1234000);
     for (final context in [en, es]) {
       for (final units in [0, 1, 500000, 999999, 1000000, 25000000, 210000000000000]) {
-        expect(parseAmount(context, formatAmount(context, units)), units);
         expect(parseAmount(context, amountText(context, units)), units);
       }
     }
-    // Refused rather than guessed: a seventh decimal, a point where the
-    // language groups with it, two separators, nothing, a sign.
+    // Refused rather than guessed: a seventh decimal, two separators
+    // (grouping included), nothing, a sign.
     expect(parseAmount(en, '0.0000001'), isNull);
-    expect(parseAmount(es, '1.5'), isNull, reason: 'in Spanish the point groups thousands: not read as 15');
-    expect(parseAmount(en, '1,5'), isNull);
+    expect(parseAmount(en, '1,234.5'), isNull);
+    expect(parseAmount(es, '1.234,5'), isNull);
     expect(parseAmount(en, '1.2.3'), isNull);
     expect(parseAmount(en, ''), isNull);
     expect(parseAmount(en, '-1'), isNull);
     expect(parseAmount(en, 'abc'), isNull);
+    // As typed, either key shows as the language's own separator.
+    TextEditingValue typed(BuildContext context, String text) => AmountInputFormatter(context)
+        .formatEditUpdate(TextEditingValue.empty, TextEditingValue(text: text, selection: const TextSelection.collapsed(offset: 2)));
+    expect(typed(en, '0,5').text, '0.5');
+    expect(typed(es, '0.5').text, '0,5');
+    expect(typed(es, '0,5').text, '0,5');
+    expect(typed(es, '0.5').selection, const TextSelection.collapsed(offset: 2));
   });
 
   test('filters: a transfer is never a message, flags are off by default', () {

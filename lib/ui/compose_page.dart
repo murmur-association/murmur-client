@@ -404,6 +404,7 @@ class _ComposePageState extends State<ComposePage> {
                     controller: _amount,
                     autovalidateMode: AutovalidateMode.onUserInteraction,
                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    inputFormatters: [AmountInputFormatter(context)],
                     decoration: InputDecoration(
                       labelText: _kind == TxKind.reply ? l.payToAuthor : l.amount,
                       border: const OutlineInputBorder(),
@@ -429,6 +430,7 @@ class _ComposePageState extends State<ComposePage> {
                     controller: _fee,
                     autovalidateMode: AutovalidateMode.onUserInteraction,
                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    inputFormatters: [AmountInputFormatter(context)],
                     decoration: InputDecoration(
                       labelText: l.feeToMiner,
                       border: const OutlineInputBorder(),

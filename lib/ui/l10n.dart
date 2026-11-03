@@ -2,6 +2,7 @@
 // lib/l10n (ICU message format, compiled by Flutter's gen-l10n); numbers and
 // dates are formatted for the current locale with intl.
 
+import 'package:flutter/services.dart' show TextEditingValue, TextInputFormatter;
 import 'package:flutter/widgets.dart';
 import 'package:intl/intl.dart';
 
@@ -65,27 +66,44 @@ String amountText(BuildContext context, int units) {
   return '${units ~/ unitsPerToken}${fraction.isEmpty ? '' : '$separator$fraction'}';
 }
 
+/// The characters an amount field takes as its decimal separator: a point
+/// and a comma in every language, and the locale's own. A phone's numeric
+/// keyboard has only its region's (a Spanish one no point), whatever the
+/// app's language, so either must do; fields never hold digit grouping
+/// ([amountText]), which leaves neither ambiguous.
+final _decimalMarks = RegExp('[.,٫]');
+
 /// What the user typed as an amount, in units, or null if it isn't one:
-/// tokens with up to six decimals after the locale's decimal separator. The
-/// locale's digit grouping is taken only where it is whole groups of three,
-/// so "1.5" typed in Spanish (where the point groups) is refused rather
-/// than read as 15.
+/// tokens with up to six decimals after one decimal separator, a point or a
+/// comma whatever the language ([_decimalMarks]). Digit grouping isn't taken:
+/// "1.234" is one token and a fraction in every language, and "1,234.5" is
+/// refused rather than guessed.
 int? parseAmount(BuildContext context, String typed) {
-  final symbols = NumberFormat.decimalPattern(context.l10n.localeName).symbols;
   final text = typed.trim().replaceAll(RegExp(r"[\s'’_]"), '');
-  final parts = text.split(symbols.DECIMAL_SEP);
+  final parts = text.split(_decimalMarks);
   if (parts.length > 2) return null;
-  var whole = parts[0];
-  if (whole.contains(symbols.GROUP_SEP)) {
-    final groups = whole.split(symbols.GROUP_SEP);
-    final first = groups.first;
-    if (first.isEmpty || first.length > 3 || groups.skip(1).any((g) => g.length != 3)) return null;
-    whole = groups.join();
-  }
+  final whole = parts[0];
   final fraction = parts.length == 2 ? parts[1] : '';
   // Fifteen digits of tokens are far more than exist, and stay exact.
   if (!RegExp(r'^\d{1,9}$').hasMatch(whole) || !RegExp(r'^\d{0,6}$').hasMatch(fraction)) return null;
   return int.parse(whole) * unitsPerToken + int.parse(fraction.padRight(6, '0'));
+}
+
+/// Writes a point or a comma typed in an amount field as the locale's
+/// decimal separator, so the field reads as the language does whichever
+/// key the keyboard had ([parseAmount] takes either).
+class AmountInputFormatter extends TextInputFormatter {
+  AmountInputFormatter(BuildContext context)
+      : _separator = NumberFormat.decimalPattern(context.l10n.localeName).symbols.DECIMAL_SEP;
+
+  final String _separator;
+
+  @override
+  TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) {
+    final text = newValue.text.replaceAll(_decimalMarks, _separator);
+    // One character for one: the cursor and selection stay where they were.
+    return text == newValue.text || _separator.length != 1 ? newValue : newValue.copyWith(text: text);
+  }
 }
 
 /// An amount with its sign, for balance changes.

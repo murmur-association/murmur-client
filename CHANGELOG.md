@@ -2,6 +2,11 @@
 
 Newest first. Each release is a `vX.Y.Z` tag matching `version` in `pubspec.yaml`; see [README](README.md#releases-and-deployment). Entries marked **Breaking** need action from users.
 
+## Unreleased
+
+- **Fixed: "Copied" shows above dialogs.** Copying from a dialog, such as the seed of a new wallet, said so behind the dialog, where it couldn't be seen.
+- **Fixed: amounts take a point or a comma for decimals, in every language.** A phone's numeric keyboard has only its region's separator (a Spanish one has no point), so "0,5" in the English app was refused. Either key now writes the language's own separator; amount fields take no thousands separator.
+
 ## v0.10.2: checkpoint refresh (2026-11-03)
 
 No protocol or network change.

@@ -589,10 +589,106 @@ String whenOf(BuildContext context, TxView v) =>
 
 const mono = TextStyle(fontFamily: 'monospace', fontFamilyFallback: ['Courier New', 'Menlo']);
 
+/// Shows a short message at the foot of the screen. From a page it's a
+/// snack bar; from a dialog, a sheet or a menu it goes on the root overlay
+/// instead, since a snack bar belongs to the page's scaffold and would show
+/// behind the dialog's barrier (copying the seed when a wallet is made).
 void showSnack(BuildContext context, String text) {
+  if (ModalRoute.of(context) case final route? when route is! PageRoute) {
+    _OverlaySnack.show(context, text);
+    return;
+  }
+  _OverlaySnack.hide();
   ScaffoldMessenger.of(context)
     ..hideCurrentSnackBar()
     ..showSnackBar(SnackBar(content: Text(text)));
+}
+
+/// A snack bar's look, above every route.
+class _OverlaySnack extends StatefulWidget {
+  const _OverlaySnack(this.text, this.onDone);
+
+  final String text;
+  final VoidCallback onDone;
+
+  static OverlayEntry? _current;
+
+  static void show(BuildContext context, String text) {
+    hide();
+    final overlay = Overlay.of(context, rootOverlay: true);
+    late final OverlayEntry entry;
+    entry = OverlayEntry(
+      builder: (_) => _OverlaySnack(text, () {
+        if (_current == entry) hide();
+      }),
+    );
+    _current = entry;
+    overlay.insert(entry);
+  }
+
+  static void hide() {
+    _current?.remove();
+    _current = null;
+  }
+
+  @override
+  State<_OverlaySnack> createState() => _OverlaySnackState();
+}
+
+class _OverlaySnackState extends State<_OverlaySnack> with SingleTickerProviderStateMixin {
+  late final AnimationController _fade =
+      AnimationController(vsync: this, duration: const Duration(milliseconds: 200))..forward();
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    // A snack bar's own time on screen.
+    _timer = Timer(const Duration(seconds: 4), () async {
+      await _fade.reverse();
+      widget.onDone();
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _fade.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    return Positioned(
+      left: 16,
+      right: 16,
+      bottom: 16 + MediaQuery.paddingOf(context).bottom,
+      child: IgnorePointer(
+        child: FadeTransition(
+          opacity: _fade,
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 560),
+              child: Material(
+                color: colors.inverseSurface,
+                elevation: 6,
+                borderRadius: BorderRadius.circular(4),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  child: Text(
+                    widget.text,
+                    style: theme.textTheme.bodyMedium?.copyWith(color: colors.onInverseSurface),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 // ---- widgets ------------------------------------------------------------------
