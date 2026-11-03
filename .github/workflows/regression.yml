@@ -154,6 +154,19 @@ jobs:
         echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
         echo "$ANDROID_HOME/platform-tools" >> "$GITHUB_PATH"
     - run: flutter pub get
+    # The NDK and CMake the build asks for, ahead of it and with retries:
+    # Gradle's own download once came back corrupt ("unknown archive") and
+    # the app never built. The NDK's version is the pinned Flutter's.
+    - name: The NDK and CMake
+      run: |
+        ndk=$(grep -rhoE 'ndkVersion[^"]*"[0-9.]+"' "$FLUTTER_ROOT/packages/flutter_tools/gradle" | grep -oE '[0-9][0-9.]+' | head -1)
+        echo "NDK $ndk"
+        for attempt in 1 2 3; do
+          sdkmanager --install "ndk;$ndk" "cmake;3.22.1" >/dev/null && exit 0
+          echo "::warning::the NDK's download failed (attempt $attempt)"
+          rm -rf "$ANDROID_HOME/ndk/$ndk"
+        done
+        exit 1
     - run: dart run tool/bundle_node.dart --for-tests
     # Once more on a fresh emulator if the emulator itself went away during
     # the tests (offline, its log ending without a word: 2 runs of 5 on
