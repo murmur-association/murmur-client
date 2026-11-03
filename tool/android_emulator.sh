@@ -25,8 +25,13 @@ if [ -w /dev/kvm ]; then accel=on; else accel=off; fi
 echo "booting Android 14, acceleration $accel" >&2
 start=$(date +%s)
 log="${TMPDIR:-/tmp}/murmur-emulator.log"
-"$sdk/emulator/emulator" -avd murmur-acceptance -accel "$accel" -no-window -no-audio -no-boot-anim -no-snapshot \
-  -gpu swiftshader_indirect -cores 4 -memory 4096 > "$log" 2>&1 &
+# Its exit status goes into its log: on GitHub's runner it sometimes ended
+# mid-suite without a word (137 would say it was killed, 139 that it crashed).
+# Appended, so a second boot keeps the first one's ending.
+echo "---- booting at $(date -u +%T)" >> "$log"
+( "$sdk/emulator/emulator" -avd murmur-acceptance -accel "$accel" -no-window -no-audio -no-boot-anim -no-snapshot \
+    -gpu swiftshader_indirect -cores 4 -memory 4096
+  echo "---- the emulator exited with status $? at $(date -u +%T)" ) >> "$log" 2>&1 &
 emulator=$!
 # Until it has booted, or for an hour; an emulator that stops ends the wait.
 deadline=$(( start + 3600 ))
