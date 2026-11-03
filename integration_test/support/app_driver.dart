@@ -11,7 +11,7 @@
 import 'dart:async';
 import 'dart:typed_data';
 
-import 'package:flutter/foundation.dart' show TargetPlatform, defaultTargetPlatform;
+import 'package:flutter/foundation.dart' show TargetPlatform, defaultTargetPlatform, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -131,11 +131,25 @@ class AppDriver {
     if (defaultTargetPlatform == TargetPlatform.macOS) deviceKeyStoreAllowed = false;
     // A window the system never showed has no size (a Mac runner with no
     // one at its screen: "Failed to foreground app"), and every tap then
-    // lands outside it. The app is laid out at a laptop's size instead.
-    if (tester.view.physicalSize.isEmpty) {
+    // lands outside it. The app is laid out at a laptop's size instead; so
+    // too a Mac window of the template's 800 × 600, which GitHub's runner
+    // shows: a thread page gone to a new reply had its first message off
+    // the screen, unbuilt (2026-11-03).
+    final size = tester.view.physicalSize / tester.view.devicePixelRatio;
+    debugPrint('the window: ${tester.view.physicalSize} at ${tester.view.devicePixelRatio}');
+    if (tester.view.physicalSize.isEmpty ||
+        (defaultTargetPlatform == TargetPlatform.macOS && (size.width < 1280 || size.height < 800))) {
       tester.view.physicalSize = const Size(1280, 800);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.reset);
+    }
+    // Android's accessibility switches the app's semantics on whenever the
+    // runner reads a screen of the system's (uiautomator, every 2 s), and
+    // the test then fails at its end: "A SemanticsHandle was active". The
+    // runner never reads the app's own screen, so they stay off.
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+      tester.binding.platformDispatcher.semanticsEnabledTestValue = false;
+      addTearDown(tester.binding.platformDispatcher.clearSemanticsEnabledTestValue);
     }
     await app.main();
     await waitFor(find.byType(HomePage), what: 'the home page');
@@ -345,6 +359,10 @@ class AppDriver {
     await openTab(l.tabMessages);
     await tap(find.byTooltip(l.notifications), what: 'the notifications bell');
     await flip(topic);
+    // On until the system has answered: Android's permission prompt stays
+    // up until the runner taps "Allow", and closing the sheet before then
+    // left the topic off.
+    await waitUntil(() => prefs.notifyTopics.isNotEmpty, what: 'the system to allow notifications');
     // Android's background check, scheduled now: the runner runs it as
     // Android would, and checks its Dart side ran.
     if (defaultTargetPlatform == TargetPlatform.android && prefs.notifyTopics.isNotEmpty) {
