@@ -1,0 +1,306 @@
+# The whole regression on every push: the analyzer, the unit tests and the
+# tests against the pinned node, a web build, the acceptance tests on every
+# flavour (integration_test/acceptance_test.dart, run by
+# tool/acceptance_test.dart: the Linux, Windows and Mac apps, Chrome with a
+# passphrase and with a passkey, Firefox, an Android emulator and an iPhone
+# simulator), and the packaged desktop apps' smoke tests
+# (tool/desktop_smoke_test.dart). GitHub's hosted runners are free for a
+# public repository, and its Linux runners have KVM, so Android's emulator
+# is accelerated here (on GitLab's it emulated the processor, about 50
+# minutes a run).
+#
+# Releases stay in .gitlab-ci.yml for now: the scheduled release, the
+# checkpoint checks, the page's deploy and the package registry.
+name: regression
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A newer push to the same branch replaces a run still going.
+concurrency:
+  group: regression-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # The Flutter SDK every job builds with; raise it deliberately, together
+  # with the version used locally (and FLUTTER_VERSION in .gitlab-ci.yml).
+  FLUTTER_VERSION: "3.47.5"
+  # The tests against the node must run, not skip themselves.
+  MURMUR_REQUIRE_NODE: "1"
+  # What building the Linux app needs, and what its tests need to run it
+  # without a desktop: a display, a window manager, a session and a keyring;
+  # xdotool works GTK's file dialog for the acceptance tests.
+  LINUX_APP_PACKAGES: >-
+    clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev g++ libsecret-1-dev libjsoncpp-dev
+    xvfb openbox wmctrl xdotool dbus dbus-x11 gnome-keyring libgl1-mesa-dri libegl1 libgles2 procps
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: subosito/flutter-action@v2
+      with:
+        flutter-version: ${{ env.FLUTTER_VERSION }}
+        cache: true
+    - run: flutter pub get
+    # The generated localizations must match the ARB files.
+    - run: flutter gen-l10n && git diff --exit-code -- lib/l10n
+    - run: flutter analyze
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: subosito/flutter-action@v2
+      with:
+        flutter-version: ${{ env.FLUTTER_VERSION }}
+        cache: true
+    - run: flutter pub get
+    # The pinned murmur-node release (tool/node_release.dart), checked
+    # against its SHA256SUMS. The public-node tests skip themselves without
+    # MURMUR_NODE.
+    - run: dart run tool/bundle_node.dart --for-tests
+    - run: flutter test
+
+  build-web:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: subosito/flutter-action@v2
+      with:
+        flutter-version: ${{ env.FLUTTER_VERSION }}
+        cache: true
+    - run: flutter pub get
+    - run: flutter build web --release --no-web-resources-cdn
+    - run: dart run tool/fetch_fallback_fonts.dart
+
+  # The Linux app (with its own node) and the browsers, in one throwaway
+  # session each (tool/linux_session.sh).
+  acceptance-linux:
+    name: 'acceptance: [${{ matrix.device }}]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        device: [linux, chrome, chrome-passkey, firefox]
+    env:
+      ACCEPTANCE_DEVICE: ${{ matrix.device }}
+    steps:
+    - uses: actions/checkout@v4
+    - uses: subosito/flutter-action@v2
+      with:
+        flutter-version: ${{ env.FLUTTER_VERSION }}
+        cache: true
+    - name: System packages
+      run: |
+        sudo apt-get update -qq
+        # Firefox's archive is xz, and it plays (and so loads) sound.
+        sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends $LINUX_APP_PACKAGES libnss3 libgbm1 xz-utils libasound2t64
+    # Ubuntu 24.04 keeps programs without an AppArmor profile of their own
+    # from user namespaces, which the pinned browsers' sandboxes need.
+    - run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+    - run: flutter pub get
+    - run: dart run tool/bundle_node.dart --for-tests
+    - name: The pinned browser
+      run: |
+        case "$ACCEPTANCE_DEVICE" in
+          chrome*) dart run tool/fetch_test_browser.dart chrome;;
+          firefox) dart run tool/fetch_test_browser.dart firefox;;
+        esac
+    - run: tool/linux_session.sh flutter test tool/acceptance_test.dart
+
+  # In an Android emulator, accelerated by KVM. The runner answers the
+  # system's screens from the host (tool/android_system.dart): the
+  # notification permission, a fingerprint enrolled and touched, a
+  # notification opened from the shade, the background job run as Android
+  # would.
+  acceptance-android:
+    name: 'acceptance: [android]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+    - uses: actions/checkout@v4
+    - name: KVM for the runner's user
+      run: |
+        echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+        sudo udevadm control --reload-rules
+        sudo udevadm trigger --name-match=kvm
+    # The key store plugin (biometric_storage) asks Gradle for Java 17.
+    - uses: actions/setup-java@v4
+      with:
+        distribution: temurin
+        java-version: '17'
+    - uses: subosito/flutter-action@v2
+      with:
+        flutter-version: ${{ env.FLUTTER_VERSION }}
+        cache: true
+    - name: The emulator's libraries, and the SDK's tools on the path
+      run: |
+        sudo apt-get update -qq
+        sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends libpulse0 libnss3 libgbm1 libxkbfile1 libxcomposite1 libxcursor1 libxdamage1 libxi6 libxtst6
+        echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
+        echo "$ANDROID_HOME/platform-tools" >> "$GITHUB_PATH"
+    - run: flutter pub get
+    - run: dart run tool/bundle_node.dart --for-tests
+    - name: Acceptance tests
+      run: |
+        export ACCEPTANCE_DEVICE=$(tool/android_emulator.sh)
+        flutter test tool/acceptance_test.dart
+    - if: always()
+      run: tail -n 60 /tmp/murmur-emulator.log || true
+
+  # In an iPhone simulator (tool/ios_simulator.sh boots one), against the
+  # node's macOS build.
+  acceptance-ios:
+    name: 'acceptance: [ios]'
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+    - uses: actions/checkout@v4
+    - name: The newest Xcode
+      run: sudo xcode-select -s "$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)" && xcodebuild -version
+    - uses: subosito/flutter-action@v2
+      with:
+        flutter-version: ${{ env.FLUTTER_VERSION }}
+        cache: true
+    - run: flutter pub get
+    - run: dart run tool/bundle_node.dart --for-tests
+    - name: Acceptance tests
+      run: |
+        export ACCEPTANCE_DEVICE=$(tool/ios_simulator.sh)
+        flutter test tool/acceptance_test.dart
+
+  # The Mac app, with its own node (the node's macOS build) as on Windows
+  # and Linux. As on GitLab, the notification step skips itself until it
+  # has been tried in this runner's session; iOS's job covers Apple's
+  # notification centre.
+  acceptance-macos:
+    name: 'acceptance: [macos]'
+    runs-on: macos-latest
+    timeout-minutes: 60
+    env:
+      ACCEPTANCE_NO_NOTIFICATIONS: "1"
+    steps:
+    - uses: actions/checkout@v4
+    - name: The newest Xcode
+      run: sudo xcode-select -s "$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)" && xcodebuild -version
+    - uses: subosito/flutter-action@v2
+      with:
+        flutter-version: ${{ env.FLUTTER_VERSION }}
+        cache: true
+    - run: flutter pub get
+    - run: dart run tool/bundle_node.dart --for-tests
+    - run: flutter test tool/acceptance_test.dart
+
+  # The Windows app. The debug app gets, beside it, the software graphics
+  # the smoke test uses and Visual Studio's debug runtime, and the node the
+  # release runtime, as on GitLab's server runner (harmless where the
+  # system has them). The notification step skips itself until it has been
+  # tried in this runner's session.
+  acceptance-windows:
+    name: 'acceptance: [windows]'
+    runs-on: windows-latest
+    timeout-minutes: 60
+    env:
+      ACCEPTANCE_NO_NOTIFICATIONS: "1"
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+    - uses: actions/checkout@v4
+    - uses: subosito/flutter-action@v2
+      with:
+        flutter-version: ${{ env.FLUTTER_VERSION }}
+        cache: true
+    - name: Visual Studio's ATL (the secure-storage plugin needs atlstr.h)
+      run: |
+        $installer = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer"
+        $vs = & "$installer\vswhere.exe" -latest -products * -property installationPath
+        $atl = & "$installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.ATL -property installationPath
+        if (-not $atl) {
+          $p = Start-Process -Wait -PassThru -FilePath "$installer\setup.exe" -ArgumentList "modify --installPath `"$vs`" --add Microsoft.VisualStudio.Component.VC.ATL --quiet --norestart"
+          Write-Output "added ATL to ${vs}: exit code $($p.ExitCode)"
+          if ($p.ExitCode -ne 0 -and $p.ExitCode -ne 3010) { exit 1 }
+        }
+        exit 0
+    - run: flutter pub get
+    - run: dart run tool/bundle_node.dart --for-tests
+    # The debug build first, so its folder is there to put things beside.
+    - run: flutter build windows --debug
+    - run: powershell -NoProfile -ExecutionPolicy Bypass -File tool\fetch_test_graphics.ps1 -Into build\windows\x64\runner\Debug
+    - name: Runtimes beside the app and the node
+      run: |
+        $app = "build\windows\x64\runner\Debug"
+        $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -property installationPath
+        $debug = Get-ChildItem "$vs\VC\Redist\MSVC\*\debug_nonredist\x64\Microsoft.VC14*.DebugCRT\*.dll" | Sort-Object FullName
+        $ucrt = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\ucrt\ucrtbased.dll" | Sort-Object FullName | Select-Object -Last 1
+        $release = Get-ChildItem "$vs\VC\Redist\MSVC\*\x64\Microsoft.VC14*.CRT\*.dll" | Sort-Object FullName
+        $debug + $ucrt | ForEach-Object { Copy-Item $_.FullName $app -Force }
+        $release | ForEach-Object { Copy-Item $_.FullName build\node -Force }
+        Write-Output "debug runtime beside the app: $(($debug + $ucrt).Name -join ', '); release runtime beside the node: $($release.Name -join ', ')"
+    - run: dart run tool/desktop_smoke_test.dart --check-system build\windows\x64\runner\Debug
+    - run: flutter test tool/acceptance_test.dart
+
+  # The packaged Linux app, as a user unpacks it: its own node starts and
+  # stops with its window, a node left by a killed app is replaced, a wallet
+  # is saved through the real keyring, and with the keyring locked and
+  # nobody to answer, the app still starts. Its own node stays on the demo
+  # network.
+  smoke-linux:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+    - uses: actions/checkout@v4
+    - uses: subosito/flutter-action@v2
+      with:
+        flutter-version: ${{ env.FLUTTER_VERSION }}
+        cache: true
+    - run: sudo apt-get update -qq && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends $LINUX_APP_PACKAGES
+    - run: flutter pub get
+    - run: flutter build linux --release --dart-define=MURMUR_LOCAL_NODE_SPEC=demo
+    - run: dart run tool/bundle_node.dart
+    - run: dart run tool/package_desktop.dart --tag smoke
+    - run: tool/linux_session.sh dart run tool/desktop_smoke_test.dart --wallet-storage build/desktop-package/murmur-client-smoke-linux-x64
+    - run: MURMUR_KEYRING=locked MURMUR_KEYRING_PROMPT_SECONDS=5 tool/linux_session.sh dart run tool/desktop_smoke_test.dart build/desktop-package/murmur-client-smoke-linux-x64
+
+  # The packaged Windows app, the same test. The runner's profile is a clean
+  # one, which the test needs (it refuses any other). Check 3 (the wallet
+  # through Windows' data protection) is reported as not tried if Windows
+  # refuses it for the runner's account.
+  smoke-windows:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+    - uses: actions/checkout@v4
+    - uses: subosito/flutter-action@v2
+      with:
+        flutter-version: ${{ env.FLUTTER_VERSION }}
+        cache: true
+    - name: Visual Studio's ATL (the secure-storage plugin needs atlstr.h)
+      run: |
+        $installer = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer"
+        $vs = & "$installer\vswhere.exe" -latest -products * -property installationPath
+        $atl = & "$installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.ATL -property installationPath
+        if (-not $atl) {
+          $p = Start-Process -Wait -PassThru -FilePath "$installer\setup.exe" -ArgumentList "modify --installPath `"$vs`" --add Microsoft.VisualStudio.Component.VC.ATL --quiet --norestart"
+          Write-Output "added ATL to ${vs}: exit code $($p.ExitCode)"
+          if ($p.ExitCode -ne 0 -and $p.ExitCode -ne 3010) { exit 1 }
+        }
+        exit 0
+    - run: flutter pub get
+    - run: flutter build windows --release --dart-define=MURMUR_LOCAL_NODE_SPEC=demo
+    - run: dart run tool/bundle_node.dart
+    - run: dart run tool/package_desktop.dart --tag smoke
+    - run: powershell -NoProfile -ExecutionPolicy Bypass -File tool\fetch_test_graphics.ps1 -Into build\desktop-package\murmur-client-smoke-windows-x64
+    - run: dart run tool/desktop_smoke_test.dart --wallet-storage build\desktop-package\murmur-client-smoke-windows-x64

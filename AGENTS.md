@@ -12,7 +12,7 @@ Targets: the web (the main one), plus Windows, Linux, macOS, Android and iOS. `w
 
 ## Commands
 
-CI (`.gitlab-ci.yml`) runs `flutter gen-l10n` with a clean-diff check, `flutter analyze`, `flutter test` and a web build on every push. Run the same locally before committing:
+CI runs `flutter gen-l10n` with a clean-diff check, `flutter analyze`, `flutter test` and a web build on every push. The whole regression runs on GitHub (`.github/workflows/regression.yml`, on `github.com/murmur-association/murmur-client`, free for a public repository): those checks, the acceptance tests on every flavour (Android's emulator accelerated by the runners' KVM) and the packaged desktop apps' smoke tests. Releases (the scheduled release, the checkpoint checks, the deploy, the package registry) are still `.gitlab-ci.yml`'s. Run the same locally before committing:
 
 ```
 flutter pub get                       # also regenerates lib/l10n/app_localizations*.dart from the ARB files
