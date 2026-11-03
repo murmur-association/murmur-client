@@ -4,7 +4,7 @@ Newest first. Each release is a `vX.Y.Z` tag matching `version` in `pubspec.yaml
 
 ## Unreleased
 
-- **Changed: the project lives on GitHub.** Releases, with the web page, the Windows and Linux apps and `SHA256SUMS`, are published at [github.com/murmur-association/murmur-client/releases](https://github.com/murmur-association/murmur-client/releases); earlier ones stay on GitLab. Security reports go through GitHub's private vulnerability reporting ([SECURITY.md](SECURITY.md)).
+- **Changed: the project lives on GitHub.** Releases, with the web page, the Windows and Linux apps and `SHA256SUMS`, are published at [github.com/murmur-association/murmur-client/releases](https://github.com/murmur-association/murmur-client/releases); earlier releases keep their tags there, but their downloads went with the GitLab project. Security reports go through GitHub's private vulnerability reporting ([SECURITY.md](SECURITY.md)).
 - **Fixed: "Copied" shows above dialogs.** Copying from a dialog, such as the seed of a new wallet, said so behind the dialog, where it couldn't be seen.
 - **Fixed: amounts take a point or a comma for decimals, in every language.** A phone's numeric keyboard has only its region's separator (a Spanish one has no point), so "0,5" in the English app was refused. Either key now writes the language's own separator; amount fields take no thousands separator.
 
