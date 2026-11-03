@@ -129,7 +129,8 @@ Future<bool> _runBackgroundJob(AndroidSystem android) async {
     if (job != null) return android.runBackgroundJob(job, backgroundCheckLog);
     await Future<void>.delayed(const Duration(seconds: 2));
   }
-  print('android: no background job was scheduled');
+  print('android: no background job was scheduled; the scheduler lists for the app:');
+  print(await android.scheduledJobsText());
   return false;
 }
 

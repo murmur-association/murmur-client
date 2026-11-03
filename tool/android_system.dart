@@ -250,6 +250,12 @@ class AndroidSystem {
     return RegExp('JOB #\\S+/(\\d+): \\S+ ${RegExp.escape(package)}/androidx\\.work').firstMatch(jobs)?.group(1);
   }
 
+  /// The job scheduler's lines that name the app, for a failure's report.
+  Future<String> scheduledJobsText() async {
+    final jobs = (await _shell('dumpsys jobscheduler')).split('\n');
+    return [for (final line in jobs) if (line.contains(package)) '  ${line.trim()}'].take(40).join('\n');
+  }
+
   /// Leaves the app a word: the file `name` in its own folder (where
   /// path_provider's support directory is), which only a debuggable app's
   /// `run-as` reaches.
