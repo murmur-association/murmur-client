@@ -244,10 +244,15 @@ class AndroidSystem {
 
   // ---- the app's background job -------------------------------------------------
 
-  /// The scheduler's id of the app's WorkManager job, if one is scheduled.
-  Future<String?> backgroundJob() async {
+  /// The app's WorkManager job, if one is scheduled: its id, and the
+  /// namespace Android 14 lists it under (`JOB androidx.work.systemjobscheduler:u0a192/1:
+  /// f745f69 @androidx.work.systemjobscheduler@info.murmur.client/androidx.work…`),
+  /// or null where jobs have none (`JOB #u0a192/1: f745f69 info.murmur.client/androidx.work…`).
+  Future<({String? namespace, String id})?> backgroundJob() async {
     final jobs = await _shell('dumpsys jobscheduler');
-    return RegExp('JOB #\\S+/(\\d+): \\S+ ${RegExp.escape(package)}/androidx\\.work').firstMatch(jobs)?.group(1);
+    final job = RegExp('JOB (?:([\\w.]+):)?#?\\w+/(\\d+): \\S+ (?:@[\\w.]+@)?${RegExp.escape(package)}/androidx\\.work')
+        .firstMatch(jobs);
+    return job == null ? null : (namespace: job.group(1), id: job.group(2)!);
   }
 
   /// The job scheduler's lines that name the app, for a failure's report.
@@ -264,9 +269,11 @@ class AndroidSystem {
 
   /// Runs the app's background job now, as the system would; whether the
   /// app's log then shows its Dart side ran (`marker`, within `timeout`).
-  Future<bool> runBackgroundJob(String job, String marker, {Duration timeout = const Duration(minutes: 3)}) async {
+  Future<bool> runBackgroundJob(({String? namespace, String id}) job, String marker,
+      {Duration timeout = const Duration(minutes: 3)}) async {
     await adb(['logcat', '-c']);
-    await _shell('cmd jobscheduler run -f $package $job');
+    final namespace = job.namespace == null ? '' : '-n ${job.namespace} ';
+    print('android: running the background job: ${(await _shell('cmd jobscheduler run -f $namespace$package ${job.id}')).trim()}');
     final deadline = DateTime.now().add(timeout);
     while (DateTime.now().isBefore(deadline)) {
       if ('${(await adb(['logcat', '-d'])).stdout}'.contains(marker)) return true;
