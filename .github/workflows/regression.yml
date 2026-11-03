@@ -155,17 +155,31 @@ jobs:
         echo "$ANDROID_HOME/platform-tools" >> "$GITHUB_PATH"
     - run: flutter pub get
     - run: dart run tool/bundle_node.dart --for-tests
+    # Once more on a fresh emulator if the emulator itself went away during
+    # the tests (offline, its log ending without a word: 2 runs of 5 on
+    # 2026-11-03, at different steps); a failure with the emulator still up
+    # is the app's, and isn't tried again.
     - name: Acceptance tests
       run: |
-        # Assigned apart from export, so a failed boot stops the step.
-        device=$(tool/android_emulator.sh)
-        export ACCEPTANCE_DEVICE=$device
-        flutter test tool/acceptance_test.dart
+        for attempt in 1 2; do
+          # Assigned apart from export, so a failed boot stops the step.
+          device=$(tool/android_emulator.sh)
+          export ACCEPTANCE_DEVICE=$device
+          if flutter test tool/acceptance_test.dart; then exit 0; fi
+          if [ "$(adb -s "$device" get-state 2>/dev/null)" = device ]; then exit 1; fi
+          echo "::warning::the emulator went offline during the acceptance tests (attempt $attempt)"
+          sudo dmesg | grep -iE 'segfault|traps:|killed process|out of memory' | tail -n 20 || true
+          pkill -f qemu-system || true
+          adb kill-server || true
+        done
+        exit 1
     - if: always()
       run: |
         tail -n 60 /tmp/murmur-emulator.log || true
-        # Whether the kernel ended a process for want of memory.
-        sudo dmesg | grep -iE 'out of memory|killed process|oom' | tail -n 20 || true
+        # Whether the kernel ended a process (memory, a crash), and the
+        # emulator's own crash reports.
+        sudo dmesg | grep -iE 'out of memory|killed process|oom|segfault|traps:' | tail -n 20 || true
+        ls -la ~/.android/breakpad /tmp/android-*/emu-crash* 2>/dev/null | tail -n 20 || true
         free -m
 
   # In an iPhone simulator (tool/ios_simulator.sh boots one), against the
