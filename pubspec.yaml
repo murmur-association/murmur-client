@@ -45,7 +45,7 @@ dev_dependencies:
   ffi: ^2.1.0
   integration_test:
     sdk: flutter
-  # Reading .gitlab-ci.yml in test/ci_config_test.dart.
+  # Reading the workflows (.github/workflows) in test/ci_config_test.dart.
   yaml: ^3.1.4
 
 flutter:

@@ -1,4 +1,4 @@
-// What a release waits on, against the live network (.gitlab-ci.yml,
+// What a release waits on, against the live network (.github/workflows/release.yml,
 // public-node-tests): the client about to be released connects to a public
 // node, starts from the shipped checkpoint, and proves the supply, the burn
 // pool and an account against the tip's state root, and reads the fees.

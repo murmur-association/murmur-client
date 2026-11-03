@@ -1,5 +1,5 @@
 // Packages the built desktop app as an archive anyone can unpack and run,
-// for the release jobs (.gitlab-ci.yml: build-windows, build-linux). Run on
+// for the release (.github/workflows/release.yml: build-windows, build-linux). Run on
 // the platform that built it, after `flutter build windows|linux --release`
 // and `dart run tool/bundle_node.dart`:
 //

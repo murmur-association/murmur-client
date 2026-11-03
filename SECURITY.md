@@ -2,7 +2,7 @@
 
 ## Reporting a vulnerability
 
-Please report vulnerabilities privately, not in a public issue: use GitLab's **confidential issue** option on this project, and mark it confidential before submitting. Include what is affected, which version or commit, how to reproduce it, and what an attacker gains.
+Please report vulnerabilities privately, not in a public issue: on this project's GitHub page, **Security → Report a vulnerability** opens a private advisory only the maintainers see. Include what is affected, which version or commit, how to reproduce it, and what an attacker gains.
 
 We'll acknowledge the report within 7 days, keep you updated while we work on a fix, and credit you when the fix is released, unless you'd rather not be named. Please give us a reasonable time to release a fix before you disclose the issue publicly.
 

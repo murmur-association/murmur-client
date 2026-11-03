@@ -1,7 +1,8 @@
-// The pipeline's configuration (.gitlab-ci.yml), checked before a push
-// meets GitLab's own check: a line GitLab refuses fails the whole pipeline
-// at once, with no job run. (A script line holding ": " outside quotes is
-// read as a mapping: that refused a push once.)
+// The workflows' configuration (.github/workflows), checked before a push
+// meets GitHub's own check: a workflow GitHub refuses runs no job at all,
+// and a release or the scheduled release would then never start. (A run
+// line holding ": " outside quotes is read as a mapping: that refused a
+// push once, on the earlier CI.)
 
 import 'dart:io';
 
@@ -9,28 +10,58 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:yaml/yaml.dart';
 
 void main() {
-  final config = loadYaml(File('.gitlab-ci.yml').readAsStringSync()) as YamlMap;
+  final files = Directory('.github/workflows')
+      .listSync()
+      .whereType<File>()
+      .where((f) => f.path.endsWith('.yml'))
+      .toList()
+    ..sort((a, b) => a.path.compareTo(b.path));
+  final workflows = {for (final f in files) f.uri.pathSegments.last: loadYaml(f.readAsStringSync()) as YamlMap};
 
-  test('every script line of every job is a string', () {
+  Iterable<(String, String, YamlMap)> jobs() sync* {
+    for (final MapEntry(key: file, value: workflow) in workflows.entries) {
+      for (final MapEntry(:key, :value) in (workflow['jobs'] as YamlMap).entries) {
+        yield (file, key as String, value as YamlMap);
+      }
+    }
+  }
+
+  test('the regression, the release and the scheduled release are there', () {
+    expect(workflows.keys, containsAll(['regression.yml', 'release.yml', 'scheduled-release.yml']));
+  });
+
+  test('every step runs a string or uses an action', () {
     final bad = [
-      for (final MapEntry(:key, :value) in config.entries)
-        if (value is YamlMap)
-          for (final part in ['before_script', 'script', 'after_script'])
-            if (value[part] case final YamlList lines)
-              for (final line in lines)
-                if (line is! String) '$key.$part: $line',
+      for (final (file, job, value) in jobs())
+        if (value['steps'] case final YamlList steps)
+          for (final (i, step) in steps.indexed)
+            if (step is! YamlMap || (step['run'] is! String && step['uses'] is! String)) '$file $job step ${i + 1}: $step',
     ];
     expect(bad, isEmpty);
   });
 
-  test('each job extends only templates that are there', () {
+  test('each job needs only jobs of its own workflow', () {
     final missing = [
-      for (final MapEntry(:key, :value) in config.entries)
-        if (value is YamlMap)
-          if (value['extends'] case final Object extended)
-            for (final Object? name in extended is YamlList ? extended : [extended])
-              if (!config.containsKey(name)) '$key extends $name',
+      for (final (file, job, value) in jobs())
+        if (value['needs'] case final Object needs)
+          for (final Object? name in needs is YamlList ? needs : [needs])
+            if (!(workflows[file]!['jobs'] as YamlMap).containsKey(name)) '$file $job needs $name',
     ];
     expect(missing, isEmpty);
+  });
+
+  test('a workflow used by another is there, and can be called', () {
+    final bad = <String>[];
+    for (final (file, job, value) in jobs()) {
+      final uses = value['uses'];
+      if (uses is! String || !uses.startsWith('./.github/workflows/')) continue;
+      final called = workflows[uses.split('/').last];
+      if (called == null) {
+        bad.add('$file $job: $uses is missing');
+      } else if ((called['on'] as YamlMap?)?.containsKey('workflow_call') != true) {
+        bad.add('$file $job: $uses is not callable');
+      }
+    }
+    expect(bad, isEmpty);
   });
 }

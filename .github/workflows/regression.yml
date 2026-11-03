@@ -9,8 +9,8 @@
 # is accelerated here (on GitLab's it emulated the processor, about 50
 # minutes a run).
 #
-# Releases stay in .gitlab-ci.yml for now: the scheduled release, the
-# checkpoint checks, the page's deploy and the package registry.
+# Releases are release.yml (on a vX.Y.Z tag) and scheduled-release.yml
+# (daily, when the testnet checkpoint has aged).
 name: regression
 
 on:
@@ -29,7 +29,7 @@ concurrency:
 
 env:
   # The Flutter SDK every job builds with; raise it deliberately, together
-  # with the version used locally (and FLUTTER_VERSION in .gitlab-ci.yml).
+  # with the version used locally and in release.yml and scheduled-release.yml.
   FLUTTER_VERSION: "3.47.5"
   # The tests against the node must run, not skip themselves.
   MURMUR_REQUIRE_NODE: "1"

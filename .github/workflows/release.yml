@@ -1,0 +1,336 @@
+# Releases: on a version tag (v0.1.1) matching the version in pubspec.yaml,
+# or when the scheduled release (scheduled-release.yml) calls it with the tag
+# it has just pushed. In order:
+#
+# 1. The checks: the tag against pubspec.yaml, the generated localizations,
+#    the analyzer and every test (the node's included); the shipped testnet
+#    checkpoint against the live network (tool/check_checkpoint.dart, which
+#    is never its source); and the bounded read-only test of the client
+#    against the live testnet (test/live_release_test.dart). A failure here
+#    stops the release before anything is built.
+# 2. The builds: the public testnet page, and the Windows and Linux apps,
+#    each tried as packaged first (tool/desktop_smoke_test.dart). The desktop
+#    apps may fail without holding back the page: that release then has no
+#    such download.
+# 3. The page as an archive with LICENSE and NOTICE, and one SHA256SUMS for
+#    everything released; the page deployed to app.murmur.info (Cloudflare
+#    Pages); and the GitHub Release, with the archives and SHA256SUMS
+#    attached, so anyone can check the live page or a download against it.
+#
+# The deploy needs the secrets CLOUDFLARE_API_TOKEN (Account > Cloudflare
+# Pages > Edit) and CLOUDFLARE_ACCOUNT_ID, kept in the environment
+# `app.murmur.info`, which only `v*` tags may deploy to (README, "Releases
+# and deployment").
+name: release
+
+on:
+  push:
+    tags: ['v*.*.*']
+  workflow_call:
+    inputs:
+      tag:
+        description: The tag to release (vX.Y.Z), already pushed.
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ inputs.tag || github.ref_name }}
+
+env:
+  # The tag released: pushed, or handed over by the scheduled release.
+  TAG: ${{ inputs.tag || github.ref_name }}
+  # The Flutter SDK every job builds with; raise it deliberately, together
+  # with the version used locally and in the other workflows.
+  FLUTTER_VERSION: "3.47.5"
+  MURMUR_REQUIRE_NODE: "1"
+  # What building the Linux app needs, and what its smoke test needs to run
+  # it without a desktop: a display, a window manager, a session, a keyring.
+  LINUX_APP_PACKAGES: >-
+    clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev g++ libsecret-1-dev libjsoncpp-dev
+    xvfb openbox wmctrl xdotool dbus dbus-x11 gnome-keyring libgl1-mesa-dri libegl1 libgles2 procps
+
+jobs:
+  # The tag must be vX.Y.Z and match the version the app declares. Its
+  # commit, for the deploy's record (a called workflow's github.sha is the
+  # caller's, not the tag's).
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.tag.outputs.sha }}
+      title: ${{ steps.tag.outputs.title }}
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        ref: refs/tags/${{ env.TAG }}
+    - id: tag
+      run: |
+        [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "$TAG is not a release tag (vX.Y.Z)"; exit 1; }
+        version=$(sed -n 's/^version: *\([0-9.]*\).*/\1/p' pubspec.yaml)
+        [ "$TAG" = "v$version" ] || { echo "tag $TAG does not match pubspec.yaml version $version"; exit 1; }
+        echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+        echo "title=$(git log -1 --format=%s)" >> "$GITHUB_OUTPUT"
+
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        ref: refs/tags/${{ env.TAG }}
+    - uses: subosito/flutter-action@v2
+      with:
+        flutter-version: ${{ env.FLUTTER_VERSION }}
+        cache: true
+    - run: flutter pub get
+    - run: flutter gen-l10n && git diff --exit-code -- lib/l10n
+    - run: flutter analyze
+    - run: dart run tool/bundle_node.dart --for-tests
+    - run: flutter test
+
+  # The shipped checkpoint must be on the live testnet's chain, checked back
+  # to genesis by every node behind the seed name, and under a week old.
+  check-checkpoint:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        ref: refs/tags/${{ env.TAG }}
+    - uses: subosito/flutter-action@v2
+      with:
+        flutter-version: ${{ env.FLUTTER_VERSION }}
+        cache: true
+    - run: flutter pub get
+    - run: flutter test tool/check_checkpoint.dart
+
+  # The client about to be released, against the live testnet, read-only and
+  # bounded (a few requests whatever the chain's length). Only here, so that
+  # ordinary pushes never depend on the public network.
+  public-node-tests:
+    runs-on: ubuntu-latest
+    env:
+      MURMUR_NODE: testnet-seed.murmur.info:7878
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        ref: refs/tags/${{ env.TAG }}
+    - uses: subosito/flutter-action@v2
+      with:
+        flutter-version: ${{ env.FLUTTER_VERSION }}
+        cache: true
+    - run: flutter pub get
+    - run: flutter test test/live_release_test.dart
+
+  # The public testnet page: wss://node.murmur.info by default, nothing from
+  # other origins (CanvasKit served from the page, the fallback fonts copied
+  # next to it), web/_headers for its response headers.
+  build-web:
+    needs: [version, checks, check-checkpoint, public-node-tests]
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        ref: refs/tags/${{ env.TAG }}
+    - uses: subosito/flutter-action@v2
+      with:
+        flutter-version: ${{ env.FLUTTER_VERSION }}
+        cache: true
+    - uses: actions/cache@v4
+      with:
+        path: .font-cache
+        key: fallback-fonts
+    - run: flutter pub get
+    - run: >-
+        flutter build web --release --no-web-resources-cdn --base-href /
+        --dart-define=MURMUR_NODE_HOST=node.murmur.info --dart-define=MURMUR_NODE_PORT=443
+    - run: dart run tool/fetch_fallback_fonts.dart --cache .font-cache
+    - run: test -f build/web/_headers
+    - uses: actions/upload-artifact@v4
+      with:
+        name: web
+        path: build/web/
+        if-no-files-found: error
+
+  # The Windows app as a zip to unpack and run: the app, the pinned node
+  # beside it, the Visual C++ runtime and the notices. First a build whose
+  # own node stays on the demo network, tried as packaged (its node starts
+  # and stops with it, a node left by a killed app is replaced, a wallet is
+  # saved through Windows' storage), with software graphics beside that copy
+  # only; then the released one, with the testnet's seed as its node,
+  # checked to hold none of the test's files.
+  build-windows:
+    needs: [version, checks, check-checkpoint, public-node-tests]
+    runs-on: windows-latest
+    continue-on-error: true
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        ref: refs/tags/${{ env.TAG }}
+    - uses: subosito/flutter-action@v2
+      with:
+        flutter-version: ${{ env.FLUTTER_VERSION }}
+        cache: true
+    - name: Visual Studio's ATL (the secure-storage plugin needs atlstr.h)
+      run: |
+        $installer = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer"
+        $vs = & "$installer\vswhere.exe" -latest -products * -property installationPath
+        $atl = & "$installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.ATL -property installationPath
+        if (-not $atl) {
+          $p = Start-Process -Wait -PassThru -FilePath "$installer\setup.exe" -ArgumentList "modify --installPath `"$vs`" --add Microsoft.VisualStudio.Component.VC.ATL --quiet --norestart"
+          Write-Output "added ATL to ${vs}: exit code $($p.ExitCode)"
+          if ($p.ExitCode -ne 0 -and $p.ExitCode -ne 3010) { exit 1 }
+        }
+        exit 0
+    - run: flutter pub get
+    - run: flutter build windows --release --dart-define=MURMUR_LOCAL_NODE_SPEC=demo
+    - run: dart run tool/bundle_node.dart
+    - run: dart run tool/package_desktop.dart --tag smoke
+    - run: powershell -NoProfile -ExecutionPolicy Bypass -File tool\fetch_test_graphics.ps1 -Into build\desktop-package\murmur-client-smoke-windows-x64
+    - run: dart run tool/desktop_smoke_test.dart --wallet-storage build\desktop-package\murmur-client-smoke-windows-x64
+    - run: Remove-Item dist\murmur-client-smoke-windows-x64.zip
+    - run: >-
+        flutter build windows --release
+        --dart-define=MURMUR_NODE_HOST=testnet-seed.murmur.info --dart-define=MURMUR_NODE_PORT=7878
+    - run: dart run tool/bundle_node.dart
+    - run: dart run tool/package_desktop.dart --tag $env:TAG
+    - name: Nothing of the test's in what's released
+      run: |
+        $inside = tar -tf "dist\murmur-client-$env:TAG-windows-x64.zip"
+        $foreign = @($inside | Where-Object { $_ -match '(opengl32|libgallium_wgl|d3d10warp)\.dll$' })
+        if ($foreign.Count -gt 0) { Write-Output "the released package holds test-only files: $($foreign -join ', ')"; exit 1 }
+        Write-Output "the released package holds $($inside.Count) entries, none of the test's"
+    - uses: actions/upload-artifact@v4
+      with:
+        name: windows
+        path: dist/murmur-client-*-windows-x64.zip
+        if-no-files-found: error
+
+  # The Linux app as an archive to unpack and run, tried first the same way
+  # inside tool/linux_session.sh (a virtual display and a keyring), and again
+  # with the keyring locked and nobody to answer: the app must still start.
+  build-linux:
+    needs: [version, checks, check-checkpoint, public-node-tests]
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        ref: refs/tags/${{ env.TAG }}
+    - uses: subosito/flutter-action@v2
+      with:
+        flutter-version: ${{ env.FLUTTER_VERSION }}
+        cache: true
+    - run: sudo apt-get update -qq && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends $LINUX_APP_PACKAGES
+    - run: flutter pub get
+    - run: flutter build linux --release --dart-define=MURMUR_LOCAL_NODE_SPEC=demo
+    - run: dart run tool/bundle_node.dart
+    - run: dart run tool/package_desktop.dart --tag smoke
+    - run: tool/linux_session.sh dart run tool/desktop_smoke_test.dart --wallet-storage build/desktop-package/murmur-client-smoke-linux-x64
+    - run: MURMUR_KEYRING=locked MURMUR_KEYRING_PROMPT_SECONDS=5 tool/linux_session.sh dart run tool/desktop_smoke_test.dart build/desktop-package/murmur-client-smoke-linux-x64
+    - run: rm dist/murmur-client-smoke-linux-*.tar.gz
+    - run: >-
+        flutter build linux --release
+        --dart-define=MURMUR_NODE_HOST=testnet-seed.murmur.info --dart-define=MURMUR_NODE_PORT=7878
+    - run: dart run tool/bundle_node.dart
+    - run: dart run tool/package_desktop.dart --tag "$TAG"
+    - uses: actions/upload-artifact@v4
+      with:
+        name: linux
+        path: dist/murmur-client-*-linux-*.tar.gz
+        if-no-files-found: error
+
+  # The page as an archive with its license and notice, and one SHA256SUMS
+  # for it and each desktop app whose build succeeded.
+  package:
+    needs: [build-web, build-windows, build-linux]
+    if: ${{ !cancelled() && needs.build-web.result == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        ref: refs/tags/${{ env.TAG }}
+    - uses: actions/download-artifact@v4
+      with:
+        name: web
+        path: build/web
+    # Whichever desktop apps were built (a failed build left none).
+    - uses: actions/download-artifact@v4
+      with:
+        pattern: '{windows,linux}'
+        path: dist
+        merge-multiple: true
+    - run: |
+        mkdir -p dist
+        name="murmur-web-$TAG.zip"
+        (cd build/web && zip -q -r "../../dist/$name" .)
+        zip -q -j "dist/$name" LICENSE NOTICE
+        cd dist
+        for system in windows linux; do
+          ls murmur-client-*-$system-* >/dev/null 2>&1 || echo "::warning::no $system app in this release: its build failed"
+        done
+        sha256sum murmur-* > SHA256SUMS
+        cat SHA256SUMS
+    - uses: actions/upload-artifact@v4
+      with:
+        name: release
+        path: dist/
+        if-no-files-found: error
+
+  # The page to the Cloudflare Pages project. Only `v*` tags may deploy to
+  # the environment that holds its secrets.
+  deploy-web:
+    needs: [version, package]
+    if: ${{ !cancelled() && needs.package.result == 'success' }}
+    runs-on: ubuntu-latest
+    environment:
+      name: app.murmur.info
+      url: https://app.murmur.info
+    env:
+      CF_PAGES_PROJECT: murmur-app
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+    - uses: actions/download-artifact@v4
+      with:
+        name: web
+        path: build/web
+    - uses: actions/setup-node@v4
+      with:
+        node-version: '22'
+    - env:
+        SHA: ${{ needs.version.outputs.sha }}
+        TITLE: ${{ needs.version.outputs.title }}
+      run: >-
+        npx --yes wrangler@4 pages deploy build/web
+        --project-name "$CF_PAGES_PROJECT" --branch main
+        --commit-hash "$SHA" --commit-message "$TAG: $TITLE" --commit-dirty=true
+
+  # The GitHub Release, once the page is live: its CHANGELOG section, the
+  # archives and SHA256SUMS.
+  release:
+    needs: deploy-web
+    if: ${{ !cancelled() && needs.deploy-web.result == 'success' }}
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        ref: refs/tags/${{ env.TAG }}
+    - uses: actions/download-artifact@v4
+      with:
+        name: release
+        path: dist
+    - run: |
+        {
+          echo "Murmur client $TAG, live at https://app.murmur.info. Verify a download against SHA256SUMS."
+          echo
+          # This release's section of CHANGELOG.md, without its heading.
+          awk -v tag="$TAG" '$0 ~ "^## " tag ":" {on = 1; next} /^## / {on = 0} on' CHANGELOG.md
+        } > notes.md
+        gh release create "$TAG" dist/* --repo "$GITHUB_REPOSITORY" --verify-tag \
+          --title "Murmur client $TAG" --notes-file notes.md

@@ -1,5 +1,5 @@
 // Checks the shipped testnet checkpoint against the live network, before a
-// release is built (.gitlab-ci.yml):
+// release is built (.github/workflows/release.yml):
 //
 //   flutter test tool/check_checkpoint.dart
 //

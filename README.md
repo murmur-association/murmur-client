@@ -142,22 +142,23 @@ Without these steps the page still works, but fetches from Google's servers.
 
 ## Releases and deployment
 
-The page is served at **app.murmur.info** by Cloudflare Pages, like the project's site. Cloudflare's build machines have no Flutter, so GitLab CI builds the page and uploads it.
+The page is served at **app.murmur.info** by Cloudflare Pages, like the project's site. Cloudflare's build machines have no Flutter, so GitHub Actions builds the page and uploads it (`.github/workflows/release.yml`).
 
 **Making a release** by hand, the same way as the node's:
 1. Refresh the testnet checkpoint: `flutter test tool/refresh_checkpoint.dart`, and check its one-line change.
 2. Raise `version:` in `pubspec.yaml` (for example to `0.1.1`), and move the "Unreleased" notes in [CHANGELOG.md](CHANGELOG.md) under a heading for it.
 3. Commit, then tag and push: `git tag v0.1.1 && git push origin main v0.1.1`.
 
-A tag of the form `vX.Y.Z` runs these jobs, in order, after the usual checks (analysis, tests, a web build); other tags and plain commits get only those checks:
+A tag of the form `vX.Y.Z` runs the release workflow; plain commits get the regression (`.github/workflows/regression.yml`) instead. Its jobs, in order:
 
+- `version` stops if the tag isn't `v` plus the version in `pubspec.yaml`; `checks` runs the generated-localizations check, the analyzer and every test.
 - `check-checkpoint` stops the release if the shipped checkpoint isn't on the live testnet's chain, or is over a week old.
 - `public-node-tests` runs a short read-only test of the client against the live testnet.
-- `build-web-testnet` stops if the tag isn't `v` plus the version in `pubspec.yaml`. Otherwise it builds the testnet page as above, with `--base-href /`.
+- `build-web` builds the testnet page as above, with `--base-href /`.
 - `build-windows` and `build-linux` build the desktop apps for the testnet and archive each with its own node and the notices (and on Windows the Visual C++ runtime), as `murmur-client-vX.Y.Z-windows-x64.zip` and `murmur-client-vX.Y.Z-linux-x64.tar.gz`. Each first tries the packaged app with the same test (`tool/desktop_smoke_test.dart --wallet-storage`; on Linux inside `tool/linux_session.sh`, which gives it a virtual display and a keyring): its node starts and stops with it, a node left by a killed app is replaced, and a wallet is saved through the real keyring. If one fails, the release goes on without that download.
-- `package` zips the page with LICENSE and NOTICE as `murmur-web-vX.Y.Z.zip`, writes one `SHA256SUMS` for the page and the Windows app, and uploads them to the project's package registry, so anyone can check the live page or a download against a release, or host the page themselves.
-- `deploy-web` uploads the page with `wrangler pages deploy` to the Pages project `murmur-app` (`CF_PAGES_PROJECT` in `.gitlab-ci.yml`).
-- `release` then creates the GitLab Release "Murmur client vX.Y.Z", linking the archives, `SHA256SUMS` and the live page.
+- `package` zips the page with LICENSE and NOTICE as `murmur-web-vX.Y.Z.zip`, and writes one `SHA256SUMS` for the page and each desktop app built, so anyone can check the live page or a download against a release, or host the page themselves.
+- `deploy-web` uploads the page with `wrangler pages deploy` to the Pages project `murmur-app` (`CF_PAGES_PROJECT` in `release.yml`).
+- `release` then creates the GitHub Release "Murmur client vX.Y.Z", with its CHANGELOG section, the archives and `SHA256SUMS` attached.
 
 `web/_headers`, copied into the build, sets the response headers: a Content-Security-Policy that allows only the page's own files and `wss://` connections (to any node, since users can pick theirs), plus `no-referrer`, `nosniff` and HSTS. The engine needs `'wasm-unsafe-eval'` for CanvasKit and `'unsafe-inline'` styles.
 
@@ -166,22 +167,20 @@ One-time setup:
 1. In Cloudflare, **Workers & Pages → Create → Pages → Direct Upload**, named `murmur-app`. It needs a first upload; any placeholder folder will do, and the first CI deploy replaces it.
 2. In the project, **Custom domains → Set up a custom domain**: `app.murmur.info`. The DNS record is created for you.
 3. **My Profile → API Tokens → Create Token → Custom token**, with only **Account → Cloudflare Pages → Edit**.
-4. In GitLab, **Settings → CI/CD → Variables**, both with **Protect variable** ticked:
-   - `CLOUDFLARE_API_TOKEN`: the token, **Masked and hidden**;
-   - `CLOUDFLARE_ACCOUNT_ID`: the account ID from any domain's Overview page, **Masked**.
-5. In GitLab, **Settings → Repository → Protected tags**: protect `v*`, allowed to create for Maintainers. Protected variables reach only protected branches and tags, so an unprotected tag's deploy would have no token.
+4. On GitHub, **Settings → Environments → New environment** `app.murmur.info`:
+   - **Deployment branches and tags:** selected ones only, the branch `main` (the scheduled release deploys from it) and tags `v*`, so no other branch can reach the token;
+   - **Environment secrets:** `CLOUDFLARE_API_TOKEN` (the token) and `CLOUDFLARE_ACCOUNT_ID` (the account ID from any domain's Overview page).
+5. **Settings → Rules → Rulesets → New tag ruleset** on `v*`, restricting creation, update and deletion to maintainers, with **GitHub Actions** allowed to bypass (the scheduled release creates tags). A tag deploys the page, so not everyone who can push may make one.
+6. **Settings → Actions → General → Workflow permissions:** read and write, so the scheduled release can push its commit and tag. If `main` has a branch ruleset, let GitHub Actions bypass it too.
+7. **Settings → Code security → Private vulnerability reporting:** enable it ([SECURITY.md](SECURITY.md) points reporters there).
 
 The page is built for the root of its domain; to serve it from a subfolder, change `--base-href` to match.
 
-**The scheduled release.** A release ships a recent testnet checkpoint, and the release job refuses one over a week old. A scheduled pipeline keeps it fresh by itself: its one job, `scheduled-release`, takes a new checkpoint from the live network (`tool/refresh_checkpoint.dart`), runs the analyzer and every test on that change, raises the patch version, writes the CHANGELOG section (`tool/prepare_release.dart`), and pushes the commit to the default branch and its `vX.Y.Z` tag. The tag then releases as any other. With a checkpoint under a day old it does nothing; if anything fails, nothing is pushed. It keeps nothing between runs, and nobody reviews what it publishes: the release holds everything on the default branch, so keep that branch releasable. One-time setup in GitLab:
+**The scheduled release.** A release ships a recent testnet checkpoint, and the release job refuses one over a week old. A scheduled workflow (`.github/workflows/scheduled-release.yml`, daily at 06:00 UTC) keeps it fresh by itself: it takes a new checkpoint from the live network (`tool/refresh_checkpoint.dart`), runs the analyzer and every test on that change, raises the patch version, writes the CHANGELOG section (`tool/prepare_release.dart`), pushes the commit to the default branch and its `vX.Y.Z` tag, and then runs the release workflow on that tag. With a checkpoint under a day old it does nothing; if anything fails before the push, nothing is pushed. It keeps nothing between runs, and nobody reviews what it publishes: the release holds everything on the default branch, so keep that branch releasable. It needs no token of its own (the workflow's suffices), and does nothing until the environment above holds the Cloudflare secrets.
 
-1. **Settings → Access tokens:** add a project access token, role **Maintainer**, scope **write_repository**. Maintainers may push to the protected default branch and create `v*` tags; this token can therefore release, so keep it only in the variable below.
-2. **Settings → CI/CD → Variables:** add it as `RELEASE_BOT_TOKEN`, **Masked and hidden** and **Protected**.
-3. **Build → Pipeline schedules:** a new schedule on the default branch, weekly (for example `0 6 * * 1`). It needs no variables.
+To run it at once, **Actions → scheduled release → Run workflow**. To stop automatic releases, disable that workflow (**⋯ → Disable workflow**); releases by hand (`flutter test tool/refresh_checkpoint.dart`, the version, the CHANGELOG, the tag) work as before.
 
-To run it at once, press **Run** on the schedule. To stop automatic releases, deactivate the schedule; releases by hand (`flutter test tool/refresh_checkpoint.dart`, the version, the CHANGELOG, the tag) work as before.
-
-After `dart run tool/bundle_node.dart --for-tests`, which downloads the pinned `murmur-node` release (`tool/node_release.dart`) and checks it against its `SHA256SUMS`, `flutter test` also runs `test/node_test.dart`, as CI does: the node builds demo chains (`murmur-node demo-chain`), the test starts it on them, and checks sync, checkpoints, reorganizations, proofs, filters, the local copy, sending, flat threads, flags, the node's index, public names and invitations, with nothing to set up first. With `MURMUR_NODE=host:port` set (for example `MURMUR_NODE=testnet-seed.murmur.info:7878`), `test/live_release_test.dart` runs a quick read-only check against that public node, as the release pipeline does, and `test/live_node_test.dart` the longer ones.
+After `dart run tool/bundle_node.dart --for-tests`, which downloads the pinned `murmur-node` release (`tool/node_release.dart`) and checks it against its `SHA256SUMS`, `flutter test` also runs `test/node_test.dart`, as CI does: the node builds demo chains (`murmur-node demo-chain`), the test starts it on them, and checks sync, checkpoints, reorganizations, proofs, filters, the local copy, sending, flat threads, flags, the node's index, public names and invitations, with nothing to set up first. With `MURMUR_NODE=host:port` set (for example `MURMUR_NODE=testnet-seed.murmur.info:7878`), `test/live_release_test.dart` runs a quick read-only check against that public node, as the release workflow does, and `test/live_node_test.dart` the longer ones.
 
 ## Trying it locally
 

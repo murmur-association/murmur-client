@@ -1,5 +1,5 @@
 // Prepares the next patch release around a refreshed checkpoint, for the
-// scheduled release job (.gitlab-ci.yml, scheduled-release): raises
+// scheduled release (.github/workflows/scheduled-release.yml): raises
 // `version:` in pubspec.yaml, gives CHANGELOG.md a section for it (taking
 // the notes waiting under "Unreleased" along), and writes the version to
 // build/release-version for the job to commit and tag.

@@ -1,0 +1,120 @@
+# The scheduled release: a release made by itself when the testnet
+# checkpoint has aged, so first sessions never have many headers to check.
+# Daily; "Run workflow" on the Actions tab starts it at once.
+#
+# 1. tool/refresh_checkpoint.dart takes a new checkpoint from the live
+#    network, taking no node's word: every node is asked separately, from
+#    the checkpoint shipped now, checked back to genesis, and all must
+#    agree. With a checkpoint under a day old the run ends here: no release.
+# 2. The same checks as any push run on that change: the generated
+#    localizations, the analyzer and every test, the node's included.
+# 3. tool/prepare_release.dart raises the patch version and gives
+#    CHANGELOG.md its section (with the notes waiting under "Unreleased":
+#    the release holds everything on the default branch).
+# 4. The commit goes to the default branch (not forced: it fails if the
+#    branch moved meanwhile) and its tag `vX.Y.Z` after it; then the release
+#    workflow runs on that tag, checking everything again before it builds,
+#    deploys and publishes. (A push made with the workflow's own token starts
+#    no workflow, so it's called from here rather than by the tag.)
+#
+# A failure anywhere before the push leaves nothing pushed. Until the
+# Cloudflare secrets are set up (README, "Releases and deployment"), it does
+# nothing: no release can deploy without them.
+name: scheduled release
+
+on:
+  schedule:
+  - cron: '0 6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: scheduled-release
+
+env:
+  FLUTTER_VERSION: "3.47.5"
+  MURMUR_REQUIRE_NODE: "1"
+
+jobs:
+  # Whether releases can deploy from here yet, and this is the default branch.
+  ready:
+    runs-on: ubuntu-latest
+    environment: app.murmur.info
+    outputs:
+      ready: ${{ steps.ready.outputs.ready }}
+    steps:
+    - id: ready
+      env:
+        HAS_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN != '' && secrets.CLOUDFLARE_ACCOUNT_ID != '' }}
+        # (A schedule's event carries no repository details to compare with.)
+        DEFAULT: ${{ github.ref == 'refs/heads/main' }}
+      run: |
+        if [ "$DEFAULT" != true ]; then
+          echo "::notice::not the default branch: no release"
+          echo "ready=false" >> "$GITHUB_OUTPUT"
+        elif [ "$HAS_TOKEN" != true ]; then
+          echo "::notice::the Cloudflare secrets aren't set up in the environment app.murmur.info: no release (README, \"Releases and deployment\")"
+          echo "ready=false" >> "$GITHUB_OUTPUT"
+        else
+          echo "ready=true" >> "$GITHUB_OUTPUT"
+        fi
+
+  prepare:
+    needs: ready
+    if: needs.ready.outputs.ready == 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.release.outputs.tag }}
+    steps:
+    - uses: actions/checkout@v4
+    - uses: subosito/flutter-action@v2
+      with:
+        flutter-version: ${{ env.FLUTTER_VERSION }}
+        cache: true
+    - run: flutter pub get
+    - run: flutter test tool/refresh_checkpoint.dart
+    - id: changed
+      run: |
+        if git diff --quiet -- lib/protocol/network.dart; then
+          echo "::notice::the checkpoint is less than a day old: no release"
+          echo "changed=false" >> "$GITHUB_OUTPUT"
+        else
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+        fi
+    - if: steps.changed.outputs.changed == 'true'
+      run: flutter gen-l10n && git diff --exit-code -- lib/l10n
+    - if: steps.changed.outputs.changed == 'true'
+      run: flutter analyze
+    - if: steps.changed.outputs.changed == 'true'
+      run: dart run tool/bundle_node.dart --for-tests
+    - if: steps.changed.outputs.changed == 'true'
+      run: flutter test
+    - id: release
+      if: steps.changed.outputs.changed == 'true'
+      env:
+        RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      run: |
+        dart run tool/prepare_release.dart
+        version=$(cat build/release-version)
+        height=$(sed -n "s/.*checkpoint: Checkpoint(\([0-9]*\), '[0-9a-f]*').*/\1/p" lib/protocol/network.dart)
+        echo "releasing v$version with the checkpoint at block $height"
+        git config user.name "Scheduled release (CI)"
+        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        git commit -m "Release v$version: testnet checkpoint at block $height" \
+          -m "Made by the scheduled release ($RUN_URL): tool/refresh_checkpoint.dart took the checkpoint from the live network (the testnet's nodes agreed on it, on a chain checked from genesis that holds the checkpoint shipped before), and analyze and the tests passed on it." \
+          -- lib/protocol/network.dart pubspec.yaml CHANGELOG.md
+        git tag "v$version"
+        # The branch first, not forced; then the tag.
+        git push origin "HEAD:refs/heads/${GITHUB_REF_NAME}"
+        git push origin "refs/tags/v$version"
+        echo "tag=v$version" >> "$GITHUB_OUTPUT"
+
+  release:
+    needs: prepare
+    if: needs.prepare.outputs.tag != ''
+    uses: ./.github/workflows/release.yml
+    with:
+      tag: ${{ needs.prepare.outputs.tag }}
+    secrets: inherit
