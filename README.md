@@ -5,7 +5,7 @@ A Flutter light client for the Murmur chain, speaking **protocol 17** (networks 
 - read threads, newest activity first, each with its replies from the newest down, and see which reply an answer is for;
 - browse blocks, transactions and addresses, and search by height, txid, block hash or address;
 - keep a wallet, and sign and send threads (Orphans), Replies, transfers (Raw), Flags and public names (Names);
-- use it in English, Spanish, Italian, Portuguese, German, Dutch, Arabic, Chinese or Japanese.
+- use it in English, Spanish, French, Italian, Portuguese, German, Dutch, Arabic, Chinese, Japanese or Korean.
 
 ## The four tabs
 
@@ -136,7 +136,7 @@ Nothing in the page can work around this without a third party, such as a DNS-ov
 
 **No requests to other sites.** The page loads everything from its own origin, and its only other connection is the node. Two build steps make that true:
 - `--no-web-resources-cdn` serves CanvasKit from the page instead of gstatic.com.
-- `tool/fetch_fallback_fonts.dart` copies the Noto fonts the engine falls back to (Arabic, Chinese, Japanese, emoji, other scripts) into `build/web/fallback-fonts/`. That's about 20 MiB, of which a browser downloads only the slices on screen. `web/flutter_bootstrap.js` points the engine there instead of fonts.gstatic.com.
+- `tool/fetch_fallback_fonts.dart` copies the Noto fonts the engine falls back to (Arabic, Chinese, Japanese, Korean, emoji, other scripts) into `build/web/fallback-fonts/`. That's about 20 MiB, of which a browser downloads only the slices on screen. `web/flutter_bootstrap.js` points the engine there instead of fonts.gstatic.com.
 
 Without these steps the page still works, but fetches from Google's servers.
 

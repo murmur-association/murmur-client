@@ -2,6 +2,10 @@
 
 Newest first. Each release is a `vX.Y.Z` tag matching `version` in `pubspec.yaml`; see [README](README.md#releases-and-deployment). Entries marked **Breaking** need action from users.
 
+## Unreleased
+
+- **New: French and Korean.** The app speaks both, follows a French or Korean device by itself, and the Threads language filter recognises threads written in them.
+
 ## v0.10.3: scheduled release, with what was waiting (2026-11-04)
 
 - **Changed: the testnet checkpoint** is now block 8,500, refreshed from the live network by the scheduled release.

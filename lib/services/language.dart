@@ -2,15 +2,16 @@
 // filter. Messages carry no language tag (PROTOCOL.md Section 2.4: content
 // is a salt and the text), so the client reads it from the text itself:
 //
-// - the script settles Arabic, Japanese (kana) and Chinese (Han without kana);
+// - the script settles Arabic, Korean (Hangul), Japanese (kana) and Chinese
+//   (Han without kana);
 // - Latin-script text is scored by the common words of each language the
-//   app speaks, plus a few letters only some of them use (ñ, ã, ß...).
+//   app speaks, plus a few letters only some of them use (ñ, ã, ß, œ...).
 //
 // Short or mixed text often can't be told apart; then the answer is null
 // ("undetected") rather than a guess. Nothing leaves the device.
 
 /// The languages the detector can name: the app's own.
-const detectableLanguages = ['en', 'es', 'it', 'pt', 'de', 'nl', 'ar', 'zh', 'ja'];
+const detectableLanguages = ['en', 'es', 'fr', 'it', 'pt', 'de', 'nl', 'ar', 'zh', 'ja', 'ko'];
 
 /// The filter's name for text whose language couldn't be told.
 const undetectedLanguage = 'und';
@@ -31,6 +32,16 @@ const Map<String, Set<String>> _commonWords = {
     'sin', 'sobre', 'también', 'me', 'hay', 'donde', 'quien', 'desde', 'todo', 'nos', 'cuando', 'hola',
     'gracias', 'bueno', 'está', 'están', 'ser', 'son', 'fue', 'tiene', 'hacer', 'eso', 'qué', 'cómo', 'yo',
     'tú', 'mi', 'tu', 'pues', 'aquí', 'estoy', 'soy', 'mucho', 'algo', 'nada', 'entonces',
+  },
+  // Words other languages share with French ('a', 'on', 'ma', 'es'...) are
+  // left out: they would count for French in English or Italian text.
+  'fr': {
+    'le', 'la', 'les', 'de', 'des', 'du', 'et', 'est', 'un', 'une', 'que', 'qui', 'pas', 'ne', 'je', //
+    'tu', 'il', 'elle', 'nous', 'vous', 'ils', 'elles', 'sont', 'pour', 'dans', 'sur', 'avec', 'ce', 'cette',
+    'mais', 'ou', 'où', 'très', 'merci', 'bonjour', 'salut', 'oui', 'non', 'c\'est', 'j\'ai', 'n\'est',
+    'qu\'il', 'suis', 'être', 'avoir', 'fait', 'plus', 'tout', 'aussi', 'bien', 'quoi', 'pourquoi', 'comment',
+    'quand', 'ici', 'rien', 'quelque', 'alors', 'au', 'aux', 'mon', 'mes', 'ton', 'votre', 'vos', 'leur',
+    'avez', 'avons', 'peut', 'faut', 'déjà', 'encore', 'chose', 'penses', 'pense', 'cet', 'ça',
   },
   'it': {
     'il', 'lo', 'la', 'i', 'gli', 'le', 'di', 'che', 'e', 'è', 'un', 'una', 'per', 'non', 'in', 'con', //
@@ -66,6 +77,7 @@ const Map<String, Set<String>> _commonWords = {
 /// weight they add.
 const Map<String, Map<String, int>> _markers = {
   'es': {'ñ': 3, '¿': 3, '¡': 3, 'ó': 1, 'á': 1, 'í': 1},
+  'fr': {'œ': 3, 'û': 2, 'ë': 2, 'î': 2, 'ï': 2, 'â': 1, 'è': 1, 'ê': 1, 'eau': 1},
   'pt': {'ã': 3, 'õ': 3, 'ç': 2, 'ê': 1, 'ô': 1, 'á': 1},
   'de': {'ß': 3, 'ä': 2, 'ö': 2, 'ü': 2, 'sch': 1},
   'nl': {'ij': 2, 'oe': 1, 'aa': 1, 'ee': 1},
@@ -74,6 +86,8 @@ const Map<String, Map<String, int>> _markers = {
 
 bool _isArabic(int c) =>
     (c >= 0x0600 && c <= 0x06FF) || (c >= 0x0750 && c <= 0x077F) || (c >= 0xFB50 && c <= 0xFDFF) || (c >= 0xFE70 && c <= 0xFEFF);
+bool _isHangul(int c) =>
+    (c >= 0xAC00 && c <= 0xD7A3) || (c >= 0x1100 && c <= 0x11FF) || (c >= 0x3130 && c <= 0x318F);
 bool _isKana(int c) => (c >= 0x3040 && c <= 0x30FF) || (c >= 0x31F0 && c <= 0x31FF) || (c >= 0xFF66 && c <= 0xFF9D);
 bool _isHan(int c) => (c >= 0x4E00 && c <= 0x9FFF) || (c >= 0x3400 && c <= 0x4DBF) || (c >= 0xF900 && c <= 0xFAFF);
 bool _isLatinLetter(int c) =>
@@ -85,10 +99,12 @@ final _noise = RegExp(r'\S*(://|www\.|@|\d)\S*');
 /// The language `text` is most likely in (one of [detectableLanguages]), or
 /// null when it can't be told: too short, mixed, or another language.
 String? detectLanguage(String text) {
-  var arabic = 0, kana = 0, han = 0, latin = 0;
+  var arabic = 0, hangul = 0, kana = 0, han = 0, latin = 0;
   for (final c in text.runes) {
     if (_isArabic(c)) {
       arabic++;
+    } else if (_isHangul(c)) {
+      hangul++;
     } else if (_isKana(c)) {
       kana++;
     } else if (_isHan(c)) {
@@ -97,10 +113,12 @@ String? detectLanguage(String text) {
       latin++;
     }
   }
-  final letters = arabic + kana + han + latin;
+  final letters = arabic + hangul + kana + han + latin;
   if (letters == 0) return null;
-  // Scripts: most of the letters, so a quoted word doesn't decide.
+  // Scripts: most of the letters, so a quoted word doesn't decide. Korean
+  // may carry a few Han characters (hanja), which don't make it Chinese.
   if (arabic * 2 > letters) return 'ar';
+  if (hangul * 2 > letters) return 'ko';
   if (kana > 0 && (kana + han) * 2 > letters) return 'ja';
   if (han * 2 > letters) return 'zh';
   if (latin * 2 <= letters) return null;

@@ -16,6 +16,11 @@ void main() {
         '¿Qué opinas de esta idea?',
         'Gracias, me ha ayudado mucho.',
       ],
+      'fr': [
+        'Je pense que la nouvelle version est prête, mais il faut la tester sur le testnet avant.',
+        'Qu\'est-ce que tu penses de cette idée ?',
+        'Merci, ça m\'a vraiment aidé !',
+      ],
       'it': [
         'Penso che la nuova versione sia pronta, ma dobbiamo provarla prima.',
         'Cosa ne pensi di questa idea?',
@@ -39,6 +44,7 @@ void main() {
       'ar': ['أعتقد أن الإصدار الجديد جاهز، لكن يجب أن نختبره أولاً.'],
       'zh': ['我认为新版本已经准备好了，但我们应该先测试一下。'],
       'ja': ['新しいバージョンは準備できていると思いますが、まずテストするべきです。'],
+      'ko': ['새 버전이 준비된 것 같지만, 먼저 테스트넷에서 시험해 봐야 합니다.', '이 아이디어 어떻게 생각하세요?'],
     };
     for (final MapEntry(key: lang, value: texts) in samples.entries) {
       for (final text in texts) {

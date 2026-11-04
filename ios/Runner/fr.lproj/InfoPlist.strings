@@ -1,0 +1,2 @@
+/* Generated from lib/l10n/app_fr.arb by tool/ios_localizations.dart: edit those. */
+"NSFaceIDUsageDescription" = "Confirmez votre identité avant que la clé de votre portefeuille soit utilisée ou affichée.";

@@ -21,6 +21,7 @@ extension L10nContext on BuildContext {
 const languageNames = {
   'en': 'English',
   'es': 'Español',
+  'fr': 'Français',
   'it': 'Italiano',
   'pt': 'Português',
   'de': 'Deutsch',
@@ -28,6 +29,7 @@ const languageNames = {
   'ar': 'العربية',
   'zh': '中文',
   'ja': '日本語',
+  'ko': '한국어',
 };
 
 /// A whole number with the locale's digit grouping: 1,234,567 in English,

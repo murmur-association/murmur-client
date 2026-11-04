@@ -29,11 +29,14 @@ void main() {
   test('a device in none of the app\'s languages gets English, and one of them its own', () {
     Locale shown(List<Locale> device) => basicLocaleListResolution(device, AppLocalizations.supportedLocales);
     // The first supported language is the fallback: once it was Arabic, the
-    // first by its code, on every French or Korean device.
-    expect(shown(const [Locale('fr', 'FR')]), const Locale('en'));
-    expect(shown(const [Locale('ko')]), const Locale('en'));
+    // first by its code, on every device in a language the app lacked (French
+    // and Korean then; Swedish and Turkish now).
+    expect(shown(const [Locale('sv', 'SE')]), const Locale('en'));
+    expect(shown(const [Locale('tr')]), const Locale('en'));
     expect(shown(const []), const Locale('en'));
-    expect(shown(const [Locale('fr'), Locale('de', 'CH')]), const Locale('de'));
+    expect(shown(const [Locale('sv'), Locale('de', 'CH')]), const Locale('de'));
+    expect(shown(const [Locale('fr', 'CA')]), const Locale('fr'));
+    expect(shown(const [Locale('ko', 'KR')]), const Locale('ko'));
     for (final code in languageNames.keys) {
       expect(shown([Locale(code)]), Locale(code));
     }

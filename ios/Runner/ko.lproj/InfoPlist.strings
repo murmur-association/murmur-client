@@ -1,0 +1,2 @@
+/* Generated from lib/l10n/app_ko.arb by tool/ios_localizations.dart: edit those. */
+"NSFaceIDUsageDescription" = "지갑 키를 사용하거나 표시하기 전에 본인임을 확인하세요.";
