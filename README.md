@@ -170,7 +170,7 @@ One-time setup:
 4. On GitHub, **Settings → Environments → New environment** `app.murmur.info`:
    - **Deployment branches and tags:** selected ones only, the branch `main` (the scheduled release deploys from it) and tags `v*`, so no other branch can reach the token;
    - **Environment secrets:** `CLOUDFLARE_API_TOKEN` (the token) and `CLOUDFLARE_ACCOUNT_ID` (the account ID from any domain's Overview page).
-5. **Settings → Rules → Rulesets → New tag ruleset** on `v*`, restricting creation, update and deletion to maintainers, with **GitHub Actions** allowed to bypass (the scheduled release creates tags). A tag deploys the page, so not everyone who can push may make one.
+5. **Settings → Rules → Rulesets → New tag ruleset** "Release tags" on `v*`, restricting update and deletion, with the repository's admins allowed to bypass: a released tag can't be moved to another commit or removed. Creation stays open, because GitHub won't let its Actions app bypass a ruleset here and the scheduled release creates tags with the workflow's own token; a tag made by anyone with write access still releases only after the whole regression passes on it. Restricting creation too would need the scheduled release to push with a credential of its own (a GitHub App, or a fine-grained token) named as the bypass.
 6. **Settings → Actions → General → Workflow permissions:** read and write, so the scheduled release can push its commit and tag. If `main` has a branch ruleset, let GitHub Actions bypass it too.
 7. **Settings → Code security → Private vulnerability reporting:** enable it ([SECURITY.md](SECURITY.md) points reporters there).
 
