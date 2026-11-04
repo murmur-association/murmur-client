@@ -2,8 +2,9 @@
 # or when the scheduled release (scheduled-release.yml) calls it with the tag
 # it has just pushed. In order:
 #
-# 1. The checks: the tag against pubspec.yaml, the generated localizations,
-#    the analyzer and every test (the node's included); the shipped testnet
+# 1. The checks: the tag against pubspec.yaml; the whole regression on the
+#    tag's commit (regression.yml: the analyzer, every test, the acceptance
+#    tests on every flavour, the desktop smoke tests); the shipped testnet
 #    checkpoint against the live network (tool/check_checkpoint.dart, which
 #    is never its source); and the bounded read-only test of the client
 #    against the live testnet (test/live_release_test.dart). A failure here
@@ -73,21 +74,17 @@ jobs:
         echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
         echo "title=$(git log -1 --format=%s)" >> "$GITHUB_OUTPUT"
 
-  checks:
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v4
-      with:
-        ref: refs/tags/${{ env.TAG }}
-    - uses: subosito/flutter-action@v2
-      with:
-        flutter-version: ${{ env.FLUTTER_VERSION }}
-        cache: true
-    - run: flutter pub get
-    - run: flutter gen-l10n && git diff --exit-code -- lib/l10n
-    - run: flutter analyze
-    - run: dart run tool/bundle_node.dart --for-tests
-    - run: flutter test
+  # The whole regression (regression.yml) on the tag's own commit: the
+  # generated localizations, the analyzer and every test, the acceptance
+  # tests on every flavour and the desktop smoke tests. Nothing is built
+  # unless all of it passes. (A release once went out on a commit whose
+  # regression had failed: 2026-11-04, v0.10.3, on iOS. And the scheduled
+  # release's own commit, pushed with the workflow's token, gets no
+  # regression of its own.)
+  regression:
+    uses: ./.github/workflows/regression.yml
+    with:
+      ref: ${{ format('refs/tags/{0}', inputs.tag || github.ref_name) }}
 
   # The shipped checkpoint must be on the live testnet's chain, checked back
   # to genesis by every node behind the seed name, and under a week old.
@@ -126,7 +123,7 @@ jobs:
   # other origins (CanvasKit served from the page, the fallback fonts copied
   # next to it), web/_headers for its response headers.
   build-web:
-    needs: [version, checks, check-checkpoint, public-node-tests]
+    needs: [version, regression, check-checkpoint, public-node-tests]
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
@@ -160,7 +157,7 @@ jobs:
   # only; then the released one, with the testnet's seed as its node,
   # checked to hold none of the test's files.
   build-windows:
-    needs: [version, checks, check-checkpoint, public-node-tests]
+    needs: [version, regression, check-checkpoint, public-node-tests]
     runs-on: windows-latest
     continue-on-error: true
     defaults:
@@ -213,7 +210,7 @@ jobs:
   # inside tool/linux_session.sh (a virtual display and a keyring), and again
   # with the keyring locked and nobody to answer: the app must still start.
   build-linux:
-    needs: [version, checks, check-checkpoint, public-node-tests]
+    needs: [version, regression, check-checkpoint, public-node-tests]
     runs-on: ubuntu-latest
     continue-on-error: true
     steps:

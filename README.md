@@ -151,7 +151,7 @@ The page is served at **app.murmur.info** by Cloudflare Pages, like the project'
 
 A tag of the form `vX.Y.Z` runs the release workflow; plain commits get the regression (`.github/workflows/regression.yml`) instead. Its jobs, in order:
 
-- `version` stops if the tag isn't `v` plus the version in `pubspec.yaml`; `checks` runs the generated-localizations check, the analyzer and every test.
+- `version` stops if the tag isn't `v` plus the version in `pubspec.yaml`; `regression` runs the whole regression (`regression.yml`) on the tagged commit, every acceptance flavour included: nothing is built unless it passes.
 - `check-checkpoint` stops the release if the shipped checkpoint isn't on the live testnet's chain, or is over a week old.
 - `public-node-tests` runs a short read-only test of the client against the live testnet.
 - `build-web` builds the testnet page as above, with `--base-href /`.

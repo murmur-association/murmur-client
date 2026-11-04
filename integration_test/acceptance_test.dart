@@ -44,6 +44,12 @@ void main() {
   final answerText = 'Acceptance answer $stamp';
   final publicName = 'Tester ${stamp % 10000}';
 
+  // Each test ends within its own limit, where only the runner's limit for
+  // the whole suite used to (150 minutes in slow mode): a test that hangs
+  // fails in minutes, saying which, and a release waiting on the regression
+  // isn't held for hours. The longest takes a few minutes.
+  const perTest = Timeout(acceptanceSlow ? Duration(minutes: 60) : Duration(minutes: 20));
+
   testWidgets('a wallet from its seed, a thread, a reply to it, an invitation card, and a public name with a picture', (tester) async {
     freshDevice();
     final app = AppDriver(tester);
@@ -191,7 +197,7 @@ void main() {
     await app.backHome();
     await app.openTab(l.tabWallet);
     await app.waitUntil(() => app.showsPicture(me), what: "the wallet's picture in place of its mark");
-  });
+  }, timeout: perTest);
 
   testWidgets('after a restart: the wallet, the thread with its reply, the card and the picture are all there',
       (tester) async {
@@ -223,7 +229,7 @@ void main() {
     await app.waitUntil(() => inviteStore.invites.length == 1, what: 'the card kept on the device');
     // Listing asks nothing; its code is still locked.
     expect(app.asksPassphrase, isFalse);
-  });
+  }, timeout: perTest);
 
   testWidgets('notifications: a reply from someone else is told while the app is away, once, and opens its thread',
       (tester) async {
@@ -284,7 +290,7 @@ void main() {
     expect(app.prefs.notifyTopics, isEmpty);
     // Not on a machine with no desktop to show them on (a CI runner's
     // service session).
-  }, skip: acceptanceNoNotifications);
+  }, skip: acceptanceNoNotifications, timeout: perTest);
 
   testWidgets("a desktop's own node: it runs beside the app, and mines on the graphics card or says why not",
       (tester) async {
@@ -330,5 +336,5 @@ void main() {
     await app.flip(l.localNodeRun);
     await app.waitUntil(() => node.state == LocalNodeState.stopped, what: "the app's own node to stop");
     expect(find.text(l.localNodeGpu), findsNothing);
-  }, skip: !acceptanceOwnNode);
+  }, skip: !acceptanceOwnNode, timeout: perTest);
 }

@@ -18,14 +18,24 @@ on:
     branches: ['**']
   pull_request:
   workflow_dispatch:
+  # The release runs the whole regression on the commit it releases, and
+  # builds nothing unless it passes (release.yml).
+  workflow_call:
+    inputs:
+      ref:
+        description: The commit to check (a tag), checked out by every job.
+        required: true
+        type: string
 
 permissions:
   contents: read
 
-# A newer push to the same branch replaces a run still going.
+# A newer push to the same branch replaces a run still going. A release's
+# regression is a group of its own, never cancelled: a push to main while
+# the scheduled release runs must not take its check away.
 concurrency:
-  group: regression-${{ github.ref }}
-  cancel-in-progress: true
+  group: ${{ inputs.ref && format('release-regression-{0}', inputs.ref) || format('regression-{0}', github.ref) }}
+  cancel-in-progress: ${{ !inputs.ref }}
 
 env:
   # The Flutter SDK every job builds with; raise it deliberately, together
@@ -45,6 +55,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
+      with:
+        ref: ${{ inputs.ref || github.sha }}
     - uses: subosito/flutter-action@v2
       with:
         flutter-version: ${{ env.FLUTTER_VERSION }}
@@ -58,6 +70,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
+      with:
+        ref: ${{ inputs.ref || github.sha }}
     - uses: subosito/flutter-action@v2
       with:
         flutter-version: ${{ env.FLUTTER_VERSION }}
@@ -73,6 +87,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
+      with:
+        ref: ${{ inputs.ref || github.sha }}
     - uses: subosito/flutter-action@v2
       with:
         flutter-version: ${{ env.FLUTTER_VERSION }}
@@ -95,6 +111,8 @@ jobs:
       ACCEPTANCE_DEVICE: ${{ matrix.device }}
     steps:
     - uses: actions/checkout@v4
+      with:
+        ref: ${{ inputs.ref || github.sha }}
     - uses: subosito/flutter-action@v2
       with:
         flutter-version: ${{ env.FLUTTER_VERSION }}
@@ -115,7 +133,7 @@ jobs:
           chrome*) dart run tool/fetch_test_browser.dart chrome;;
           firefox) dart run tool/fetch_test_browser.dart firefox;;
         esac
-    - run: tool/linux_session.sh flutter test tool/acceptance_test.dart
+    - run: tool/linux_session.sh flutter test --reporter expanded tool/acceptance_test.dart
 
   # In an Android emulator, accelerated by KVM. The runner answers the
   # system's screens from the host (tool/android_system.dart): the
@@ -133,6 +151,8 @@ jobs:
       GRADLE_OPTS: -Dorg.gradle.daemon=false -Dkotlin.compiler.execution.strategy=in-process
     steps:
     - uses: actions/checkout@v4
+      with:
+        ref: ${{ inputs.ref || github.sha }}
     - name: KVM for the runner's user
       run: |
         echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -179,7 +199,7 @@ jobs:
           # Assigned apart from export, so a failed boot stops the step.
           device=$(tool/android_emulator.sh)
           export ACCEPTANCE_DEVICE=$device
-          if flutter test tool/acceptance_test.dart; then exit 0; fi
+          if flutter test --reporter expanded tool/acceptance_test.dart; then exit 0; fi
           if [ "$(adb -s "$device" get-state 2>/dev/null)" = device ]; then exit 1; fi
           echo "::warning::the emulator went offline during the acceptance tests (attempt $attempt)"
           sudo dmesg | grep -iE 'segfault|traps:|killed process|out of memory' | tail -n 20 || true
@@ -202,19 +222,20 @@ jobs:
 
   # In an iPhone simulator (tool/ios_simulator.sh boots one), against the
   # node's macOS build (universal: Intel and Apple silicon). Both Apple jobs
-  # run on Intel Macs for now: on 2026-11-03 GitHub's Apple silicon runners
-  # took no job twice in a row ("capacity constraints"); back to
-  # macos-latest once they do. Intel Macs are slow: the test node, mining
-  # at 1% of a core, left the suite's waits without a block, so it waits six
-  # times as long there (ACCEPTANCE_SLOW, as for an emulator without KVM).
+  # run on Apple silicon. On 2026-11-03 those runners took no job twice in a
+  # row ("capacity constraints"), and the jobs ran on Intel Macs
+  # (macos-15-intel) for a day: slow enough that the test node, mining at 1%
+  # of a core, left the suite's waits without a block (so ACCEPTANCE_SLOW,
+  # six times the waits), and iOS once hung for hours. If Apple silicon
+  # turns jobs away again, go back to both of those.
   acceptance-ios:
     name: 'acceptance: [ios]'
-    runs-on: macos-15-intel
-    timeout-minutes: 180
-    env:
-      ACCEPTANCE_SLOW: "1"
+    runs-on: macos-latest
+    timeout-minutes: 60
     steps:
     - uses: actions/checkout@v4
+      with:
+        ref: ${{ inputs.ref || github.sha }}
     - name: The newest Xcode
       run: sudo xcode-select -s "$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)" && xcodebuild -version
     - uses: subosito/flutter-action@v2
@@ -227,7 +248,7 @@ jobs:
       run: |
         device=$(tool/ios_simulator.sh)
         export ACCEPTANCE_DEVICE=$device
-        flutter test tool/acceptance_test.dart
+        flutter test --reporter expanded tool/acceptance_test.dart
 
   # The Mac app, with its own node (the node's macOS build) as on Windows
   # and Linux. As on GitLab, the notification step skips itself until it
@@ -235,13 +256,14 @@ jobs:
   # notification centre.
   acceptance-macos:
     name: 'acceptance: [macos]'
-    runs-on: macos-15-intel
-    timeout-minutes: 180
+    runs-on: macos-latest
+    timeout-minutes: 60
     env:
       ACCEPTANCE_NO_NOTIFICATIONS: "1"
-      ACCEPTANCE_SLOW: "1"
     steps:
     - uses: actions/checkout@v4
+      with:
+        ref: ${{ inputs.ref || github.sha }}
     - name: The newest Xcode
       run: sudo xcode-select -s "$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)" && xcodebuild -version
     - uses: subosito/flutter-action@v2
@@ -250,7 +272,7 @@ jobs:
         cache: true
     - run: flutter pub get
     - run: dart run tool/bundle_node.dart --for-tests
-    - run: flutter test tool/acceptance_test.dart
+    - run: flutter test --reporter expanded tool/acceptance_test.dart
 
   # The Windows app. The debug app gets, beside it, the software graphics
   # the smoke test uses and Visual Studio's debug runtime, and the node the
@@ -268,6 +290,8 @@ jobs:
         shell: pwsh
     steps:
     - uses: actions/checkout@v4
+      with:
+        ref: ${{ inputs.ref || github.sha }}
     - uses: subosito/flutter-action@v2
       with:
         flutter-version: ${{ env.FLUTTER_VERSION }}
@@ -299,7 +323,7 @@ jobs:
         $release | ForEach-Object { Copy-Item $_.FullName build\node -Force }
         Write-Output "debug runtime beside the app: $(($debug + $ucrt).Name -join ', '); release runtime beside the node: $($release.Name -join ', ')"
     - run: dart run tool/desktop_smoke_test.dart --check-system build\windows\x64\runner\Debug
-    - run: flutter test tool/acceptance_test.dart
+    - run: flutter test --reporter expanded tool/acceptance_test.dart
 
   # The packaged Linux app, as a user unpacks it: its own node starts and
   # stops with its window, a node left by a killed app is replaced, a wallet
@@ -311,6 +335,8 @@ jobs:
     timeout-minutes: 45
     steps:
     - uses: actions/checkout@v4
+      with:
+        ref: ${{ inputs.ref || github.sha }}
     - uses: subosito/flutter-action@v2
       with:
         flutter-version: ${{ env.FLUTTER_VERSION }}
@@ -335,6 +361,8 @@ jobs:
         shell: pwsh
     steps:
     - uses: actions/checkout@v4
+      with:
+        ref: ${{ inputs.ref || github.sha }}
     - uses: subosito/flutter-action@v2
       with:
         flutter-version: ${{ env.FLUTTER_VERSION }}

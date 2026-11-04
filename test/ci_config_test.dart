@@ -60,6 +60,13 @@ void main() {
         bad.add('$file $job: $uses is missing');
       } else if ((called['on'] as YamlMap?)?.containsKey('workflow_call') != true) {
         bad.add('$file $job: $uses is not callable');
+      } else {
+        // Every input the called workflow requires is given.
+        final inputs = ((called['on'] as YamlMap)['workflow_call'] as YamlMap?)?['inputs'] as YamlMap? ?? YamlMap();
+        final given = value['with'] as YamlMap? ?? YamlMap();
+        for (final MapEntry(:key, :value) in inputs.entries) {
+          if ((value as YamlMap)['required'] == true && !given.containsKey(key)) bad.add('$file $job: $uses needs $key');
+        }
       }
     }
     expect(bad, isEmpty);

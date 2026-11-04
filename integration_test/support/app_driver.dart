@@ -182,6 +182,7 @@ class AppDriver {
       }
     }
 
+    if (!doneYet()) _waiting(what);
     while (!doneYet()) {
       if (DateTime.now().isAfter(deadline)) {
         fail('timed out waiting for $what (link ${client.state.name} at ${client.height}, error ${client.error})\n'
@@ -194,12 +195,18 @@ class AppDriver {
 
   Future<void> waitFor(Finder finder, {required String what, Duration timeout = const Duration(seconds: 90)}) async {
     final deadline = DateTime.now().add(_scaled(timeout));
+    if (finder.evaluate().isEmpty) _waiting(what);
     while (finder.evaluate().isEmpty) {
       if (DateTime.now().isAfter(deadline)) fail('timed out waiting for $what\n${_onScreen()}');
       await tester.pump(const Duration(milliseconds: 100));
     }
     await tester.pump();
   }
+
+  /// Says what the test waits for, with the time, so a run that hangs shows
+  /// where: on 2026-11-03 iOS hung for two hours with nothing after its last
+  /// step, and only the suite's own limit ended it.
+  void _waiting(String what) => debugPrint('${DateTime.now().toUtc().toIso8601String().substring(11, 19)} waiting for $what');
 
   /// The texts on screen, for a failure's report: what the user would see.
   String _onScreen() {
