@@ -1,16 +1,26 @@
 // Packages the built desktop app as an archive anyone can unpack and run,
 // for the release (.github/workflows/release.yml: build-windows, build-linux). Run on
-// the platform that built it, after `flutter build windows|linux --release`
+// the platform that built it, after `flutter build windows|linux|macos --release`
 // and `dart run tool/bundle_node.dart`:
 //
 //   dart run tool/package_desktop.dart [--tag v0.2.1]
 //
-// Writes dist/murmur-client-<tag>-windows-x64.zip, or
-// dist/murmur-client-<tag>-linux-<x64|arm64>.tar.gz, holding one folder:
+// Writes dist/murmur-client-<tag>-windows-x64.zip,
+// dist/murmur-client-<tag>-linux-<x64|arm64>.tar.gz, or
+// dist/murmur-client-<tag>-macos-universal.zip, holding one folder:
 // the app (murmur_client and what it needs), its own node beside it, and
 // LICENSE and NOTICE. The Windows one also holds the Visual C++ runtime the
 // app is linked against (a Windows without Visual Studio may not have it).
 // The tag defaults to `v` + the version in pubspec.yaml.
+//
+// The Mac one holds murmur_client.app, with the node and its miner inside
+// (Contents/MacOS, where the app looks for them) and the node's notices in
+// Contents/Resources, since codesign takes everything in Contents/MacOS for
+// code. Adding them breaks the seal the build put on the app, so the app is
+// signed again, ad hoc only: there's no Apple developer account yet, so no
+// Developer ID and no notarization, and Gatekeeper stops a downloaded copy.
+// The regression packages it only to smoke-test it (desktop_smoke_test.dart);
+// no release publishes it.
 
 import 'dart:io';
 
@@ -20,7 +30,7 @@ final _sep = Platform.pathSeparator;
 const _windowsRuntime = ['msvcp140.dll', 'vcruntime140.dll', 'vcruntime140_1.dll'];
 
 Future<void> main(List<String> args) async {
-  if (!Platform.isWindows && !Platform.isLinux) _fail('this packages the Windows and Linux builds');
+  if (!Platform.isWindows && !Platform.isLinux && !Platform.isMacOS) _fail('this packages the desktop builds');
   String? tag;
   for (var i = 0; i < args.length; i++) {
     if (args[i] == '--tag' && i + 1 < args.length) {
@@ -34,17 +44,26 @@ Future<void> main(List<String> args) async {
   final arch = _arch();
   final built = Directory(Platform.isWindows
       ? 'build${_sep}windows${_sep}x64${_sep}runner${_sep}Release'
-      : 'build${_sep}linux$_sep$arch${_sep}release${_sep}bundle');
+      : Platform.isMacOS
+          ? 'build/macos/Build/Products/Release/$_macApp'
+          : 'build${_sep}linux$_sep$arch${_sep}release${_sep}bundle');
   final needed = Platform.isWindows
       ? ['murmur_client.exe', 'murmur-node.exe', 'murmur-miner.exe', 'flutter_windows.dll', 'data']
-      : ['murmur_client', 'murmur-node', 'murmur-miner', 'lib', 'data'];
+      : Platform.isMacOS
+          ? ['Contents/MacOS/murmur_client', 'Contents/MacOS/murmur-node', 'Contents/MacOS/murmur-miner']
+          : ['murmur_client', 'murmur-node', 'murmur-miner', 'lib', 'data'];
   for (final name in needed) {
     if (FileSystemEntity.typeSync('${built.path}$_sep$name') == FileSystemEntityType.notFound) {
       _fail('$name is missing from ${built.path}: build the app and bundle the node first');
     }
   }
 
-  final name = 'murmur-client-$tag-${Platform.isWindows ? 'windows-x64' : 'linux-$arch'}';
+  final system = Platform.isWindows
+      ? 'windows-x64'
+      : Platform.isMacOS
+          ? 'macos-universal'
+          : 'linux-$arch';
+  final name = 'murmur-client-$tag-$system';
   final stage = Directory('build${_sep}desktop-package$_sep$name');
   if (stage.parent.existsSync()) stage.parent.deleteSync(recursive: true);
   stage.parent.createSync(recursive: true);
@@ -58,6 +77,8 @@ Future<void> main(List<String> args) async {
       if (!source.existsSync()) _fail('$dll not found in ${runtime.path}');
       source.copySync('${stage.path}\\$dll');
     }
+  } else if (Platform.isMacOS) {
+    await _stageMacApp(built, Directory('${stage.path}/$_macApp'));
   } else {
     // cp keeps what a Dart copy would lose: the programs' permission to run.
     final r = await Process.run('cp', ['-a', built.path, stage.path]);
@@ -67,19 +88,44 @@ Future<void> main(List<String> args) async {
     File(notice).copySync('${stage.path}$_sep$notice');
   }
 
-  final archive = File('dist$_sep$name.${Platform.isWindows ? 'zip' : 'tar.gz'}');
+  final archive = File('dist$_sep$name.${Platform.isLinux ? 'tar.gz' : 'zip'}');
   archive.parent.createSync(recursive: true);
   if (archive.existsSync()) archive.deleteSync();
   // Windows' tar writes a zip when the name says so (-a); Linux's a gzip.
-  final r = await Process.run('tar', [
-    if (Platform.isWindows) ...['-a', '-c'] else '-cz',
-    '-f', archive.absolute.path,
-    '-C', stage.parent.path,
-    name,
-  ]);
+  // On a Mac, ditto: it keeps the frameworks' links and the signature as
+  // the Finder unpacks them.
+  final r = Platform.isMacOS
+      ? await Process.run('ditto', ['-c', '-k', '--keepParent', stage.path, archive.absolute.path])
+      : await Process.run('tar', [
+          if (Platform.isWindows) ...['-a', '-c'] else '-cz',
+          '-f', archive.absolute.path,
+          '-C', stage.parent.path,
+          name,
+        ]);
   if (r.exitCode != 0) _fail('could not write ${archive.path}: ${r.stderr}');
   stdout.writeln('${archive.path}: ${(archive.lengthSync() / 1048576).toStringAsFixed(1)} MiB'
       '${runtimeFrom == null ? '' : ' (runtime from $runtimeFrom)'}');
+}
+
+/// The Mac app's bundle, as `flutter build macos` names it (PRODUCT_NAME).
+const _macApp = 'murmur_client.app';
+
+/// Copies the Mac app to `to`, moves the node's notices out of
+/// Contents/MacOS, signs it again ad hoc, and checks the signature.
+Future<void> _stageMacApp(Directory from, Directory to) async {
+  final copy = await Process.run('ditto', [from.path, to.path]);
+  if (copy.exitCode != 0) _fail('could not copy ${from.path}: ${copy.stderr}');
+  final programs = Directory('${to.path}/Contents/MacOS');
+  final resources = Directory('${to.path}/Contents/Resources')..createSync(recursive: true);
+  for (final f in programs.listSync().whereType<File>()) {
+    final name = f.uri.pathSegments.last;
+    if (name.startsWith('murmur-node-') || name == 'murmur-node.version') f.renameSync('${resources.path}/$name');
+  }
+  final sign = await Process.run('codesign', ['--force', '--deep', '--sign', '-', to.path]);
+  if (sign.exitCode != 0) _fail('could not sign ${to.path}: ${sign.stderr}');
+  final check = await Process.run('codesign', ['--verify', '--deep', '--strict', '--verbose=2', to.path]);
+  if (check.exitCode != 0) _fail('the signature of ${to.path} does not hold: ${check.stderr}');
+  stdout.writeln('${to.path}: signed ad hoc, and the signature holds');
 }
 
 String _arch() {

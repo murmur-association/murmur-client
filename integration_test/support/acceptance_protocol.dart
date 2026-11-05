@@ -30,3 +30,12 @@ const chooserCancelRequest = 'ACCEPTANCE CANCEL CHOOSER: ';
 /// The file the runner and a browser's driver pick: the app's own icon,
 /// a PNG every checkout has.
 const chooserPictureFile = 'web/icons/Icon-192.png';
+
+/// Asks the runner of the phone storage test (tool/phone_storage_test.dart)
+/// to have the system clear apps' caches, as it does when storage runs
+/// short: on Android, `pm trim-caches`.
+const phoneClearCachesRequest = 'PHONE STORAGE CLEAR CACHES';
+
+/// The file the runner writes into the app's own folder once the system has
+/// cleared the caches (whatever came of it).
+const phoneCachesCleared = 'phone-storage-caches-cleared';

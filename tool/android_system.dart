@@ -267,6 +267,17 @@ class AndroidSystem {
   Future<void> tellApp(String name) =>
       adb(['shell', "run-as $package sh -c 'mkdir -p files && touch files/$name'"]);
 
+  /// Has the system clear apps' cache folders, as it does when storage runs
+  /// short: asked to free far more than the device holds, it clears them
+  /// all (the phone storage test, tool/phone_storage_test.dart). Returns
+  /// what pm said, and what is left of the app's cache folder.
+  Future<String> clearCaches() async {
+    final r = await adb(['shell', 'pm', 'trim-caches', '999G']);
+    final left = await _shell("run-as $package sh -c 'ls -R cache 2>&1 | head -n 20'");
+    return 'pm trim-caches: exit code ${r.exitCode} ${'${r.stdout}${r.stderr}'.trim()}; '
+        'left in the cache folder: ${left.trim().isEmpty ? 'nothing' : left.trim().replaceAll('\n', ' ')}';
+  }
+
   /// Runs the app's background job now, as the system would; whether the
   /// app's log then shows its Dart side ran (`marker`, within `timeout`).
   Future<bool> runBackgroundJob(({String? namespace, String id}) job, String marker,

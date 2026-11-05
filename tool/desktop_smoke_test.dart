@@ -1,5 +1,5 @@
 // Tries the packaged desktop app as a user would start it, the same way on
-// Windows and Linux. Run on the folder a user unpacks (see
+// Windows, Linux and macOS. Run on the folder a user unpacks (see
 // package_desktop.dart), built with --dart-define=MURMUR_LOCAL_NODE_SPEC=demo
 // so its node stays off the public network:
 //
@@ -24,8 +24,14 @@
 // The test switches the app's own node on in its settings and may store a
 // wallet, so it must not run over a user's own: on Linux it runs in a
 // throwaway home folder and session (linux_session.sh makes them, and
-// this refuses without); Windows has no such thing, so there it refuses
-// where the app's folders exist, and removes them when done.
+// this refuses without); Windows and macOS have no such thing, so there it
+// refuses where the app's settings or folders exist, and removes them when
+// done.
+//
+// On macOS, where nothing outside the app may press its window's buttons
+// without Accessibility (which a runner hasn't), "closing the window" is a
+// quit request instead, as the app menu's Quit sends: the app takes the
+// same way out, and the app delegate quits after its last window anyway.
 //
 // Exit codes: 0 passed, 1 failed, 3 this system can't start the app (the
 // libraries it lacks are listed; nothing was tried).
@@ -44,7 +50,11 @@ final _sep = Platform.pathSeparator;
 Future<void> main(List<String> args) async {
   final walletStorage = args.contains('--wallet-storage');
   final rest = args.where((a) => a != '--wallet-storage').toList();
-  final desktop = Platform.isWindows ? _Windows() : _Linux() as Desktop;
+  final desktop = Platform.isWindows
+      ? _Windows()
+      : Platform.isMacOS
+          ? _Mac()
+          : _Linux() as Desktop;
   if (rest.length == 2 && rest[0] == '--check-system') {
     // What this system offers, starting nothing of the app's: for trying
     // the system-specific parts where the test itself can't run.
@@ -156,7 +166,10 @@ class _SmokeTest {
 
   Future<bool> _alive(int pid) async => Platform.isWindows
       ? (await Process.run('tasklist', ['/FI', 'PID eq $pid', '/NH'])).stdout.toString().contains(' $pid ')
-      : Directory('/proc/$pid').existsSync();
+      : Platform.isMacOS
+          // No /proc on a Mac: signal 0 only asks whether the process is there.
+          ? (await Process.run('kill', ['-0', '$pid'])).exitCode == 0
+          : Directory('/proc/$pid').existsSync();
 
   /// The app's own node: the bundled program, started by this app.
   Future<Proc?> _nodeOf(int app) async =>
@@ -703,4 +716,153 @@ class _Windows extends Desktop {
             '$name ${File('$_system32\\$name').existsSync() ? 'yes' : 'NO'}',
         ].join(', ')}',
       ];
+}
+
+class _Mac extends Desktop {
+  // The bundle as flutter builds it (PRODUCT_NAME), its programs inside.
+  @override
+  String get app => 'murmur_client.app/Contents/MacOS/murmur_client';
+  @override
+  String get node => 'murmur_client.app/Contents/MacOS/murmur-node';
+
+  /// The app's settings are its user defaults, a domain named by its bundle
+  /// id; its node's data is under ~/.local/share, as local_node_io.dart
+  /// finds it without XDG variables.
+  static const _domain = 'info.murmur.client';
+  final _data = Directory('${Platform.environment['HOME']}/.local/share/murmur-client');
+
+  bool get _hasSettings => Process.runSync('defaults', ['read', _domain]).exitCode == 0;
+
+  @override
+  String? refusal() => _hasSettings
+      ? "the user defaults $_domain exist: the app has been used here, and this test would change its settings."
+      : _data.existsSync()
+          ? '${_data.path} exists: the app has been used here.'
+          : null;
+
+  @override
+  void switchOwnNodeOn() => Process.runSync('defaults', ['write', _domain, 'flutter.run_local_node', '-bool', 'true']);
+
+  // Only what this run made: both were absent when it began.
+  @override
+  void cleanUp() {
+    Process.runSync('defaults', ['delete', _domain]);
+    try {
+      if (_data.existsSync()) _data.deleteSync(recursive: true);
+    } on FileSystemException {
+      // Still held by a process on its way out.
+    }
+  }
+
+  @override
+  Future<List<Proc>> nodes(String node) async {
+    final program = File(node).resolveSymbolicLinksSync();
+    final r = await Process.run('ps', ['-axo', 'pid=,ppid=,comm=']);
+    final found = <Proc>[];
+    for (final line in const LineSplitter().convert('${r.stdout}')) {
+      final m = RegExp(r'^\s*(\d+)\s+(\d+)\s+(.+)$').firstMatch(line);
+      if (m == null) continue;
+      try {
+        if (File(m[3]!).resolveSymbolicLinksSync() != program) continue;
+      } on FileSystemException {
+        continue; // not a path (a process named otherwise), or gone
+      }
+      found.add(Proc(int.parse(m[1]!), int.parse(m[2]!), program));
+    }
+    return found;
+  }
+
+  /// lsof's fields (-F): "p<pid>" starts a process, "n<name>" is a socket's
+  /// addresses, "local" or "local->remote".
+  Future<List<({int pid, String name})>> _lsof(List<String> args) async {
+    final r = await Process.run('lsof', ['-nP', ...args]);
+    final out = <({int pid, String name})>[];
+    var pid = 0;
+    for (final line in const LineSplitter().convert('${r.stdout}')) {
+      if (line.startsWith('p')) pid = int.tryParse(line.substring(1)) ?? 0;
+      if (line.startsWith('n')) out.add((pid: pid, name: line.substring(1)));
+    }
+    return out;
+  }
+
+  static int? _port(String address) => int.tryParse(address.substring(address.lastIndexOf(':') + 1));
+
+  @override
+  Future<Set<int>> listening(int pid) async => {
+        for (final s in await _lsof(['-a', '-p', '$pid', '-iTCP', '-sTCP:LISTEN', '-Fpn']))
+          if (_port(s.name) case final port?) port,
+      };
+
+  @override
+  Future<Set<int>> connectedTo(Set<int> ports) async => {
+        for (final s in await _lsof(['-iTCP', '-sTCP:ESTABLISHED', '-Fpn']))
+          if (s.name.split('->') case [_, final remote]
+              when remote.startsWith('127.0.0.1:') && ports.contains(_port(remote)))
+            s.pid,
+      };
+
+  /// The window server's windows (CGWindowListCopyWindowInfo, through
+  /// JavaScript for Automation): owner, layer, title, on screen. Asking needs
+  /// no permission, but titles come only with Screen Recording's: without
+  /// it a title is null.
+  List<({int pid, int layer, String? title, bool shown})> _windows() {
+    const script = "ObjC.import('CoreGraphics');"
+        r'JSON.stringify(ObjC.deepUnwrap(ObjC.castRefToObject($.CGWindowListCopyWindowInfo(0, 0)))'
+        '.map(w => [w.kCGWindowOwnerPID, w.kCGWindowLayer, w.kCGWindowName === undefined ? null : w.kCGWindowName,'
+        ' w.kCGWindowIsOnscreen ? 1 : 0]))';
+    final r = Process.runSync('osascript', ['-l', 'JavaScript', '-e', script]);
+    if (r.exitCode != 0) return const [];
+    return [
+      for (final w in jsonDecode('${r.stdout}') as List)
+        if (w case [final int pid, final int layer, final String? title, final int shown])
+          (pid: pid, layer: layer, title: title, shown: shown == 1),
+    ];
+  }
+
+  @override
+  String? window(int pid, String title) {
+    // Layer 0: an app's ordinary windows, not its menu bar or status items.
+    final own = _windows().where((w) => w.pid == pid && w.layer == 0).toList();
+    final named = own.where((w) => w.title == title).firstOrNull;
+    if (named != null) return named.shown ? 'shown' : 'hidden';
+    // Titles can't be read here: a window of the app's is what can be told.
+    final untitled = own.where((w) => w.title == null).firstOrNull;
+    if (untitled != null) return '${untitled.shown ? 'shown' : 'hidden'} (its title unread: no Screen Recording here)';
+    return null;
+  }
+
+  // A quit request to that process (NSRunningApplication.terminate, a quit
+  // Apple Event, as the app menu's Quit sends): the window's close button
+  // can't be pressed from outside without Accessibility.
+  @override
+  void closeWindow(int pid, String title) {
+    final r = Process.runSync('osascript', [
+      '-l', 'JavaScript', '-e',
+      "ObjC.import('AppKit'); const a = \$.NSRunningApplication.runningApplicationWithProcessIdentifier($pid);"
+          " a.isNil() ? 'not an app' : (a.terminate ? 'asked to quit' : 'refused')",
+    ]);
+    print('quit request to $pid: ${'${r.stdout}${r.stderr}'.trim()}');
+  }
+
+  // The bundle carries the app's frameworks; the rest is the system's.
+  @override
+  Future<List<String>> missingLibraries(String bundle) async => const [];
+
+  // The device's key store asks for the login password in a dialog of the
+  // system's, which nobody answers on a runner (the acceptance tests keep the
+  // vault to a passphrase there for the same reason).
+  @override
+  Future<String?> walletStorageRefusal() async => Platform.environment['CI'] != null
+      ? "the Mac's key store asks for the login password in a dialog, and nobody is there to answer it."
+      : null;
+
+  @override
+  Map<String, String>? debugBuildNeeds(String bundle) => null;
+
+  // (The bundle's signature is checked when it's packaged.)
+  @override
+  List<String> system() {
+    final version = Process.runSync('sw_vers', ['-productVersion']);
+    return ['macOS ${'${version.stdout}'.trim()}'];
+  }
 }

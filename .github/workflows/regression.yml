@@ -3,8 +3,9 @@
 # flavour (integration_test/acceptance_test.dart, run by
 # tool/acceptance_test.dart: the Linux, Windows and Mac apps, Chrome with a
 # passphrase and with a passkey, Firefox, an Android emulator and an iPhone
-# simulator), and the packaged desktop apps' smoke tests
-# (tool/desktop_smoke_test.dart). GitHub's hosted runners are free for a
+# simulator, each phone also running the phone storage test), and the
+# packaged desktop apps' smoke tests (tool/desktop_smoke_test.dart: Linux,
+# Windows and macOS). GitHub's hosted runners are free for a
 # public repository, and its Linux runners have KVM, so Android's emulator
 # is accelerated here (on GitLab's it emulated the processor, about 50
 # minutes a run).
@@ -191,7 +192,10 @@ jobs:
     # Once more on a fresh emulator if the emulator itself went away during
     # the tests (offline, its log ending without a word: 2 runs of 5 on
     # 2026-11-03, at different steps); a failure with the emulator still up
-    # is the app's, and isn't tried again.
+    # is the app's, and isn't tried again. After the acceptance tests, on
+    # the same emulator, the phone storage test
+    # (integration_test/phone_storage_test.dart): the local copy in the
+    # cache folder, cleared by the system itself, own messages kept.
     - name: Acceptance tests
       run: |
         df -h / | tail -n 1
@@ -199,7 +203,8 @@ jobs:
           # Assigned apart from export, so a failed boot stops the step.
           device=$(tool/android_emulator.sh)
           export ACCEPTANCE_DEVICE=$device
-          if flutter test --reporter expanded tool/acceptance_test.dart; then exit 0; fi
+          if flutter test --reporter expanded tool/acceptance_test.dart &&
+             flutter test --reporter expanded tool/phone_storage_test.dart; then exit 0; fi
           if [ "$(adb -s "$device" get-state 2>/dev/null)" = device ]; then exit 1; fi
           echo "::warning::the emulator went offline during the acceptance tests (attempt $attempt)"
           sudo dmesg | grep -iE 'segfault|traps:|killed process|out of memory' | tail -n 20 || true
@@ -244,11 +249,14 @@ jobs:
         cache: true
     - run: flutter pub get
     - run: dart run tool/bundle_node.dart --for-tests
+    # Then the phone storage test on the same simulator
+    # (integration_test/phone_storage_test.dart).
     - name: Acceptance tests
       run: |
         device=$(tool/ios_simulator.sh)
         export ACCEPTANCE_DEVICE=$device
         flutter test --reporter expanded tool/acceptance_test.dart
+        flutter test --reporter expanded tool/phone_storage_test.dart
 
   # The Mac app, with its own node (the node's macOS build) as on Windows
   # and Linux. As on GitLab, the notification step skips itself until it
@@ -348,6 +356,31 @@ jobs:
     - run: dart run tool/package_desktop.dart --tag smoke
     - run: tool/linux_session.sh dart run tool/desktop_smoke_test.dart --wallet-storage build/desktop-package/murmur-client-smoke-linux-x64
     - run: MURMUR_KEYRING=locked MURMUR_KEYRING_PROMPT_SECONDS=5 tool/linux_session.sh dart run tool/desktop_smoke_test.dart build/desktop-package/murmur-client-smoke-linux-x64
+
+  # The packaged Mac app, the same test: murmur_client.app with its node
+  # inside, signed again ad hoc (tool/package_desktop.dart; no Developer ID
+  # or notarization without an Apple developer account, so no release
+  # publishes it). The window is "closed" by a quit request, since pressing
+  # its button from outside needs Accessibility; check 3 is reported as not
+  # tried, the key store's password dialog having nobody to answer it.
+  smoke-macos:
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        ref: ${{ inputs.ref || github.sha }}
+    - name: The newest Xcode
+      run: sudo xcode-select -s "$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)" && xcodebuild -version
+    - uses: subosito/flutter-action@v2
+      with:
+        flutter-version: ${{ env.FLUTTER_VERSION }}
+        cache: true
+    - run: flutter pub get
+    - run: flutter build macos --release --dart-define=MURMUR_LOCAL_NODE_SPEC=demo
+    - run: dart run tool/bundle_node.dart
+    - run: dart run tool/package_desktop.dart --tag smoke
+    - run: dart run tool/desktop_smoke_test.dart --wallet-storage build/desktop-package/murmur-client-smoke-macos-universal
 
   # The packaged Windows app, the same test. The runner's profile is a clean
   # one, which the test needs (it refuses any other). Check 3 (the wallet
