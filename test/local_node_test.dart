@@ -59,6 +59,13 @@ void main() {
     expect(localNodeMiningAllowed, isTrue, reason: 'a build without MURMUR_STORE mines when asked');
   });
 
+  test("a Store build's node keeps a data folder of its own, apart from the installer's", () {
+    // Both copies may be installed; the package reads the real folder
+    // merged with its own, so sharing one would let it stop the other's node.
+    expect(localNodeDataDir(r'C:\a', r'\', store: false), r'C:\a\murmur-client\node');
+    expect(localNodeDataDir(r'C:\a', r'\', store: true), r'C:\a\murmur-client\node-store');
+  });
+
   test("how far the node has come is read from its output's stable lines", () {
     // A start from the checkpoint, its catching up, and the check from genesis
     // behind it, in the node's words (node v0.16.0, README and fast_start.rs).

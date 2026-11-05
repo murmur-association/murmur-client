@@ -2,13 +2,15 @@
 // is `murmur-node` (`.exe` on Windows) next to the app's executable, put
 // there by tool/bundle_node.dart; MURMUR_NODE_BIN overrides it (tests). The
 // data folder is murmur-client/node in the user's application data folder,
-// beside the chain cache.
+// beside the chain cache (murmur-client/node-store in a Microsoft Store
+// build: localNodeDataDir).
 
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
 import 'local_node.dart';
+import 'updates.dart' show storeBuild;
 
 LocalNode createLocalNode() {
   final desktop = Platform.isWindows || Platform.isLinux || Platform.isMacOS;
@@ -37,9 +39,16 @@ String _dataDir() {
       env['XDG_DATA_HOME'] ??
       (env['HOME'] == null ? null : '${env['HOME']}/.local/share') ??
       Directory.systemTemp.path;
-  final sep = Platform.pathSeparator;
-  return '$base${sep}murmur-client${sep}node';
+  return localNodeDataDir(base, Platform.pathSeparator);
 }
+
+/// The node's data folder under `base` (public for tests). A Microsoft
+/// Store build keeps its own: a package reads the real %APPDATA% merged with
+/// its private copy of it, so with the installer's copy also on the
+/// computer, the Store's would otherwise find that one's node (its pid file,
+/// which a start takes for a node left by a crash and stops, and its data).
+String localNodeDataDir(String base, String sep, {bool store = storeBuild}) =>
+    '$base${sep}murmur-client$sep${store ? 'node-store' : 'node'}';
 
 /// A node run as a child process (public so tests can point it anywhere).
 class ProcessLocalNode extends LocalNode {

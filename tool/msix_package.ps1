@@ -18,7 +18,19 @@
 # -Check installs the package once and removes it, as the Store would:
 # signed with a certificate made for the run and trusted for the run only
 # (in the machine's Trusted People, so it needs an administrator: CI's
-# runners). It refuses where the package is installed already.
+# runners). It refuses where the package is installed already. With it:
+#
+# -Certify runs the Windows App Certification Kit (the Store's own tests,
+#   appcert.exe from the Windows SDK) on the package first, and fails when
+#   the kit does; its report is written beside the package
+#   (<name>.wack.xml).
+# -Smoke, while the package is installed, starts it as the Start menu does
+#   and tries it (tool/desktop_smoke_test.dart --packaged): its node, beside
+#   the installer's copy's, its own folder, a notification's click. The app
+#   must be a demo build (MURMUR_LOCAL_NODE_SPEC=demo), and a runner without
+#   a graphics card needs the software graphics beside it
+#   (fetch_test_graphics.ps1), which only -AllowTestGraphics lets in: never
+#   in a package for the Store.
 param(
   [Parameter(Mandatory)][string]$Version,
   [Parameter(Mandatory)][string]$Source,
@@ -26,7 +38,10 @@ param(
   [string]$IdentityName = $env:MSIX_IDENTITY_NAME,
   [string]$Publisher = $env:MSIX_PUBLISHER,
   [string]$PublisherDisplayName = $env:MSIX_PUBLISHER_DISPLAY_NAME,
-  [switch]$Check
+  [switch]$Check,
+  [switch]$Certify,
+  [switch]$Smoke,
+  [switch]$AllowTestGraphics
 )
 $ErrorActionPreference = 'Stop'
 
@@ -50,6 +65,12 @@ foreach ($f in 'murmur_client.exe', 'murmur-node.exe', 'flutter_windows.dll', 'd
 if (Test-Path (Join-Path $src 'murmur-miner.exe')) {
   throw "$src holds murmur-miner.exe: stage it with package_desktop.dart --store"
 }
+if (-not $AllowTestGraphics) {
+  foreach ($f in 'opengl32.dll', 'libgallium_wgl.dll', 'd3d10warp.dll') {
+    if (Test-Path (Join-Path $src $f)) { throw "$src holds $f, the tests' software graphics (fetch_test_graphics.ps1)" }
+  }
+}
+if (($Certify -or $Smoke) -and -not $Check) { throw '-Certify and -Smoke go with -Check' }
 
 $work = Join-Path ([IO.Path]::GetTempPath()) "murmur-msix-$PID"
 if (Test-Path $work) { Remove-Item -Recurse -Force $work }
@@ -104,6 +125,30 @@ try {
   Export-Certificate -Cert $cert -FilePath "$work\check.cer" | Out-Null
   $trusted = Import-Certificate -FilePath "$work\check.cer" -CertStoreLocation Cert:\LocalMachine\TrustedPeople
 
+  if ($Certify) {
+    # The kit installs and removes the package itself, so before ours.
+    $appcert = "${env:ProgramFiles(x86)}\Windows Kits\10\App Certification Kit\appcert.exe"
+    if (-not (Test-Path $appcert)) { throw "no Windows App Certification Kit at $appcert" }
+    $report = [IO.Path]::ChangeExtension($out, '.wack.xml')
+    if (Test-Path $report) { Remove-Item $report }
+    & $appcert reset | Out-Null
+    # What the kit and the test say on stderr is output, not a failure.
+    & { $ErrorActionPreference = 'Continue'; & $appcert test -appxpackagepath $signed -reportoutputpath $report }
+    if (-not (Test-Path $report)) { throw "the certification kit wrote no report (exit code $LASTEXITCODE)" }
+    $xml = [xml](Get-Content -Raw $report)
+    $overall = $xml.REPORT.OVERALL_RESULT
+    foreach ($t in @($xml.SelectNodes('//TEST'))) {
+      $result = "$($t.RESULT.InnerText)".Trim()
+      if ($result -and $result -ne 'PASS') {
+        Write-Output "  ${result}: $($t.NAME)"
+        foreach ($m in @($t.SelectNodes('.//MESSAGE'))) { Write-Output "      $($m.TEXT)$($m.InnerText)" }
+      }
+    }
+    Write-Output "the certification kit's result: $overall (report: $report)"
+    if ($overall -eq 'FAIL') { throw "the package fails the Windows App Certification Kit" }
+    if (Get-AppxPackage -Name $IdentityName) { throw "the certification kit left the package installed" }
+  }
+
   Add-AppxPackage -Path $signed
   $installed = Get-AppxPackage -Name $IdentityName
   if (-not $installed) { throw "the package did not install" }
@@ -112,10 +157,23 @@ try {
   }
   if (Test-Path (Join-Path $installed.InstallLocation 'murmur-miner.exe')) { throw "the installed package holds murmur-miner.exe" }
   Write-Output "installed $($installed.PackageFullName) into $($installed.InstallLocation)"
+  if ($Smoke) {
+    Push-Location "$PSScriptRoot\.."
+    try {
+      & { $ErrorActionPreference = 'Continue'; dart run tool/desktop_smoke_test.dart --packaged $installed.PackageFamilyName $installed.InstallLocation }
+      if ($LASTEXITCODE -ne 0) { throw "the installed package failed its smoke test ($LASTEXITCODE)" }
+    } finally {
+      Pop-Location
+    }
+  }
   Remove-AppxPackage -Package $installed.PackageFullName
+  $installed = $null
   if (Get-AppxPackage -Name $IdentityName) { throw "the package was not removed" }
   Write-Output "and removed it"
 } finally {
+  # Never left installed, even after a failure.
+  $left = Get-AppxPackage -Name $IdentityName
+  if ($left) { Remove-AppxPackage -Package $left.PackageFullName }
   if ($trusted) { Remove-Item "Cert:\LocalMachine\TrustedPeople\$($trusted.Thumbprint)" }
   Remove-Item "Cert:\CurrentUser\My\$($cert.Thumbprint)"
   Remove-Item -Recurse -Force $work

@@ -8,9 +8,11 @@
   no murmur-miner in the package.
 
   A desktop app with full trust (runFullTrust): it starts its own node as a
-  child, which runs inside the package too. Its notifications are clicked
-  back through the COM class below, the same activator the installer's
-  Start menu shortcut names (lib/services/notifier.dart): never change it.
+  child, which runs inside the package too, with a data folder of its own
+  (lib/services/local_node_io.dart). Its notifications are clicked back
+  through the COM class below (storeToastActivator in
+  lib/services/notifier.dart), not the installer's, since both copies may be
+  installed side by side: never change it.
 -->
 <Package
   xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
@@ -57,12 +59,12 @@
         Square44x44Logo="Assets\Square44x44Logo.png" />
       <Extensions>
         <desktop:Extension Category="windows.toastNotificationActivation">
-          <desktop:ToastNotificationActivation ToastActivatorCLSID="6f3c2a51-9d84-4e0b-b7a2-5c1e8f04d3a9" />
+          <desktop:ToastNotificationActivation ToastActivatorCLSID="13cb96cb-b216-4987-9d52-128da9a29306" />
         </desktop:Extension>
         <com:Extension Category="windows.comServer">
           <com:ComServer>
             <com:ExeServer Executable="murmur_client.exe" Arguments="-ToastActivated" DisplayName="Murmur">
-              <com:Class Id="6f3c2a51-9d84-4e0b-b7a2-5c1e8f04d3a9" />
+              <com:Class Id="13cb96cb-b216-4987-9d52-128da9a29306" />
             </com:ExeServer>
           </com:ComServer>
         </com:Extension>
