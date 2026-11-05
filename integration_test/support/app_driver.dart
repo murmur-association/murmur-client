@@ -325,10 +325,19 @@ class AppDriver {
   }
 
   /// Pulls the list in view down from its top, as a finger does, to have it
-  /// taken again.
+  /// taken again: from the top of the list, slowly, nearly its whole height.
+  /// A Mac's bouncing physics (Safari's too) damp the pull, and the refresh
+  /// arms only past a share of the list's height, so a fixed fling of 500
+  /// pixels never armed it in Safari's tall window (2026-11-05).
   Future<void> pullDown(Finder list) async {
     await waitFor(list, what: 'the list to pull');
-    await tester.fling(list.first, const Offset(0, 500), 1500);
+    // At its top first: a pull refreshes only from there.
+    final position = tester.state<ScrollableState>(list.first).position;
+    position.jumpTo(position.minScrollExtent);
+    await tester.pump();
+    final box = tester.getRect(list.first);
+    await tester.timedDragFrom(box.topCenter + const Offset(0, 10), Offset(0, box.height * 0.9),
+        const Duration(milliseconds: 800));
     for (var i = 0; i < 15; i++) {
       await tester.pump(const Duration(milliseconds: 100));
     }

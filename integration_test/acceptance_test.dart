@@ -10,6 +10,7 @@
 // Rules of the code (which reply answers what, the order of threads, the
 // vault) are unit-tested in test/; here it's the app as a whole.
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
@@ -41,6 +42,13 @@ void main() {
   reportTestException = (details, description) {
     final why = (binding.reportData ??= {}).putIfAbsent('failures', () => <String, String>{}) as Map;
     why[description] = '${details.exception}';
+    // Natively, a GitHub annotation too, from the output `flutter test`
+    // passes on to the runner's log (a browser's goes through the driver).
+    if (!kIsWeb) {
+      String escaped(String s) => s.replaceAll('%', '%25').replaceAll('\r', '%0D').replaceAll('\n', '%0A');
+      debugPrint('::error title=${escaped(description).replaceAll(':', '%3A').replaceAll(',', '%2C')}'
+          '::${escaped('${details.exception}')}');
+    }
     report(details, description);
   };
 

@@ -5,6 +5,7 @@ Newest first. Each release is a `vX.Y.Z` tag matching `version` in `pubspec.yaml
 ## Unreleased
 
 - **New: French and Korean.** The app speaks both, follows a French or Korean device by itself, and the Threads language filter recognises threads written in them.
+- **Fixed: nothing sent from Safari was ever mined** (and so from any browser on an iPhone, which all run Safari's engine). The page signed with the browser's own Ed25519, and Safari's gives other signatures than the standard's; what it signed stayed pending. Every platform now signs with the app's own, standard Ed25519.
 
 ## v0.10.3: scheduled release, with what was waiting (2026-11-04)
 
