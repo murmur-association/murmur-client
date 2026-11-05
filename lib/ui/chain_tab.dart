@@ -177,10 +177,7 @@ class _ChainSummary extends StatelessWidget {
           // page is always the one served now, and not once a node has said
           // the network moved on (the banner says that, more firmly).
           if (client.releaseLooksOld && client.newerProtocolSeen == null && installed != Installed.web)
-            _UpdateHint(text: switch (installed) {
-              Installed.flatpak => l.appMaybeOldSystem,
-              _ => l.appMaybeOld,
-            }),
+            _UpdateHint(text: systemUpdates ? l.appMaybeOldSystem : l.appMaybeOld),
           Row(children: [
             Expanded(
               child: Text(
@@ -335,12 +332,14 @@ class _LocalNodeCardState extends State<_LocalNodeCard> {
               if (prefs.runLocalNode && (node.peersNewer != null || scope.client.newerProtocolSeen != null)) ...[
                 const SizedBox(height: 8),
                 _UpdateHint(
-                  text: installed == Installed.flatpak ? l.localNodeOutdatedSystem : l.localNodeOutdated,
+                  text: systemUpdates ? l.localNodeOutdatedSystem : l.localNodeOutdated,
                   warning: true,
                 ),
               ],
               if (prefs.runLocalNode && node.state == LocalNodeState.running) ..._progress(context, node.sync, small),
-              if (prefs.runLocalNode) ...[
+              // Not in a Microsoft Store build, whose policies refuse mining
+              // on the device (updates.dart, storeBuild).
+              if (prefs.runLocalNode && localNodeMiningAllowed) ...[
                 const Divider(height: 24),
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,

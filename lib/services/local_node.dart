@@ -22,11 +22,15 @@
 // shipped beside it, and mines on the processor whenever the card can't be
 // used. What the app shows of it comes from the node's own output (the
 // "[gpu]" lines), never from its control port.
+//
+// A Microsoft Store build never mines (updates.dart, storeBuild): the
+// Store's policies refuse apps that mine on the device.
 
 import 'package:flutter/foundation.dart';
 
 import '../protocol/network.dart';
 import 'local_node_io.dart' if (dart.library.js_interop) 'local_node_web.dart' as impl;
+import 'updates.dart' show storeBuild;
 
 enum LocalNodeState {
   /// No node binary next to the app, or not a desktop build.
@@ -46,6 +50,9 @@ const localNodeSpec = String.fromEnvironment('MURMUR_LOCAL_NODE_SPEC', defaultVa
 /// The network [localNodeSpec] names, for its checkpoint.
 NetworkInfo get localNodeNetwork => localNodeSpec == 'demo' ? NetworkInfo.demo : NetworkInfo.whitepaper;
 
+/// Whether this build may mine at all: not one for the Microsoft Store.
+const localNodeMiningAllowed = !storeBuild;
+
 /// Default share of one CPU core the node may mine with.
 const defaultLocalNodeCpu = 25;
 
@@ -58,6 +65,7 @@ List<String> localNodeArgs({
   int cpuPct = defaultLocalNodeCpu,
   bool gpu = false,
   Checkpoint? checkpoint,
+  bool allowMining = localNodeMiningAllowed,
 }) =>
     [
       '--daemon',
@@ -79,7 +87,7 @@ List<String> localNodeArgs({
       // already has a chain ignores it.
       if (checkpoint != null && checkpoint.wellFormed) ...['--checkpoint', '${checkpoint.height}:${checkpoint.hash}'],
       if (address != null) ...['--keep-author', address],
-      if (mine && address != null) ...[
+      if (mine && allowMining && address != null) ...[
         '--mine-to', address,
         '--mine-cpu', '${cpuPct.clamp(1, 100)}',
         // Only with mining (the node refuses --gpu without --mine-to), and

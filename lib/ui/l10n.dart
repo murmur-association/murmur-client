@@ -165,7 +165,7 @@ String linkErrorText(AppLocalizations l, LinkError e) => switch (e.kind) {
       // A node ahead of this app: the network moved on, and updating is the fix.
       LinkErrorKind.version when e.nodeVersion > protocolVersion => switch (installed) {
           Installed.web => l.errAppOutdatedWeb,
-          Installed.flatpak => l.errAppOutdatedSystem,
+          _ when systemUpdates => l.errAppOutdatedSystem,
           _ => l.errAppOutdated,
         },
       LinkErrorKind.version => l.errVersion(e.nodeVersion, protocolVersion),

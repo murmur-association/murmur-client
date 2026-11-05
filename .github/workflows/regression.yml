@@ -424,3 +424,14 @@ jobs:
         powershell -NoProfile -ExecutionPolicy Bypass -File tool\windows_installer.ps1 -Version $version `
           -Source build\desktop-package\murmur-client-smoke-windows-x64 -Output build\installer\murmur-client-smoke-setup.exe -Check
         if ($LASTEXITCODE -ne 0) { exit 1 }
+    # The Microsoft Store's package (windows/msix/AppxManifest.xml), as the
+    # release makes it: a build with MURMUR_STORE (no mining), staged without
+    # murmur-miner, packed, then installed and removed once.
+    - run: flutter build windows --release --dart-define=MURMUR_LOCAL_NODE_SPEC=demo --dart-define=MURMUR_STORE=true
+    - run: dart run tool/bundle_node.dart
+    - run: dart run tool/package_desktop.dart --tag smoke --store
+    - run: |
+        $version = (Select-String -Path pubspec.yaml -Pattern '^version:\s*([0-9.]+)').Matches[0].Groups[1].Value
+        powershell -NoProfile -ExecutionPolicy Bypass -File tool\msix_package.ps1 -Version $version `
+          -Source build\desktop-package\murmur-client-smoke-windows-x64-store -Output build\msix\murmur-client-smoke.msix -Check
+        if ($LASTEXITCODE -ne 0) { exit 1 }

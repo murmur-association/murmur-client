@@ -3,7 +3,7 @@
 // the platform that built it, after `flutter build windows|linux|macos --release`
 // and `dart run tool/bundle_node.dart`:
 //
-//   dart run tool/package_desktop.dart [--tag v0.2.1]
+//   dart run tool/package_desktop.dart [--tag v0.2.1] [--store]
 //
 // Writes dist/murmur-client-<tag>-windows-x64.zip,
 // dist/murmur-client-<tag>-linux-<x64|arm64>.tar.gz, or
@@ -12,6 +12,11 @@
 // LICENSE and NOTICE. The Windows one also holds the Visual C++ runtime the
 // app is linked against (a Windows without Visual Studio may not have it).
 // The tag defaults to `v` + the version in pubspec.yaml.
+//
+// With --store (Windows only, after a build with MURMUR_STORE): the same
+// folder without murmur-miner, since a Microsoft Store build never mines,
+// as build/desktop-package/murmur-client-<tag>-windows-x64-store, and no
+// archive: tool/msix_package.ps1 packs it.
 //
 // The Mac one holds murmur_client.app, with the node and its miner inside
 // (Contents/MacOS, where the app looks for them) and the node's notices in
@@ -32,14 +37,18 @@ const _windowsRuntime = ['msvcp140.dll', 'vcruntime140.dll', 'vcruntime140_1.dll
 Future<void> main(List<String> args) async {
   if (!Platform.isWindows && !Platform.isLinux && !Platform.isMacOS) _fail('this packages the desktop builds');
   String? tag;
+  var store = false;
   for (var i = 0; i < args.length; i++) {
     if (args[i] == '--tag' && i + 1 < args.length) {
       tag = args[++i];
+    } else if (args[i] == '--store') {
+      store = true;
     } else {
-      _fail('unknown option ${args[i]}\nusage: dart run tool/package_desktop.dart [--tag <tag>]');
+      _fail('unknown option ${args[i]}\nusage: dart run tool/package_desktop.dart [--tag <tag>] [--store]');
     }
   }
   tag ??= 'v${RegExp(r'^version:\s*([0-9.]+)', multiLine: true).firstMatch(File('pubspec.yaml').readAsStringSync())![1]}';
+  if (store && !Platform.isWindows) _fail('--store packages the Windows app for the Microsoft Store');
 
   final arch = _arch();
   final built = Directory(Platform.isWindows
@@ -48,7 +57,7 @@ Future<void> main(List<String> args) async {
           ? 'build/macos/Build/Products/Release/$_macApp'
           : 'build${_sep}linux$_sep$arch${_sep}release${_sep}bundle');
   final needed = Platform.isWindows
-      ? ['murmur_client.exe', 'murmur-node.exe', 'murmur-miner.exe', 'flutter_windows.dll', 'data']
+      ? ['murmur_client.exe', 'murmur-node.exe', if (!store) 'murmur-miner.exe', 'flutter_windows.dll', 'data']
       : Platform.isMacOS
           ? ['Contents/MacOS/murmur_client', 'Contents/MacOS/murmur-node', 'Contents/MacOS/murmur-miner']
           : ['murmur_client', 'murmur-node', 'murmur-miner', 'lib', 'data'];
@@ -63,7 +72,7 @@ Future<void> main(List<String> args) async {
       : Platform.isMacOS
           ? 'macos-universal'
           : 'linux-$arch';
-  final name = 'murmur-client-$tag-$system';
+  final name = 'murmur-client-$tag-$system${store ? '-store' : ''}';
   final stage = Directory('build${_sep}desktop-package$_sep$name');
   if (stage.parent.existsSync()) stage.parent.deleteSync(recursive: true);
   stage.parent.createSync(recursive: true);
@@ -86,6 +95,14 @@ Future<void> main(List<String> args) async {
   }
   for (final notice in ['LICENSE', 'NOTICE']) {
     File(notice).copySync('${stage.path}$_sep$notice');
+  }
+  if (store) {
+    // No miner in what the Store gets: its policies refuse mining on the
+    // device, and the build doesn't offer it (lib/services/updates.dart).
+    final miner = File('${stage.path}${_sep}murmur-miner.exe');
+    if (miner.existsSync()) miner.deleteSync();
+    stdout.writeln('${stage.path}: staged for the Microsoft Store, without murmur-miner');
+    return;
   }
 
   final archive = File('dist$_sep$name.${Platform.isLinux ? 'tar.gz' : 'zip'}');
