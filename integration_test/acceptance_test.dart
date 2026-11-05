@@ -221,8 +221,14 @@ void main() {
 
     // The local copy outlived the app: the thread's text is still in the
     // device's storage.
+    // (The wallet's own messages are known once its history is read, which
+    // a slow device does after the Threads tab has the thread.)
     final me = app.wallets.wallet!.addressHex;
-    final thread = app.client.messagesBy(me).firstWhere((v) => v.tx.kind == TxKind.orphan).tx;
+    late Transaction thread;
+    await app.waitUntil(() {
+      thread = app.client.messagesBy(me).firstWhere((v) => v.tx.kind == TxKind.orphan).tx;
+      return true;
+    }, what: "the wallet's thread among its own messages");
     final stored = await app.storedChain();
     expect(stored?.contents.containsKey(toHex(thread.messageHash!)), isTrue,
         reason: "the thread's text in the local copy, after the restart");

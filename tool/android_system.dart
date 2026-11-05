@@ -97,6 +97,9 @@ class AndroidSystem {
   /// isn't there.
   Future<bool> clickNotification(String title) async {
     await _shell('cmd statusbar expand-notifications');
+    // Not while the shade still slides down: an element found then is
+    // tapped where it was, beside where it ends up.
+    await Future<void>.delayed(const Duration(seconds: 2));
     final tapped = await poll(() async {
       final n = find(await screen(), texts: [title]);
       if (n != null) await tap(n);
