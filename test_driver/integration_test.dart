@@ -65,6 +65,17 @@ Future<void> main() async {
     exit(0);
   }
   print('Failure Details:\n${response.formattedFailureDetails}');
+  // The failures' own messages, which a release build's details leave out
+  // (integration_test/acceptance_test.dart hands them over).
+  if (response.data?['failures'] case final Map failures) {
+    failures.forEach((test, why) {
+      print('Why "$test" failed:\n$why\n');
+      // Also as a GitHub annotation (a workflow command in the job's output),
+      // which the run's page lists, and its API serves without signing in.
+      String escaped(String s) => s.replaceAll('%', '%25').replaceAll('\r', '%0D').replaceAll('\n', '%0A');
+      print('::error title=${escaped('$test').replaceAll(':', '%3A').replaceAll(',', '%2C')}::${escaped('$why')}');
+    });
+  }
   exit(1);
 }
 

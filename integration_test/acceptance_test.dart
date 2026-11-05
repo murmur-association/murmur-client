@@ -31,7 +31,17 @@ import 'support/header_nonce_checks.dart';
 import 'support/system_notifications.dart';
 
 void main() {
-  IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  // Why a test failed, for the driver to print. A browser runs a release
+  // build, where a failure's details print as nothing, so the failure's
+  // own message ("timed out waiting for …", with what's on screen) goes to
+  // the driver beside them (test_driver/integration_test.dart).
+  final report = reportTestException;
+  reportTestException = (details, description) {
+    final why = (binding.reportData ??= {}).putIfAbsent('failures', () => <String, String>{}) as Map;
+    why[description] = '${details.exception}';
+    report(details, description);
+  };
 
   // What numbers do differs between a browser and the rest: the header
   // vectors that each once got wrong, on the flavour at hand.
