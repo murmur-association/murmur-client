@@ -286,6 +286,12 @@ jobs:
     - run: dart run tool/bundle_node.dart --for-tests
     # The debug build first, so its folder is there to put things beside.
     - run: flutter build windows --debug
+    # The pinned graphics downloads, kept between runs (the script takes a
+    # cached file whose SHA-256 is the pinned one).
+    - uses: actions/cache@v4
+      with:
+        path: build/test-graphics
+        key: test-graphics-${{ hashFiles('tool/fetch_test_graphics.ps1') }}
     - run: powershell -NoProfile -ExecutionPolicy Bypass -File tool\fetch_test_graphics.ps1 -Into build\windows\x64\runner\Debug
     - name: Runtimes beside the app and the node
       run: |
@@ -342,5 +348,9 @@ jobs:
     - run: flutter build windows --release --dart-define=MURMUR_LOCAL_NODE_SPEC=demo
     - run: dart run tool/bundle_node.dart
     - run: dart run tool/package_desktop.dart --tag smoke
+    - uses: actions/cache@v4
+      with:
+        path: build/test-graphics
+        key: test-graphics-${{ hashFiles('tool/fetch_test_graphics.ps1') }}
     - run: powershell -NoProfile -ExecutionPolicy Bypass -File tool\fetch_test_graphics.ps1 -Into build\desktop-package\murmur-client-smoke-windows-x64
     - run: dart run tool/desktop_smoke_test.dart --wallet-storage build\desktop-package\murmur-client-smoke-windows-x64

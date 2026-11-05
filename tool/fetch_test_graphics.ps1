@@ -16,9 +16,12 @@
 # extractor, which unpacks Mesa.
 #
 # For tests only: the project's rule against third parties is about what's
-# released, and these files must never be in a released package. The
-# release job gives them to the copy it tries, then builds and packages the
-# released app afresh, and checks that package holds none of them.
+# released, and these files must never be in a released package. Only the
+# regression's Windows jobs use them, on copies they try (smoke-windows,
+# acceptance-windows); the release builds and packages its app in a job of
+# its own, where this never runs. Those jobs cache the downloads
+# (build\test-graphics, keyed on this file), since GitHub's release downloads
+# once answered 504 for a while and stopped the smoke test.
 param([Parameter(Mandatory = $true)][string]$Into)
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
@@ -43,13 +46,26 @@ $work = 'build\test-graphics'
 New-Item -ItemType Directory -Force $work | Out-Null
 foreach ($d in $downloads) {
   $file = Join-Path $work $d.Name
-  if (-not (Test-Path $file) -or (Get-FileHash $file -Algorithm SHA256).Hash -ne $d.Sha256) {
-    Invoke-WebRequest -UseBasicParsing -Uri $d.Url -OutFile $file
-  }
-  $hash = (Get-FileHash $file -Algorithm SHA256).Hash.ToLower()
-  if ($hash -ne $d.Sha256) {
+  # Up to three tries: one download that failed on its way stopped the
+  # smoke test, and with it a release's regression (2026-11-05).
+  for ($try = 1; $try -le 3; $try++) {
+    if (-not (Test-Path $file) -or (Get-FileHash $file -Algorithm SHA256).Hash -ne $d.Sha256) {
+      try {
+        Invoke-WebRequest -UseBasicParsing -Uri $d.Url -OutFile $file
+      } catch {
+        Write-Output "downloading $($d.Name) failed (try $try): $($_.Exception.Message)"
+        if (Test-Path $file) { Remove-Item $file }
+        Start-Sleep -Seconds (10 * $try)
+        continue
+      }
+    }
+    $hash = (Get-FileHash $file -Algorithm SHA256).Hash.ToLower()
+    if ($hash -eq $d.Sha256) { break }
     Remove-Item $file
-    Write-Output "$($d.Name) is not the pinned file (SHA-256 $hash): refusing it"
+    Write-Output "$($d.Name) is not the pinned file (SHA-256 $hash, try $try)"
+  }
+  if (-not (Test-Path $file)) {
+    Write-Output "$($d.Name): no pinned file after three tries: refusing to go on"
     exit 1
   }
 }
