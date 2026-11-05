@@ -285,6 +285,11 @@ void main() {
     eachLine(flutter, (line) {
       said.add(line);
       print(line);
+      // A failure's annotation the app printed (acceptance_test.dart) comes
+      // after a prefix on some devices (Android's "I/flutter (…): "), and
+      // GitHub reads a workflow command only at the start of a line.
+      final command = line.indexOf('::error ');
+      if (command > 0) print(line.substring(command));
       if (chooser == 'host' && (line.contains(chooserPickRequest) || line.contains(chooserCancelRequest))) {
         unawaited(answerChooser(line));
       }
