@@ -54,10 +54,8 @@ class TestBrowser {
     final http = HttpClient();
     try {
       for (final (i, archive) in _archives.indexed) {
-        final response = await (await http.getUrl(Uri.parse(archive.url))).close();
-        if (response.statusCode != 200) throw StateError('${archive.url}: HTTP ${response.statusCode}');
         final file = File('${dir.path}/download-$i');
-        await response.pipe(file.openWrite());
+        await _download(http, archive.url, file);
         final actual = sha256.convert(await file.readAsBytes()).toString();
         if (actual != archive.sha256) {
           throw StateError('${archive.url} has SHA-256 $actual, not the pinned ${archive.sha256}: not unpacked');
@@ -72,6 +70,27 @@ class TestBrowser {
     }
     _writeSettings();
     _fetched.writeAsStringSync(version);
+  }
+
+  /// Downloads `url` into `file`, trying up to three times: GitHub's release
+  /// downloads (geckodriver's) once answered 504 for a while, and the
+  /// Firefox job stopped there (2026-11-05).
+  static Future<void> _download(HttpClient http, String url, File file) async {
+    for (var attempt = 1;; attempt++) {
+      try {
+        final response = await (await http.getUrl(Uri.parse(url))).close();
+        if (response.statusCode != 200) {
+          await response.drain<void>();
+          throw HttpException('HTTP ${response.statusCode}', uri: Uri.parse(url));
+        }
+        await response.pipe(file.openWrite());
+        return;
+      } on IOException catch (e) {
+        if (attempt == 3) throw StateError('$url: $e (after $attempt tries)');
+        print('$url: $e; trying again');
+        await Future<void>.delayed(Duration(seconds: 10 * attempt));
+      }
+    }
   }
 
   void _writeSettings() {

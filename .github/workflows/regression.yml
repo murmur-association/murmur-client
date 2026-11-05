@@ -103,6 +103,13 @@ jobs:
     # from user namespaces, which the pinned browsers' sandboxes need.
     - run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
     - run: dart run tool/bundle_node.dart --for-tests
+    # The pinned browsers, kept between runs (the tool keeps a pinned version
+    # it finds, and fetches only what isn't there).
+    - if: matrix.device != 'linux'
+      uses: actions/cache@v4
+      with:
+        path: build/test-browser
+        key: test-browser-${{ startsWith(matrix.device, 'chrome') && 'chrome' || matrix.device }}-${{ hashFiles('tool/fetch_test_browser.dart') }}
     - name: The pinned browser
       run: |
         case "$ACCEPTANCE_DEVICE" in
