@@ -5,8 +5,11 @@
 //
 // The app keeps its settings and secrets in memory here, never in the
 // device's own storage: a run can't touch a wallet the user has, and starts
-// from nothing wherever it runs. (Storing for real is
-// wallet_storage_test.dart's subject.)
+// from nothing wherever it runs. (Storing them for real is
+// wallet_storage_test.dart's subject.) Its local copy of the chain does go to
+// the device's storage, as a user's would: on a desktop in a folder the
+// runner throws away (MURMUR_DATA_HOME), elsewhere in the browser's or the
+// test app's own.
 
 import 'dart:async';
 import 'dart:typed_data';
@@ -19,6 +22,7 @@ import 'package:murmur_client/crypto/wallet.dart';
 import 'package:murmur_client/main.dart' as app;
 import 'package:murmur_client/protocol/bytes.dart';
 import 'package:murmur_client/protocol/models.dart';
+import 'package:murmur_client/services/chain_cache.dart';
 import 'package:murmur_client/services/key_vault.dart' show deviceKeyStoreAllowed;
 import 'package:murmur_client/services/local_node.dart';
 import 'package:murmur_client/services/node_client.dart';
@@ -32,6 +36,7 @@ import 'package:murmur_client/ui/picture_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'acceptance_protocol.dart';
+import 'csp_io.dart' if (dart.library.js_interop) 'csp_web.dart';
 import 'passkey_io.dart' if (dart.library.js_interop) 'passkey_web.dart';
 import 'runner_signal_io.dart' if (dart.library.js_interop) 'runner_signal_web.dart';
 
@@ -51,9 +56,9 @@ const acceptanceOwnNode = bool.fromEnvironment('ACCEPTANCE_OWN_NODE');
 const acceptancePasskey = bool.fromEnvironment('ACCEPTANCE_PASSKEY');
 
 /// Whether this machine can't show the system's notifications at all: a
-/// CI runner's service session has no desktop, and the Windows plugin's
-/// start-up ends the app there. The runner sets it from the environment's
-/// ACCEPTANCE_NO_NOTIFICATIONS.
+/// service session with no desktop (the Windows plugin's start-up ends the
+/// app there), or Safari, whose driver can't grant them. The runner sets it
+/// from the environment's ACCEPTANCE_NO_NOTIFICATIONS, and for Safari.
 const acceptanceNoNotifications = bool.fromEnvironment('ACCEPTANCE_NO_NOTIFICATIONS');
 
 /// Whether the device is much slower than a desktop: an emulator with no
@@ -66,8 +71,9 @@ const acceptanceSlow = bool.fromEnvironment('ACCEPTANCE_SLOW');
 /// Who works the system's picture chooser in this run, as the runner says:
 /// `host`, the runner itself, at the app's requests (Android, Linux, and
 /// Windows with a desktop: tool/system_chooser.dart); `browser`, the
-/// browser's driver, by itself; empty where nothing outside the app can
-/// (macOS, iOS, Windows without a desktop), and the test then hands over a
+/// browser's driver, by itself (Chrome, Firefox); empty where nothing
+/// outside the app can (macOS, iOS, Safari, a desktop the runner is told has
+/// no screen with ACCEPTANCE_NO_CHOOSER), and the test then hands over a
 /// file in the chooser's place.
 const acceptanceSystemChooser = String.fromEnvironment('ACCEPTANCE_SYSTEM_CHOOSER');
 
@@ -86,19 +92,29 @@ bool get acceptanceDeviceLock =>
 /// The one passphrase of the app in these tests.
 const passphrase = 'correct horse battery';
 
-/// A fresh device: no wallet, no cards, the test's node as its node, and
-/// the question about keeping a local copy answered (no).
-void freshDevice() {
+/// [acceptanceNode], as its host and its port.
+({String host, int port}) get acceptanceNodeAddress {
   final colon = acceptanceNode.lastIndexOf(':');
-  if (colon < 0 || acceptanceSeed.length != 64) {
+  final port = colon < 0 ? null : int.tryParse(acceptanceNode.substring(colon + 1));
+  if (port == null || acceptanceSeed.length != 64) {
     fail('Run through `flutter test tool/acceptance_test.dart`, which starts the node and passes '
         'ACCEPTANCE_NODE and ACCEPTANCE_SEED.');
   }
+  return (host: acceptanceNode.substring(0, colon), port: port);
+}
+
+/// A fresh device: no wallet, no cards, the test's node as its node, and
+/// the question about keeping a local copy answered: yes, so the device's
+/// own storage for it is used (IndexedDB in a browser, the app's cache
+/// folder on a phone, MURMUR_DATA_HOME on a desktop, which the runner makes
+/// a throwaway folder), and the restart starts from it.
+void freshDevice() {
+  final node = acceptanceNodeAddress;
   FlutterSecureStorage.setMockInitialValues({});
   SharedPreferences.setMockInitialValues({
-    'node_host': acceptanceNode.substring(0, colon),
-    'node_port': int.parse(acceptanceNode.substring(colon + 1)),
-    'storage_consent': StorageConsent.rejected.name,
+    'node_host': node.host,
+    'node_port': node.port,
+    'storage_consent': StorageConsent.allowed.name,
   });
 }
 
@@ -114,12 +130,18 @@ class AppDriver {
     if (acceptancePasskey) {
       // The page loads before the driver has given the browser its
       // authenticator: nothing starts until it's there.
-      final deadline = DateTime.now().add(const Duration(seconds: 60));
-      while (!await passkeyAuthenticatorThere()) {
-        if (DateTime.now().isAfter(deadline)) fail('the browser has no passkey authenticator');
-        await Future<void>.delayed(const Duration(milliseconds: 200));
-      }
+      await waitUntil(passkeyAuthenticatorThere,
+          what: "the browser's passkey authenticator",
+          timeout: const Duration(seconds: 60),
+          every: const Duration(milliseconds: 200));
     }
+    // Rule 2, in a browser: the page, served under app.murmur.info's
+    // Content-Security-Policy, reaches nothing the policy forbids (another
+    // origin's fonts or scripts, say), in any test.
+    watchPolicyViolations();
+    final violations = policyViolations().length;
+    addTearDown(() => expect(policyViolations().skip(violations), isEmpty,
+        reason: 'the page reached for something its Content-Security-Policy forbids'));
     // Typing goes to the test's text input, not the system's keyboard, which
     // integration tests otherwise keep: an iPhone's reports its own state
     // back, and moved the cursor away from what the test had just typed.
@@ -154,6 +176,18 @@ class AppDriver {
     }
     await app.main();
     await waitFor(find.byType(HomePage), what: 'the home page');
+    // When the test ends, this app's client stops as an app closing would:
+    // the next test's app, a restart, starts from what the device holds,
+    // and two clients never write the same local copy.
+    final started = client;
+    addTearDown(() async {
+      started
+        ..useCache(null)
+        ..disconnect();
+      await started.useOwnMessages(null);
+      // A write already under way finishes first.
+      await Future<void>.delayed(const Duration(seconds: 1));
+    });
     await waitUntil(() => client.state == LinkState.live, what: 'the app to follow the chain');
   }
 
@@ -165,43 +199,45 @@ class AppDriver {
   Preferences get prefs => AppScope.of(_home).prefs;
   LocalNode get ownNode => AppScope.of(_home).localNode!;
 
-  /// Lets the app run until `done`, for at most `timeout`: frames are drawn
-  /// as time passes, without waiting for animations to end (a spinner never
-  /// does). A `done` that throws (it reads a field of a page not built yet,
-  /// as on a slow device) counts as not yet.
-  Future<void> waitUntil(bool Function() done,
-      {required String what, Duration timeout = const Duration(seconds: 90)}) async {
+  /// Lets the app run until `done`, for at most `timeout`, asking every
+  /// `every`: frames are drawn as time passes, without waiting for
+  /// animations to end (a spinner never does). `done` may be asynchronous
+  /// (it reads the device's storage, say). A `done` that throws a
+  /// [StateError] (it reads a field of a page not built yet, as on a slow
+  /// device) counts as not yet.
+  Future<void> waitUntil(FutureOr<bool> Function() done,
+      {required String what,
+      Duration timeout = const Duration(seconds: 90),
+      Duration every = const Duration(milliseconds: 100)}) async {
     final deadline = DateTime.now().add(_scaled(timeout));
     Object? lastError;
-    bool doneYet() {
+    Future<bool> doneYet() async {
       try {
-        return done();
+        return await done();
       } on StateError catch (e) {
         lastError = e;
         return false;
       }
     }
 
-    if (!doneYet()) _waiting(what);
-    while (!doneYet()) {
+    if (!await doneYet()) _waiting(what);
+    while (!await doneYet()) {
       if (DateTime.now().isAfter(deadline)) {
-        fail('timed out waiting for $what (link ${client.state.name} at ${client.height}, error ${client.error})\n'
-            '${lastError == null ? '' : 'last: $lastError\n'}${_onScreen()}');
+        fail('timed out waiting for $what${_link()}\n${lastError == null ? '' : 'last: $lastError\n'}${_onScreen()}');
       }
-      await tester.pump(const Duration(milliseconds: 100));
+      await tester.pump(every);
     }
     await tester.pump();
   }
 
-  Future<void> waitFor(Finder finder, {required String what, Duration timeout = const Duration(seconds: 90)}) async {
-    final deadline = DateTime.now().add(_scaled(timeout));
-    if (finder.evaluate().isEmpty) _waiting(what);
-    while (finder.evaluate().isEmpty) {
-      if (DateTime.now().isAfter(deadline)) fail('timed out waiting for $what\n${_onScreen()}');
-      await tester.pump(const Duration(milliseconds: 100));
-    }
-    await tester.pump();
-  }
+  Future<void> waitFor(Finder finder, {required String what, Duration timeout = const Duration(seconds: 90)}) =>
+      waitUntil(() => finder.evaluate().isNotEmpty, what: what, timeout: timeout);
+
+  /// The client's link, for a failure's report, once there's a home page
+  /// to find it under.
+  String _link() => find.byType(HomePage, skipOffstage: false).evaluate().isEmpty
+      ? ''
+      : ' (link ${client.state.name} at ${client.height}, error ${client.error})';
 
   /// Says what the test waits for, with the time, so a run that hangs shows
   /// where: on 2026-11-03 iOS hung for two hours with nothing after its last
@@ -370,11 +406,10 @@ class AppDriver {
     // Switching off cancels Android's background check: first the runner
     // runs it, as asked when it was switched on, and says so.
     if (wasOn && !kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
-      final deadline = DateTime.now().add(_scaled(const Duration(minutes: 5)));
-      while (!await runnerSaid(androidBackgroundJobDone)) {
-        if (DateTime.now().isAfter(deadline)) fail('timed out waiting for the runner to run the background check');
-        await tester.pump(const Duration(milliseconds: 500));
-      }
+      await waitUntil(() => runnerSaid(androidBackgroundJobDone),
+          what: 'the runner to run the background check',
+          timeout: const Duration(minutes: 5),
+          every: const Duration(milliseconds: 500));
     }
     await flip(topic);
     // Switched on, it's on only once the system has answered: Android's
@@ -405,11 +440,11 @@ class AppDriver {
   Future<(String, Transaction)> someoneReplies(String root, String text) async {
     final payer = await MurmurWallet.fromSeed(fromHex(acceptanceSeed));
     final someone = await MurmurWallet.generate();
-    final colon = acceptanceNode.lastIndexOf(':');
+    final node = acceptanceNodeAddress;
     final other = MurmurClient();
     bool mined(Transaction tx) => other.lookupTx(tx.id)?.confirmed ?? false;
     try {
-      unawaited(other.connect(acceptanceNode.substring(0, colon), int.parse(acceptanceNode.substring(colon + 1))));
+      unawaited(other.connect(node.host, node.port));
       // Paid again if another of the wallet's transactions takes the
       // funding's nonce: one no device here knows of can still be waiting to
       // be mined (the card funded before the app restarted), and the proven
@@ -543,22 +578,30 @@ class AppDriver {
         reason: 'what a picture costs, said before sending');
     await press<FilledButton>(l.publicNameSet);
     await waitFor(find.text(l.profileSetTo(name)), what: 'the profile on the compose page');
-    await press<FilledButton>(l.signAndSend);
-    await waitFor(find.text(l.confirmSendTitle), what: 'the summary before signing');
-    await press<FilledButton>(l.signAndSend);
-    await unlock();
+    await signAndSend();
     return shown.picture!;
   }
 
-  /// Writes `text` on the compose page that's open, and signs and sends it:
-  /// the form, the summary, then the passphrase.
-  Future<void> writeAndSend(String text) async {
-    await type(l.message, text);
+  /// Signs and sends what the compose page that's open holds: its button,
+  /// the summary (where `onSummary` may look at it), the button again, then
+  /// the one question the vault asks.
+  Future<void> signAndSend({void Function()? onSummary}) async {
     await press<FilledButton>(l.signAndSend);
     await waitFor(find.text(l.confirmSendTitle), what: 'the summary before signing');
+    onSummary?.call();
     await press<FilledButton>(l.signAndSend);
     await unlock();
   }
+
+  /// Writes `text` on the compose page that's open, and signs and sends it.
+  Future<void> writeAndSend(String text) async {
+    await type(l.message, text);
+    await signAndSend();
+  }
+
+  /// What the device's own storage holds of the local copy for the chain
+  /// the app follows, read as a later session would; null if nothing.
+  Future<CachedChain?> storedChain() async => (await ChainCache.open())?.load(toHex(client.genesis!));
 }
 
 /// An image file a user might pick for their picture: a wide PNG (a sky, a

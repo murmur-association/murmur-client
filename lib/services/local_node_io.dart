@@ -8,6 +8,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'chain_cache_io.dart' show chainCacheBase;
 import 'local_node.dart';
 
 LocalNode createLocalNode() {
@@ -33,10 +34,8 @@ String _dataDir() {
   // Another folder, for tests of the app that must leave the user's alone.
   final override = env['MURMUR_NODE_DATA'];
   if (override != null) return override;
-  final base = env['APPDATA'] ??
-      env['XDG_DATA_HOME'] ??
-      (env['HOME'] == null ? null : '${env['HOME']}/.local/share') ??
-      Directory.systemTemp.path;
+  // Beside the chain cache, wherever that goes (MURMUR_DATA_HOME included).
+  final base = chainCacheBase(phone: false, env: env, temp: Directory.systemTemp.path);
   final sep = Platform.pathSeparator;
   return '$base${sep}murmur-client${sep}node';
 }
@@ -172,35 +171,43 @@ class ProcessLocalNode extends LocalNode {
     _exited(process, asked: true);
   }
 
-  /// Stops the node recorded in the pid file, if that process is still a
-  /// murmur-node (the pid may have been reused by something else since).
-  Future<void> _stopStale() async {
-    final int? pid;
-    try {
-      pid = int.tryParse((await _pidFile.readAsString()).trim());
-      await _pidFile.delete();
-    } on FileSystemException {
-      return;
-    }
-    if (pid == null || !await _isNodeProcess(pid)) return;
-    Process.killPid(pid);
-    await Future<void>.delayed(const Duration(seconds: 1));
-  }
+  /// Stops a node left running in this data folder by a session that
+  /// crashed.
+  Future<void> _stopStale() => stopLeftNode(dataDir);
+}
 
-  static Future<bool> _isNodeProcess(int pid) async {
-    try {
-      if (Platform.isWindows) {
-        final r = await Process.run('tasklist', ['/FI', 'PID eq $pid', '/FO', 'CSV', '/NH']);
-        return '${r.stdout}'.toLowerCase().contains('murmur-node');
-      }
-      if (Platform.isLinux) {
-        final cmdline = File('/proc/$pid/cmdline');
-        return await cmdline.exists() && (await cmdline.readAsString()).contains('murmur-node');
-      }
-      final r = await Process.run('ps', ['-p', '$pid', '-o', 'comm=']);
-      return '${r.stdout}'.contains('murmur-node');
-    } on ProcessException {
-      return false;
+/// Stops the node recorded in `dataDir`'s pid file, if that process is
+/// still a murmur-node (the pid may have been reused by something else
+/// since), and removes the file. A starting app does it, and so does the
+/// acceptance runner after a run (tool/acceptance_test.dart), for a node a
+/// failed test never switched off.
+Future<void> stopLeftNode(String dataDir) async {
+  final pidFile = File('$dataDir${Platform.pathSeparator}app-node.pid');
+  final int? pid;
+  try {
+    pid = int.tryParse((await pidFile.readAsString()).trim());
+    await pidFile.delete();
+  } on FileSystemException {
+    return;
+  }
+  if (pid == null || !await _isNodeProcess(pid)) return;
+  Process.killPid(pid);
+  await Future<void>.delayed(const Duration(seconds: 1));
+}
+
+Future<bool> _isNodeProcess(int pid) async {
+  try {
+    if (Platform.isWindows) {
+      final r = await Process.run('tasklist', ['/FI', 'PID eq $pid', '/FO', 'CSV', '/NH']);
+      return '${r.stdout}'.toLowerCase().contains('murmur-node');
     }
+    if (Platform.isLinux) {
+      final cmdline = File('/proc/$pid/cmdline');
+      return await cmdline.exists() && (await cmdline.readAsString()).contains('murmur-node');
+    }
+    final r = await Process.run('ps', ['-p', '$pid', '-o', 'comm=']);
+    return '${r.stdout}'.contains('murmur-node');
+  } on ProcessException {
+    return false;
   }
 }

@@ -74,11 +74,8 @@ void main() {
     await app.type(l.message, '$threadText\n@Fri');
     await app.tap(find.widgetWithText(ActionChip, '@Friend'), what: 'the suggested friend');
     expect(app.fieldText(l.message), '$threadText\n@Friend ');
-    await app.press<FilledButton>(l.signAndSend);
-    await app.waitFor(find.text(l.confirmSendTitle), what: 'the summary before signing');
-    expect(find.text(l.mentionsLabel), findsWidgets, reason: 'the summary says whom it mentions');
-    await app.press<FilledButton>(l.signAndSend);
-    await app.unlock();
+    await app.signAndSend(
+        onSummary: () => expect(find.text(l.mentionsLabel), findsWidgets, reason: 'the summary says whom it mentions'));
     await app.waitFor(find.byType(ThreadPage), what: "the new thread's page");
     expect(find.textContaining(threadText), findsWidgets);
     final sent = app.client.messagesBy(me).firstWhere((v) => v.tx.kind == TxKind.orphan).tx;
@@ -197,9 +194,17 @@ void main() {
     await app.backHome();
     await app.openTab(l.tabWallet);
     await app.waitUntil(() => app.showsPicture(me), what: "the wallet's picture in place of its mark");
+
+    // The local copy, allowed on this device: the chain and the thread's
+    // text are in the device's own storage, read back as the restart will.
+    await app.waitUntil(() async {
+      final stored = await app.storedChain();
+      return stored != null && stored.headers.isNotEmpty && stored.contents.containsKey(toHex(sent.messageHash!));
+    }, what: "the chain and the thread's text in the local copy", every: const Duration(seconds: 1));
   }, timeout: perTest);
 
-  testWidgets('after a restart: the wallet, the thread with its reply, the card and the picture are all there',
+  testWidgets(
+      'after a restart: the wallet, the thread with its reply, the card, the picture and the local copy are all there',
       (tester) async {
     // What the device held when the first test ended, and nothing more.
     final app = AppDriver(tester);
@@ -214,10 +219,17 @@ void main() {
     await app.waitFor(find.text(app.wallets.wallet!.addressHex), what: "the wallet's address");
     expect(find.text(l.importSeed), findsNothing);
 
+    // The local copy outlived the app: the thread's text is still in the
+    // device's storage.
+    final me = app.wallets.wallet!.addressHex;
+    final thread = app.client.messagesBy(me).firstWhere((v) => v.tx.kind == TxKind.orphan).tx;
+    final stored = await app.storedChain();
+    expect(stored?.contents.containsKey(toHex(thread.messageHash!)), isTrue,
+        reason: "the thread's text in the local copy, after the restart");
+
     // The profile, read again from the chain: the picture in place of the
     // mark, and kept when the name is edited again, so a new name alone
     // wouldn't drop it.
-    final me = app.wallets.wallet!.addressHex;
     await app.waitUntil(() => app.showsPicture(me), what: "the wallet's picture, read again from the chain");
     await app.press<FilledButton>(l.publicNameAndPictureSet);
     await app.waitFor(find.text(l.pictureRemove), what: 'the published picture, kept in the dialog');
@@ -288,8 +300,8 @@ void main() {
     // And off again.
     await app.switchOnNotifications(l.notifyReplies);
     expect(app.prefs.notifyTopics, isEmpty);
-    // Not on a machine with no desktop to show them on (a CI runner's
-    // service session).
+    // Not on a machine that can't show them (ACCEPTANCE_NO_NOTIFICATIONS: no
+    // desktop, or a browser whose driver can't grant them).
   }, skip: acceptanceNoNotifications, timeout: perTest);
 
   testWidgets("a desktop's own node: it runs beside the app, and mines on the graphics card or says why not",

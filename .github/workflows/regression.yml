@@ -2,12 +2,15 @@
 # tests against the pinned node, a web build, the acceptance tests on every
 # flavour (integration_test/acceptance_test.dart, run by
 # tool/acceptance_test.dart: the Linux, Windows and Mac apps, Chrome with a
-# passphrase and with a passkey, Firefox, an Android emulator and an iPhone
-# simulator), and the packaged desktop apps' smoke tests
+# passphrase and with a passkey, Firefox, Safari, an Android emulator and an
+# iPhone simulator), and the packaged desktop apps' smoke tests
 # (tool/desktop_smoke_test.dart). GitHub's hosted runners are free for a
 # public repository, and its Linux runners have KVM, so Android's emulator
 # is accelerated here (on GitLab's it emulated the processor, about 50
 # minutes a run).
+#
+# Every job sets up Flutter, the packages and what it builds with through
+# one local action (.github/actions/flutter), after its checkout.
 #
 # Releases are release.yml (on a vX.Y.Z tag) and scheduled-release.yml
 # (daily, when the testnet checkpoint has aged).
@@ -38,17 +41,8 @@ concurrency:
   cancel-in-progress: ${{ !inputs.ref }}
 
 env:
-  # The Flutter SDK every job builds with; raise it deliberately, together
-  # with the version used locally and in release.yml and scheduled-release.yml.
-  FLUTTER_VERSION: "3.47.5"
   # The tests against the node must run, not skip themselves.
   MURMUR_REQUIRE_NODE: "1"
-  # What building the Linux app needs, and what its tests need to run it
-  # without a desktop: a display, a window manager, a session and a keyring;
-  # xdotool works GTK's file dialog for the acceptance tests.
-  LINUX_APP_PACKAGES: >-
-    clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev g++ libsecret-1-dev libjsoncpp-dev
-    xvfb openbox wmctrl xdotool dbus dbus-x11 gnome-keyring libgl1-mesa-dri libegl1 libgles2 procps
 
 jobs:
   analyze:
@@ -57,11 +51,7 @@ jobs:
     - uses: actions/checkout@v4
       with:
         ref: ${{ inputs.ref || github.sha }}
-    - uses: subosito/flutter-action@v2
-      with:
-        flutter-version: ${{ env.FLUTTER_VERSION }}
-        cache: true
-    - run: flutter pub get
+    - uses: ./.github/actions/flutter
     # The generated localizations must match the ARB files.
     - run: flutter gen-l10n && git diff --exit-code -- lib/l10n
     - run: flutter analyze
@@ -72,11 +62,7 @@ jobs:
     - uses: actions/checkout@v4
       with:
         ref: ${{ inputs.ref || github.sha }}
-    - uses: subosito/flutter-action@v2
-      with:
-        flutter-version: ${{ env.FLUTTER_VERSION }}
-        cache: true
-    - run: flutter pub get
+    - uses: ./.github/actions/flutter
     # The pinned murmur-node release (tool/node_release.dart), checked
     # against its SHA256SUMS. The public-node tests skip themselves without
     # MURMUR_NODE.
@@ -89,11 +75,7 @@ jobs:
     - uses: actions/checkout@v4
       with:
         ref: ${{ inputs.ref || github.sha }}
-    - uses: subosito/flutter-action@v2
-      with:
-        flutter-version: ${{ env.FLUTTER_VERSION }}
-        cache: true
-    - run: flutter pub get
+    - uses: ./.github/actions/flutter
     - run: flutter build web --release --no-web-resources-cdn
     - run: dart run tool/fetch_fallback_fonts.dart
 
@@ -113,19 +95,13 @@ jobs:
     - uses: actions/checkout@v4
       with:
         ref: ${{ inputs.ref || github.sha }}
-    - uses: subosito/flutter-action@v2
+    # Firefox's archive is xz, and it plays (and so loads) sound.
+    - uses: ./.github/actions/flutter
       with:
-        flutter-version: ${{ env.FLUTTER_VERSION }}
-        cache: true
-    - name: System packages
-      run: |
-        sudo apt-get update -qq
-        # Firefox's archive is xz, and it plays (and so loads) sound.
-        sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends $LINUX_APP_PACKAGES libnss3 libgbm1 xz-utils libasound2t64
+        linux: session libnss3 libgbm1 xz-utils libasound2t64
     # Ubuntu 24.04 keeps programs without an AppArmor profile of their own
     # from user namespaces, which the pinned browsers' sandboxes need.
     - run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
-    - run: flutter pub get
     - run: dart run tool/bundle_node.dart --for-tests
     - name: The pinned browser
       run: |
@@ -163,17 +139,14 @@ jobs:
       with:
         distribution: temurin
         java-version: '17'
-    - uses: subosito/flutter-action@v2
+    # The emulator's libraries.
+    - uses: ./.github/actions/flutter
       with:
-        flutter-version: ${{ env.FLUTTER_VERSION }}
-        cache: true
-    - name: The emulator's libraries, and the SDK's tools on the path
+        linux: libpulse0 libnss3 libgbm1 libxkbfile1 libxcomposite1 libxcursor1 libxdamage1 libxi6 libxtst6
+    - name: The SDK's tools on the path
       run: |
-        sudo apt-get update -qq
-        sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends libpulse0 libnss3 libgbm1 libxkbfile1 libxcomposite1 libxcursor1 libxdamage1 libxi6 libxtst6
         echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
         echo "$ANDROID_HOME/platform-tools" >> "$GITHUB_PATH"
-    - run: flutter pub get
     # The NDK and CMake the build asks for, ahead of it and with retries:
     # Gradle's own download once came back corrupt ("unknown archive") and
     # the app never built. The NDK's version is the pinned Flutter's.
@@ -221,7 +194,7 @@ jobs:
         free -m
 
   # In an iPhone simulator (tool/ios_simulator.sh boots one), against the
-  # node's macOS build (universal: Intel and Apple silicon). Both Apple jobs
+  # node's macOS build (universal: Intel and Apple silicon). The Apple jobs
   # run on Apple silicon. On 2026-11-03 those runners took no job twice in a
   # row ("capacity constraints"), and the jobs ran on Intel Macs
   # (macos-15-intel) for a day: slow enough that the test node, mining at 1%
@@ -238,11 +211,7 @@ jobs:
         ref: ${{ inputs.ref || github.sha }}
     - name: The newest Xcode
       run: sudo xcode-select -s "$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)" && xcodebuild -version
-    - uses: subosito/flutter-action@v2
-      with:
-        flutter-version: ${{ env.FLUTTER_VERSION }}
-        cache: true
-    - run: flutter pub get
+    - uses: ./.github/actions/flutter
     - run: dart run tool/bundle_node.dart --for-tests
     - name: Acceptance tests
       run: |
@@ -251,40 +220,55 @@ jobs:
         flutter test --reporter expanded tool/acceptance_test.dart
 
   # The Mac app, with its own node (the node's macOS build) as on Windows
-  # and Linux. As on GitLab, the notification step skips itself until it
-  # has been tried in this runner's session; iOS's job covers Apple's
-  # notification centre.
+  # and Linux, and its notifications in the runner's logged-in session
+  # (GitHub's Macs have one; GitLab's console belonged to root). The system's
+  # file dialog answers only a process with Accessibility, which the runner
+  # hasn't: the suite hands a file over in its place.
   acceptance-macos:
     name: 'acceptance: [macos]'
     runs-on: macos-latest
     timeout-minutes: 60
-    env:
-      ACCEPTANCE_NO_NOTIFICATIONS: "1"
     steps:
     - uses: actions/checkout@v4
       with:
         ref: ${{ inputs.ref || github.sha }}
     - name: The newest Xcode
       run: sudo xcode-select -s "$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)" && xcodebuild -version
-    - uses: subosito/flutter-action@v2
+    - uses: ./.github/actions/flutter
+    - run: dart run tool/bundle_node.dart --for-tests
+    - run: flutter test --reporter expanded tool/acceptance_test.dart
+
+  # The page in Safari, the system's own, through safaridriver (enabled
+  # here, which needs the runner's logged-in session). Safari's driver can't
+  # grant notifications nor fill a file input, so the runner skips the
+  # notification test and hands a picture over in the chooser's place.
+  acceptance-safari:
+    name: 'acceptance: [safari]'
+    runs-on: macos-latest
+    timeout-minutes: 60
+    env:
+      ACCEPTANCE_DEVICE: safari
+    steps:
+    - uses: actions/checkout@v4
       with:
-        flutter-version: ${{ env.FLUTTER_VERSION }}
-        cache: true
-    - run: flutter pub get
+        ref: ${{ inputs.ref || github.sha }}
+    - uses: ./.github/actions/flutter
+    - run: sudo safaridriver --enable
     - run: dart run tool/bundle_node.dart --for-tests
     - run: flutter test --reporter expanded tool/acceptance_test.dart
 
   # The Windows app. The debug app gets, beside it, the software graphics
   # the smoke test uses and Visual Studio's debug runtime, and the node the
   # release runtime, as on GitLab's server runner (harmless where the
-  # system has them). The notification step skips itself until it has been
-  # tried in this runner's session.
+  # system has them). GitHub's runner has a logged-on user's desktop, so the
+  # notification step runs and the system's file dialog is worked from
+  # outside the app (tool/system_chooser.dart); Windows can't list an
+  # unpackaged app's notifications back, so there only the app's side is
+  # checked.
   acceptance-windows:
     name: 'acceptance: [windows]'
     runs-on: windows-latest
     timeout-minutes: 60
-    env:
-      ACCEPTANCE_NO_NOTIFICATIONS: "1"
     defaults:
       run:
         shell: pwsh
@@ -292,22 +276,9 @@ jobs:
     - uses: actions/checkout@v4
       with:
         ref: ${{ inputs.ref || github.sha }}
-    - uses: subosito/flutter-action@v2
+    - uses: ./.github/actions/flutter
       with:
-        flutter-version: ${{ env.FLUTTER_VERSION }}
-        cache: true
-    - name: Visual Studio's ATL (the secure-storage plugin needs atlstr.h)
-      run: |
-        $installer = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer"
-        $vs = & "$installer\vswhere.exe" -latest -products * -property installationPath
-        $atl = & "$installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.ATL -property installationPath
-        if (-not $atl) {
-          $p = Start-Process -Wait -PassThru -FilePath "$installer\setup.exe" -ArgumentList "modify --installPath `"$vs`" --add Microsoft.VisualStudio.Component.VC.ATL --quiet --norestart"
-          Write-Output "added ATL to ${vs}: exit code $($p.ExitCode)"
-          if ($p.ExitCode -ne 0 -and $p.ExitCode -ne 3010) { exit 1 }
-        }
-        exit 0
-    - run: flutter pub get
+        atl: true
     - run: dart run tool/bundle_node.dart --for-tests
     # The debug build first, so its folder is there to put things beside.
     - run: flutter build windows --debug
@@ -329,7 +300,8 @@ jobs:
   # stops with its window, a node left by a killed app is replaced, a wallet
   # is saved through the real keyring, and with the keyring locked and
   # nobody to answer, the app still starts. Its own node stays on the demo
-  # network.
+  # network. The release builds on this: it runs this regression on the
+  # tag, and packages the released app without trying it again.
   smoke-linux:
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -337,12 +309,9 @@ jobs:
     - uses: actions/checkout@v4
       with:
         ref: ${{ inputs.ref || github.sha }}
-    - uses: subosito/flutter-action@v2
+    - uses: ./.github/actions/flutter
       with:
-        flutter-version: ${{ env.FLUTTER_VERSION }}
-        cache: true
-    - run: sudo apt-get update -qq && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends $LINUX_APP_PACKAGES
-    - run: flutter pub get
+        linux: session
     - run: flutter build linux --release --dart-define=MURMUR_LOCAL_NODE_SPEC=demo
     - run: dart run tool/bundle_node.dart
     - run: dart run tool/package_desktop.dart --tag smoke
@@ -363,22 +332,9 @@ jobs:
     - uses: actions/checkout@v4
       with:
         ref: ${{ inputs.ref || github.sha }}
-    - uses: subosito/flutter-action@v2
+    - uses: ./.github/actions/flutter
       with:
-        flutter-version: ${{ env.FLUTTER_VERSION }}
-        cache: true
-    - name: Visual Studio's ATL (the secure-storage plugin needs atlstr.h)
-      run: |
-        $installer = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer"
-        $vs = & "$installer\vswhere.exe" -latest -products * -property installationPath
-        $atl = & "$installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.ATL -property installationPath
-        if (-not $atl) {
-          $p = Start-Process -Wait -PassThru -FilePath "$installer\setup.exe" -ArgumentList "modify --installPath `"$vs`" --add Microsoft.VisualStudio.Component.VC.ATL --quiet --norestart"
-          Write-Output "added ATL to ${vs}: exit code $($p.ExitCode)"
-          if ($p.ExitCode -ne 0 -and $p.ExitCode -ne 3010) { exit 1 }
-        }
-        exit 0
-    - run: flutter pub get
+        atl: true
     - run: flutter build windows --release --dart-define=MURMUR_LOCAL_NODE_SPEC=demo
     - run: dart run tool/bundle_node.dart
     - run: dart run tool/package_desktop.dart --tag smoke

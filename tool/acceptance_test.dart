@@ -7,32 +7,42 @@
 //   ACCEPTANCE_DEVICE=chrome flutter test tool/acceptance_test.dart    # a browser, with a passphrase
 //   ACCEPTANCE_DEVICE=chrome-passkey flutter test tool/acceptance_test.dart   # a browser, with a passkey
 //   ACCEPTANCE_DEVICE=firefox flutter test tool/acceptance_test.dart   # Firefox (Linux)
+//   ACCEPTANCE_DEVICE=safari flutter test tool/acceptance_test.dart    # Safari (macOS, after `sudo safaridriver --enable`)
 //   ACCEPTANCE_DEVICE=emulator-5554 flutter test tool/acceptance_test.dart   # an Android emulator
 //   ACCEPTANCE_DEVICE=$(tool/ios_simulator.sh) flutter test tool/acceptance_test.dart   # an iPhone simulator (macOS)
 //
 // A browser run uses a pinned browser and its WebDriver (`dart run
-// tool/fetch_test_browser.dart chrome|firefox` downloads them): the driver
-// is started here, on port 4444, and stopped afterwards.
-// ACCEPTANCE_HEADED shows the browser. Not Edge: `flutter drive` asks Edge's
-// driver for a browser it doesn't know by that name.
+// tool/fetch_test_browser.dart chrome|firefox` downloads them), or the
+// system's own Safari and safaridriver: the driver is started here, on port
+// 4444, and stopped afterwards. ACCEPTANCE_HEADED shows the browser (Safari
+// always shows). Not Edge: `flutter drive` asks Edge's driver for a browser
+// it doesn't know by that name.
 //
-// The app in the test keeps nothing on the device (app_driver.dart), so
-// this can run where the app is used. On Linux it still needs a display:
+// What the machine can't do is said in the environment:
+// ACCEPTANCE_NO_NOTIFICATIONS (it can't show the system's notifications, so
+// the notification test skips itself) and ACCEPTANCE_NO_CHOOSER (nothing
+// can work the system's file dialog from outside the app: no desktop, so a
+// file is handed over in its place).
+//
+// The app in the test keeps its settings and secrets in memory
+// (app_driver.dart), and a desktop app its local copy, its own messages and
+// its node's data in a folder thrown away with the run (MURMUR_DATA_HOME),
+// so this can run where the app is used. On Linux it still needs a display:
 // tool/linux_session.sh gives one.
 
 // ignore_for_file: avoid_print
 
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:murmur_client/crypto/wallet.dart';
 import 'package:murmur_client/protocol/bytes.dart';
-
+import 'package:murmur_client/services/local_node_io.dart' show stopLeftNode;
 import 'package:murmur_client/ui/notifications.dart' show backgroundCheckLog;
 
 import '../integration_test/support/acceptance_protocol.dart';
+import '../test/support/host.dart';
 import '../test/support/test_node.dart';
 import 'android_system.dart';
 import 'fetch_test_browser.dart';
@@ -40,14 +50,17 @@ import 'system_chooser.dart';
 
 final _env = Platform.environment;
 final _device = _env['ACCEPTANCE_DEVICE'] ?? Platform.operatingSystem;
-const _browsers = {'chrome', 'chrome-passkey', 'firefox'};
+const _browsers = {'chrome', 'chrome-passkey', 'firefox', 'safari'};
+
+/// Whether the environment says so (any value).
+bool _said(String name) => _env[name] != null;
 
 /// The browser `flutter drive` drives for a browser flavour.
 String get _browserName => _device == 'chrome-passkey' ? 'chrome' : _device;
 const _suite = 'integration_test/acceptance_test.dart';
 
 /// A device far slower than a desktop (ACCEPTANCE_SLOW): the suite waits longer.
-final _slow = _env['ACCEPTANCE_SLOW'] != null;
+final _slow = _said('ACCEPTANCE_SLOW');
 
 /// A port nothing listens on now.
 Future<int> _freePort() async {
@@ -60,30 +73,36 @@ Future<int> _freePort() async {
 /// Starts the browser's WebDriver on the port `flutter drive` expects, and
 /// waits until it answers.
 Future<Process> _startWebDriver() async {
-  final pinned = testBrowserNamed(_browserName);
-  if (!pinned.ready) {
-    fail('No $_browserName ${pinned.version} in ${pinned.dir.path}: '
-        'run `dart run tool/fetch_test_browser.dart $_browserName`.');
+  // Safari's driver is the system's own (enabled once with `sudo
+  // safaridriver --enable`); the others are pinned downloads.
+  final String program;
+  if (_browserName == 'safari') {
+    program = '/usr/bin/safaridriver';
+  } else {
+    final pinned = testBrowserNamed(_browserName);
+    if (!pinned.ready) {
+      fail('No $_browserName ${pinned.version} in ${pinned.dir.path}: '
+          'run `dart run tool/fetch_test_browser.dart $_browserName`.');
+    }
+    program = pinned.driver.path;
   }
-  final driver = await Process.start(pinned.driver.path, [
-    '--port=4444',
-    if (_browserName == 'firefox') '--binary=${pinned.browser.path}',
+  final driver = await Process.start(program, [
+    if (_browserName == 'safari') ...['--port', '4444'] else '--port=4444',
+    if (_browserName == 'firefox') '--binary=${testBrowserNamed('firefox').browser.path}',
   ]);
   // Kept for a failure's report: a driver that won't start says why.
   final said = StringBuffer();
-  for (final stream in [driver.stdout, driver.stderr]) {
-    stream.transform(const Utf8Decoder(allowMalformed: true)).listen(said.write);
-  }
-  final deadline = DateTime.now().add(const Duration(seconds: 30));
-  while (true) {
+  eachLine(driver, said.writeln);
+  final listening = await poll(() async {
     try {
       (await Socket.connect(InternetAddress.loopbackIPv4, 4444)).destroy();
-      return driver;
+      return true;
     } on SocketException {
-      if (DateTime.now().isAfter(deadline)) fail('${pinned.driver.path} did not listen on port 4444; it said: $said');
+      return false;
     }
-    await Future<void>.delayed(const Duration(milliseconds: 200));
-  }
+  }, timeout: const Duration(seconds: 30), every: const Duration(milliseconds: 200));
+  if (!listening) fail('$program did not listen on port 4444; it said: $said');
+  return driver;
 }
 
 /// Flutter's web server settings (web_dev_config.yaml) that serve the page
@@ -106,28 +125,26 @@ String webDevConfig(String headers, {required String node}) {
   return '$yaml';
 }
 
-/// Stops the node the app under test may have left running (a test that
-/// failed midway never switched it off), then removes its folder.
-Future<void> _stopOwnNode(Directory data) async {
-  final pidFile = File('${data.path}${Platform.pathSeparator}app-node.pid');
-  if (pidFile.existsSync()) {
-    final pid = int.tryParse(pidFile.readAsStringSync().trim());
-    if (pid != null) Process.killPid(pid, ProcessSignal.sigkill);
-    await Future<void>.delayed(const Duration(seconds: 1));
-  }
+/// Stops the node the app under test may have left running in the run's
+/// data folder (a test that failed midway never switched it off), as the
+/// app itself would at its next start, then removes the folder.
+Future<void> _throwAway(Directory dataHome) async {
+  final sep = Platform.pathSeparator;
+  await stopLeftNode('${dataHome.path}${sep}murmur-client${sep}node');
   try {
-    data.deleteSync(recursive: true);
+    dataHome.deleteSync(recursive: true);
   } on FileSystemException {
     // Still held for a moment by the node on its way out.
   }
 }
+
 /// Finds the app's WorkManager job (scheduled once notifications are on),
 /// runs it as Android would, and says whether its Dart side ran.
 Future<bool> _runBackgroundJob(AndroidSystem android) async {
-  for (var i = 0; i < 30; i++) {
-    final job = await android.backgroundJob();
-    if (job != null) return android.runBackgroundJob(job, backgroundCheckLog);
-    await Future<void>.delayed(const Duration(seconds: 2));
+  ({String? namespace, String id})? job;
+  if (await poll(() async => (job = await android.backgroundJob()) != null,
+      timeout: const Duration(minutes: 1), every: const Duration(seconds: 2))) {
+    return android.runBackgroundJob(job!, backgroundCheckLog);
   }
   print('android: no background job was scheduled; the scheduler lists for the app:');
   print(await android.scheduledJobsText());
@@ -149,18 +166,23 @@ void main() {
     await node.start(mineTo: wallet.address, webSocketPort: webSocket);
     // An Android emulator reaches this machine as 10.0.2.2.
     final host = _device.startsWith('emulator-') ? '10.0.2.2' : '127.0.0.1';
-    // A desktop app can run a node of its own: the pinned one, on the demo
-    // network, in a folder thrown away with the run (never the user's).
+    // A desktop app keeps its local copy, its own messages and its node's
+    // data under MURMUR_DATA_HOME: a folder thrown away with the run, never
+    // the user's (the demo chain would replace the user's local copy). Its
+    // node is the pinned one, on the demo network.
     final desktop = _device == 'windows' || _device == 'linux' || _device == 'macos';
-    final ownNodeData = desktop ? await Directory.systemTemp.createTemp('murmur-acceptance-node') : null;
-    if (ownNodeData != null) addTearDown(() => _stopOwnNode(ownNodeData));
+    final dataHome = desktop ? await Directory.systemTemp.createTemp('murmur-acceptance') : null;
+    if (dataHome != null) addTearDown(() => _throwAway(dataHome));
+    // Safari's driver has no way to grant notifications (WebDriver's Set
+    // Permission) nor to give a file input its file.
+    final noNotifications = _said('ACCEPTANCE_NO_NOTIFICATIONS') || _device == 'safari';
     final settings = [
       '--dart-define=ACCEPTANCE_NODE=$host:${webSocket ?? node.port}',
       '--dart-define=ACCEPTANCE_SEED=${toHex(wallet.seed)}',
       if (desktop) ...['--dart-define=ACCEPTANCE_OWN_NODE=true', '--dart-define=MURMUR_LOCAL_NODE_SPEC=demo'],
       if (passkey) '--dart-define=ACCEPTANCE_PASSKEY=true',
-      // A machine without a desktop, which can't show notifications.
-      if (_env['ACCEPTANCE_NO_NOTIFICATIONS'] != null) '--dart-define=ACCEPTANCE_NO_NOTIFICATIONS=true',
+      // A machine that can't show the system's notifications.
+      if (noNotifications) '--dart-define=ACCEPTANCE_NO_NOTIFICATIONS=true',
       // A device far slower than a desktop (an emulator without KVM).
       if (_slow) '--dart-define=ACCEPTANCE_SLOW=true',
     ];
@@ -197,9 +219,12 @@ void main() {
     // In the system's own form (backslashes on Windows, whose file dialog
     // takes no other).
     final picture = File(chooserPictureFile).resolveSymbolicLinksSync();
-    final (desktopChooser, chooserWhy) =
-        desktop && _env['ACCEPTANCE_NO_NOTIFICATIONS'] == null ? await SystemChooser.here() : (null, 'no desktop');
-    final chooser = browser
+    final (desktopChooser, chooserWhy) = !desktop
+        ? (null, 'not a desktop')
+        : _said('ACCEPTANCE_NO_CHOOSER')
+            ? (null, 'no desktop to work it on')
+            : await SystemChooser.here();
+    final chooser = browser && _device != 'safari'
         ? 'browser'
         : android != null || desktopChooser != null
             ? 'host'
@@ -234,7 +259,8 @@ void main() {
             '--release', '--no-web-resources-cdn',
             '--browser-name=$_browserName',
             if (_browserName == 'chrome') '--chrome-binary=${testBrowserNamed('chrome').browser.path}',
-            if (_env['ACCEPTANCE_HEADED'] == null) '--headless',
+            // Safari has no headless mode.
+            if (!_said('ACCEPTANCE_HEADED') && _browserName != 'safari') '--headless',
             ...settings,
           ];
     print('flutter ${args.where((a) => !a.contains('ACCEPTANCE_SEED')).join(' ')}');
@@ -248,37 +274,35 @@ void main() {
     final environment = {
       for (final MapEntry(:key, :value) in _env.entries)
         if (key != 'FONTCONFIG_FILE' && key != 'FLUTTER_TEST' && key != 'GITHUB_ACTIONS') key: value,
-      if (ownNodeData != null) ...{'MURMUR_NODE_BIN': nodeBinary!, 'MURMUR_NODE_DATA': ownNodeData.path},
+      if (dataHome != null) ...{'MURMUR_NODE_BIN': nodeBinary!, 'MURMUR_DATA_HOME': dataHome.path},
       if (passkey) 'ACCEPTANCE_PASSKEY': '1',
       // The file a browser's driver gives the page's file input.
-      if (browser) 'ACCEPTANCE_PICTURE_FILE': picture,
+      if (chooser == 'browser') 'ACCEPTANCE_PICTURE_FILE': picture,
     };
     final flutter = await Process.start(Platform.isWindows ? 'flutter.bat' : 'flutter', args,
         environment: environment, includeParentEnvironment: false, runInShell: Platform.isWindows);
     final said = <String>[];
-    for (final stream in [flutter.stdout, flutter.stderr]) {
-      stream.transform(const Utf8Decoder(allowMalformed: true)).transform(const LineSplitter()).listen((line) {
-        said.add(line);
-        print(line);
-        if (chooser == 'host' && (line.contains(chooserPickRequest) || line.contains(chooserCancelRequest))) {
-          unawaited(answerChooser(line));
-        }
-        if (android == null) return;
-        final click = line.indexOf(androidClickRequest);
-        if (click >= 0) {
-          final title = line.substring(click + androidClickRequest.length).trim();
-          android.clickNotification(title).then((done) => print('android: clicked "$title": $done'));
-        } else if (line.contains(androidBackgroundJobRequest)) {
-          _runBackgroundJob(android).then((ran) async {
-            backgroundJobRan = ran;
-            print('android: the background job ran: $ran');
-            // The app waits for this before it switches notifications off,
-            // which cancels the job.
-            await android.tellApp(androidBackgroundJobDone);
-          });
-        }
-      });
-    }
+    eachLine(flutter, (line) {
+      said.add(line);
+      print(line);
+      if (chooser == 'host' && (line.contains(chooserPickRequest) || line.contains(chooserCancelRequest))) {
+        unawaited(answerChooser(line));
+      }
+      if (android == null) return;
+      final click = line.indexOf(androidClickRequest);
+      if (click >= 0) {
+        final title = line.substring(click + androidClickRequest.length).trim();
+        android.clickNotification(title).then((done) => print('android: clicked "$title": $done'));
+      } else if (line.contains(androidBackgroundJobRequest)) {
+        _runBackgroundJob(android).then((ran) async {
+          backgroundJobRan = ran;
+          print('android: the background job ran: $ran');
+          // The app waits for this before it switches notifications off,
+          // which cancels the job.
+          await android.tellApp(androidBackgroundJobDone);
+        });
+      }
+    });
     expect(await flutter.exitCode, 0, reason: 'the acceptance tests on $_device');
     // `flutter drive` can end with 0 after tests that failed.
     expect(said.where((line) => line.contains('Some tests failed') || line.contains('[E]')), isEmpty);

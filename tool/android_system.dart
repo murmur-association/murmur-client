@@ -12,6 +12,8 @@
 import 'dart:async';
 import 'dart:io';
 
+import '../test/support/host.dart';
+
 /// One element of the screen: its attributes, and its centre.
 typedef ScreenNode = ({Map<String, String> attributes, int x, int y});
 
@@ -95,16 +97,13 @@ class AndroidSystem {
   /// isn't there.
   Future<bool> clickNotification(String title) async {
     await _shell('cmd statusbar expand-notifications');
-    for (var i = 0; i < 15; i++) {
-      await Future<void>.delayed(const Duration(seconds: 2));
+    final tapped = await poll(() async {
       final n = find(await screen(), texts: [title]);
-      if (n != null) {
-        await tap(n);
-        return true;
-      }
-    }
-    await _shell('cmd statusbar collapse');
-    return false;
+      if (n != null) await tap(n);
+      return n != null;
+    }, timeout: const Duration(seconds: 30), every: const Duration(seconds: 2));
+    if (!tapped) await _shell('cmd statusbar collapse');
+    return tapped;
   }
 
   // ---- the picture chooser ------------------------------------------------------
@@ -123,14 +122,13 @@ class AndroidSystem {
   /// The screen once a chooser of the system's is on it: an app other than
   /// this one and the system's own bar. Null if none comes.
   Future<List<ScreenNode>?> _chooser({Duration timeout = const Duration(minutes: 2)}) async {
-    final deadline = DateTime.now().add(timeout);
-    while (DateTime.now().isBefore(deadline)) {
-      final now = await screen();
+    var now = <ScreenNode>[];
+    final came = await poll(() async {
+      now = await screen();
       final others = {for (final n in now) n.attributes['package'] ?? ''}..removeAll({'', package, 'com.android.systemui'});
-      if (others.isNotEmpty) return now;
-      await Future<void>.delayed(const Duration(seconds: 1));
-    }
-    return null;
+      return others.isNotEmpty;
+    }, timeout: timeout, every: const Duration(seconds: 1));
+    return came ? now : null;
   }
 
   /// Cancels the chooser the app opens, as the Back key does; false if none
@@ -146,7 +144,7 @@ class AndroidSystem {
   /// name, from Downloads if it isn't listed at first). False if it can't.
   Future<bool> pickPicture({Duration timeout = const Duration(minutes: 3)}) async {
     if (await _chooser() == null) return false;
-    final deadline = DateTime.now().add(timeout);
+    final began = DateTime.now();
     // What the chooser showed, for a failure's report: every element, since
     // a file may be named in its description rather than its text.
     var last = <ScreenNode>[];
@@ -154,7 +152,7 @@ class AndroidSystem {
     // started the list over (GitHub's runner, 2026-11-03).
     var openedDownloads = false;
     final stem = pictureName.substring(0, pictureName.lastIndexOf('.'));
-    while (DateTime.now().isBefore(deadline)) {
+    final picked = await poll(() async {
       final now = await screen();
       if (now.isNotEmpty) last = now;
       // By name, with or without its extension (Files may leave it out),
@@ -172,7 +170,7 @@ class AndroidSystem {
       // (GitHub's runner showed it empty, 2026-11-03).
       final storage = now.where((n) => RegExp(r'\bfree$').hasMatch(n.attributes['text'] ?? '')).firstOrNull;
       final folder = find(now, texts: const ['Download']);
-      final late = DateTime.now().isAfter(deadline.subtract(timeout - const Duration(seconds: 20)));
+      final late = DateTime.now().difference(began) > const Duration(seconds: 20);
       if (byName ?? photo case final n?) {
         await tap(n);
         return true;
@@ -188,8 +186,9 @@ class AndroidSystem {
       } else if (late && roots != null) {
         await tap(roots);
       }
-      await Future<void>.delayed(const Duration(seconds: 2));
-    }
+      return false;
+    }, timeout: timeout, every: const Duration(seconds: 2));
+    if (picked) return true;
     print('android: the picture was not found in the chooser; it last showed:');
     for (final n in last) {
       final a = n.attributes;
@@ -207,14 +206,10 @@ class AndroidSystem {
   Future<bool> enrollFingerprint({Duration timeout = const Duration(minutes: 25)}) async {
     await _shell('locksettings set-pin $pin');
     await _shell('am start -a android.settings.FINGERPRINT_ENROLL');
-    final deadline = DateTime.now().add(timeout);
     // What Settings showed, for a failure's report: the last few screens.
     final seen = <String>[];
-    while (DateTime.now().isBefore(deadline)) {
-      if (await fingerprintEnrolled()) {
-        await _shell('input keyevent KEYCODE_HOME');
-        return true;
-      }
+    final enrolled = await poll(() async {
+      if (await fingerprintEnrolled()) return true;
       final now = await screen();
       final texts = [for (final n in now) if (n.attributes['text'] case final t? when t.isNotEmpty) t].join(' | ');
       if (seen.isEmpty || seen.last != texts) seen.add(texts);
@@ -227,7 +222,11 @@ class AndroidSystem {
         // The sensor's screen: touch, lift, touch again.
         await touchFinger();
       }
-      await Future<void>.delayed(const Duration(seconds: 2));
+      return false;
+    }, timeout: timeout, every: const Duration(seconds: 2));
+    if (enrolled) {
+      await _shell('input keyevent KEYCODE_HOME');
+      return true;
     }
     // Back as it was: a PIN without a fingerprint leaves a lock screen, and
     // a key store asking for the PIN, that nobody answers.
@@ -274,12 +273,8 @@ class AndroidSystem {
     await adb(['logcat', '-c']);
     final namespace = job.namespace == null ? '' : '-n ${job.namespace} ';
     print('android: running the background job: ${(await _shell('cmd jobscheduler run -f $namespace$package ${job.id}')).trim()}');
-    final deadline = DateTime.now().add(timeout);
-    while (DateTime.now().isBefore(deadline)) {
-      if ('${(await adb(['logcat', '-d'])).stdout}'.contains(marker)) return true;
-      await Future<void>.delayed(const Duration(seconds: 5));
-    }
-    return false;
+    return poll(() async => '${(await adb(['logcat', '-d'])).stdout}'.contains(marker),
+        timeout: timeout, every: const Duration(seconds: 5));
   }
 }
 

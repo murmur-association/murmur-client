@@ -39,6 +39,8 @@ import 'dart:io';
 
 import 'package:ffi/ffi.dart';
 
+import '../test/support/host.dart';
+
 final _sep = Platform.pathSeparator;
 
 Future<void> main(List<String> args) async {
@@ -147,11 +149,7 @@ class _SmokeTest {
   String get _nodeProgram => '$bundle$_sep${desktop.node}';
 
   Future<void> _waitFor(int seconds, String what, FutureOr<bool> Function() done) async {
-    final deadline = DateTime.now().add(Duration(seconds: seconds));
-    while (!await done()) {
-      if (DateTime.now().isAfter(deadline)) throw _Failed(what);
-      await Future<void>.delayed(const Duration(milliseconds: 500));
-    }
+    if (!await poll(done, timeout: Duration(seconds: seconds))) throw _Failed(what);
   }
 
   Future<bool> _alive(int pid) async => Platform.isWindows
@@ -168,9 +166,7 @@ class _SmokeTest {
     _said.clear();
     _appExit = null;
     final app = _app = await Process.start(_appProgram, const [], workingDirectory: bundle);
-    for (final stream in [app.stdout, app.stderr]) {
-      stream.transform(const Utf8Decoder(allowMalformed: true)).transform(const LineSplitter()).listen(_said.add);
-    }
+    eachLine(app, _said.add);
     unawaited(app.exitCode.then((code) => identical(_app, app) ? _appExit = code : null));
     await _waitFor(60, 'the app made no window titled Murmur',
         () => _appExit != null ? throw _Failed('the app stopped by itself') : desktop.window(app.pid, 'Murmur') != null);
@@ -212,12 +208,9 @@ class _SmokeTest {
     } finally {
       probe.destroy();
     }
-    final until = DateTime.now().add(const Duration(seconds: 10));
-    while (DateTime.now().isBefore(until)) {
-      if ((await desktop.connectedTo(ports)).contains(_app!.pid)) {
-        throw _Failed('the app connected to its own node (ports $ports) instead of leaving it alone');
-      }
-      await Future<void>.delayed(const Duration(milliseconds: 500));
+    if (await poll(() async => (await desktop.connectedTo(ports)).contains(_app!.pid),
+        timeout: const Duration(seconds: 10))) {
+      throw _Failed('the app connected to its own node (ports $ports) instead of leaving it alone');
     }
     print('the node listens on $ports, and the app never connected to it');
   }

@@ -17,6 +17,7 @@ import 'package:murmur_client/services/local_node_io.dart';
 import 'package:murmur_client/services/node_client.dart';
 
 import '../../tool/node_release.dart';
+import 'host.dart';
 
 final _exe = Platform.isWindows ? 'murmur-node.exe' : 'murmur-node';
 final _downloaded = File('$testNodeDir${Platform.pathSeparator}$_exe').absolute;
@@ -112,12 +113,11 @@ class TestNode {
       if (mineTo != null) ...['--mine-to', toHex(mineTo), '--mine-cpu', '1'],
       ...extra,
     ]);
-    final deadline = DateTime.now().add(const Duration(seconds: 30));
-    while (node.state != LocalNodeState.running) {
+    final started = await poll(() {
       if (node.state == LocalNodeState.failed) fail('the node stopped: ${node.problem}');
-      if (DateTime.now().isAfter(deadline)) fail('the node did not start: ${node.problem}');
-      await Future<void>.delayed(const Duration(milliseconds: 20));
-    }
+      return node.state == LocalNodeState.running;
+    }, timeout: const Duration(seconds: 30), every: const Duration(milliseconds: 20));
+    if (!started) fail('the node did not start: ${node.problem}');
     _port = node.port;
   }
 
@@ -146,7 +146,6 @@ Future<void> until(MurmurClient c, bool Function() done,
     bool reconnecting = false,
     String what = '',
     String Function()? state}) async {
-  final deadline = DateTime.now().add(timeout);
   final from = c.height;
   // What a client meets while its node restarts, until it's back.
   bool passing(LinkError e) => switch (e.kind) {
@@ -154,14 +153,15 @@ Future<void> until(MurmurClient c, bool Function() done,
         LinkErrorKind.syncFailed => e.cause != null && passing(e.cause!),
         _ => false,
       };
-  while (!done()) {
+  final held = await poll(() {
+    if (done()) return true;
     final e = c.error;
     if (e != null && !(reconnecting && passing(e))) fail('client error: $e (${e.cause} ${e.detail})');
-    if (DateTime.now().isAfter(deadline)) {
-      fail('timed out${what.isEmpty ? '' : ' waiting for $what'}: ${c.state.name}, height $from when waiting began, '
-          '${c.height} now (node at ${c.peerHeight}), error ${c.error}${state == null ? '' : '; ${state()}'}');
-    }
-    await Future<void>.delayed(const Duration(milliseconds: 20));
+    return false;
+  }, timeout: timeout, every: const Duration(milliseconds: 20));
+  if (!held) {
+    fail('timed out${what.isEmpty ? '' : ' waiting for $what'}: ${c.state.name}, height $from when waiting began, '
+        '${c.height} now (node at ${c.peerHeight}), error ${c.error}${state == null ? '' : '; ${state()}'}');
   }
 }
 

@@ -40,8 +40,12 @@ Future<ChainCache> openChainCache() async {
   return FileChainCache(dir);
 }
 
-/// The folder the local copy goes under.
-/// - **Desktop:** the user's application data folder, from the environment
+/// The folder the local copy goes under (and the user's own messages,
+/// `own_messages_io.dart`).
+/// - **Desktop:** `MURMUR_DATA_HOME` when set (the acceptance tests give
+///   the app a throwaway folder with it, so a run never writes over the
+///   user's own copy or messages), else the user's application data folder,
+///   from the environment
 ///   (`APPDATA`, `XDG_DATA_HOME`, or `HOME/.local/share`), else `temp`.
 /// - **Phones** have no such variables: the app's cache folder (`appCache`).
 ///   Not its support folder, which iOS and Android include in device
@@ -50,7 +54,7 @@ Future<ChainCache> openChainCache() async {
 ///   again.
 String chainCacheBase({required bool phone, required Map<String, String> env, required String temp, String? appCache}) {
   if (phone) return appCache ?? temp;
-  return env['APPDATA'] ?? env['XDG_DATA_HOME'] ?? (env['HOME'] == null ? null : '${env['HOME']}/.local/share') ?? temp;
+  return env['MURMUR_DATA_HOME'] ?? env['APPDATA'] ?? env['XDG_DATA_HOME'] ?? (env['HOME'] == null ? null : '${env['HOME']}/.local/share') ?? temp;
 }
 
 /// The cache in `dir` (public so tests can use a temporary folder).
