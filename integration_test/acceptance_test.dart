@@ -28,6 +28,7 @@ import 'package:murmur_client/ui/threads_tab.dart';
 
 import 'support/app_driver.dart';
 import 'support/header_nonce_checks.dart';
+import 'support/signature_checks.dart';
 import 'support/system_notifications.dart';
 
 void main() {
@@ -46,6 +47,12 @@ void main() {
   // What numbers do differs between a browser and the rest: the header
   // vectors that each once got wrong, on the flavour at hand.
   group('header nonces', headerNonceTests);
+  // And signatures: the wallet's must be RFC 8032's on every flavour. What
+  // the platform's own signer does is noted for the driver to print.
+  group('signatures', () => signatureTests((note) {
+        debugPrint('signatures: $note');
+        ((binding.reportData ??= {}).putIfAbsent('notes', () => <String>[]) as List).add(note);
+      }));
 
   // Told apart from any other run's on the same chain.
   final stamp = DateTime.now().millisecondsSinceEpoch;

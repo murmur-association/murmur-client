@@ -60,6 +60,14 @@ Future<void> main() async {
   final response = Response.fromJson(await driver.requestData(null, timeout: const Duration(minutes: 20)));
   running = false;
   await driver.close();
+  // What the tests noted about this browser (its own Ed25519, say), also as
+  // a GitHub notice: the run's page lists it, and its API serves it.
+  if (response.data?['notes'] case final List notes) {
+    for (final note in notes) {
+      print('Noted: $note');
+      print('::notice title=browser::${'$note'.replaceAll('%', '%25').replaceAll('\n', '%0A')}');
+    }
+  }
   if (response.allTestsPassed) {
     print('All tests passed.');
     exit(0);
