@@ -86,6 +86,7 @@ set TMP=%TEMP%
      - **Reading a code asks every time** (`unlockCards`): to show a card's QR code and link, to print, and to cancel (which signs with the card's key). One unlock for the selected cards.
      - **Codes earlier versions stored in the clear** are sealed at the next unlock, or when cards are next made.
      - Forgetting the passphrase leaves waiting cards unreadable: they can't be shown or cancelled any more (said when it's chosen, `passphraseNewForget`).
+     - **A wallet can still be made or imported without that passphrase** (the user was locked out by it: a new wallet must share the cards', `sealSeed(alongside:)`). When it can't be given, `protectWallet` offers to let the cards' key go (`InviteStore.forgetKey`, a destructive confirmation, `forgetCardsKeyTitle`), and the wallet then chooses a passphrase of its own. Cards whose codes were sealed to that key stay listed, followed on the chain, but can't be selected, shown or cancelled (`InviteRecord.codeLost`, `inviteCodeLost`); the next cards make a new key under the wallet's passphrase.
 5. **Check before showing.** Every header is checked fully: link, proof of work, median-time-past, the difficulty rule's target, and `history_root`. Everything shown is proven against checked headers:
    - state proofs against `state_root`;
    - a page of a thread or of an address's history (the node's index) by its range proof, against the count and root the state holds for that list at the page's block;
@@ -128,7 +129,7 @@ lib/
               transport_{io,web} (TCP, or WebSocket), chain_cache_{io,web} (files, or IndexedDB),
               fees, threads (reply/flag rules of Section 2.4), aliases (resolving, Section 7.8),
               activity (filter classifiers), news (what the badges count and notifications tell), notifier
-              (the system's notifications), storage
+              (the system's notifications), storage, updates (how this copy is updated; the move into a Flatpak)
   ui/         tabs (threads, messages, wallet, chain), detail pages, compose, paged list, brand, glyphs, l10n
   l10n/       app_<lang>.arb (source) and the generated app_localizations*.dart (committed; CI checks
               they match the ARB files, so run `flutter gen-l10n` or `flutter pub get` after editing an ARB)
@@ -147,7 +148,11 @@ tool/         notification_server (a stand-in desktop notification server, for L
               prepare_release (the scheduled release's version and changelog section),
               package_desktop (the Windows and Linux apps as archives, for the release),
               desktop_smoke_test (the packaged desktop apps, their nodes and wallet storage; linux_session.sh gives it a session on Linux),
-              fetch_test_graphics.ps1 (software OpenGL and Direct3D for the Windows release runner, tests only)
+              fetch_test_graphics.ps1 (software OpenGL and Direct3D for the Windows release runner, tests only),
+              windows_installer.ps1 (builds windows/installer/murmur.iss, and tries it), winget_manifest + release/winget
+              (winget's manifests for the installer)
+windows/installer/  murmur.iss, the Windows installer (Inno Setup: per user, updates in place)
+linux/flatpak/  the Flatpak manifest, desktop entry and metainfo, for Flathub
 web/          index.html, flutter_bootstrap.js (loader config: local fallback fonts), manifest, icons
 ```
 
@@ -363,6 +368,12 @@ A TxStatus of invalid or refused takes the transaction out of nonce and balance 
 - **At most five at once**, newest first, then one that counts the others (`notifyMore`). Each says who (`nameFor`) and why, with the message's first line; a tap opens it in its thread (`appNavigator`, payload `/thread/<root>/<txid>`). Withdrawn and non-text messages, and muted senders, are never told. On Android the lock screen hides what they say (`NotificationVisibility.private`).
 - **Where:** every platform; the bell (`NotificationsButton`, `Glyph.bell`) is in the Messages header and beside the Starred tab's lists. Apple's notification centre (iOS, macOS) is asked for permission when the first topic is switched on, and the app is its delegate (`AppDelegate`), so a tap reaches it. **iOS also checks while closed** (background app refresh, `BGTaskSchedulerPermittedIdentifiers` = `murmur-news` in Info.plist, registered in `AppDelegate`): iOS decides when, hours apart for an app rarely opened. macOS's background tasks run only while the app runs, whose watcher already tells, so none is scheduled there.
 
+**Updates** (`services/updates.dart`; README, "Desktop updates"). An outdated desktop app can't reach a node after a protocol change, so it must say so plainly. **It never asks anyone whether there's a newer version** (rule 2): no update check, no self-updater (the user agreed to leave updating to the systems' package managers).
+- **What tells:** a node's Hello on a newer protocol (`MurmurClient.newerProtocolSeen`, kept for the session; `_handshake` reports that failure over any later one), the app's own node dropping peers on a newer protocol (`newerPeerProtocol`, `LocalNode.peersNewer`), and the chain grown 30 days of blocks past the build's checkpoint (`releaseLooksOld`).
+- **What's said depends on how the copy was installed** (`installed`): the web reloads, a Flatpak updates through the system, a Windows or Linux download gets **Get the new version** (`latestReleaseUrl`, opened on the tap only). Phones and Macs have no published download yet, so no button.
+- **Windows:** the installer (`windows/installer/murmur.iss`, per user under `%LOCALAPPDATA%\Programs\Murmur`) and winget, from it. Its `AppId` is winget's `ProductCode`, and its Start-menu shortcut carries the notifications' AUMID and toast CLSID (`services/notifier.dart`): never change either. The regression builds it and installs it silently once (`smoke-windows`).
+- **Linux:** Flathub, from the release archive (`linux/flatpak/`). The first run as a Flatpak copies the settings and own messages from `~/.local/share` (`moveIntoFlatpak`; the manifest grants read-only access to just those folders). The wallet stays in the host keyring (`--talk-name=org.freedesktop.secrets`, `SECRET_BACKEND=service`).
+
 **Sharing** (`ui/share.dart`). Every link, address and hash has a `ShareButton` (`Glyph.share`) instead of a copy button.
 - **Where the system has a real share sheet**, the button offers "Copy" and "Share…": Android, iOS and macOS through `share_plus`, and browsers with the Web Share API through `navigator.share`.
 - **Elsewhere it simply copies.** That's Windows and Linux, where the plugin would fall back to a mail link, and Firefox on desktop.
@@ -509,3 +520,7 @@ A TxStatus of invalid or refused takes the transaction out of nonce and balance 
    - **Building on Linux** needs `clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev libsecret-1-dev libjsoncpp-dev` and a C++ standard library (`g++`); the smoke test also `xvfb openbox wmctrl dbus-x11 gnome-keyring` and Mesa's software renderer (`libgl1-mesa-dri libegl1 libgles2`). From a Windows checkout, build in a copy on the Linux side (WSL: `rsync` to `~/murmur-client`), not under `/mnt/c`.
 10. **The pruned node and protocol 17 came with node v0.16.0** (2026-10-31; the client pins it). The app's own node runs pruned (`--prune-blocks`) and starts from the app's checkpoint (`--checkpoint`; `murmur-testnet-15` has none until it is a day old). Every test passes against the pinned release, and the read-only checks (`live_release_test.dart`, `live_node_test.dart`) against the live testnet (2026-10-31). Not tried: a start from the testnet's checkpoint against the live network (none yet), a pruned node past its first day of blocks, and the card's progress in the built app on a long chain.
    - **What a pruned node gives up**, all fine for a node no client reads from: peers can't sync old blocks from it, and a heavier chain forking more than a day back isn't followed (the node warns in `status`, which the app doesn't read). A data folder once run pruned is refused without `--prune-blocks`, so never drop the option for an existing folder.
+11. **Desktop updates: packaging not yet tried end to end** (2026-11-04). The notices are unit-tested (`network_test.dart`, `local_node_test.dart`, `updates_test.dart`), and the regression builds the Windows installer and installs it silently once. Not tried:
+   - **Signing:** neither the installer nor the apps are signed, so SmartScreen warns of an unknown publisher on a download (winget installs don't pass through the browser's download mark, but don't count on that).
+   - **winget:** no manifest has been submitted to microsoft/winget-pkgs yet; the first is reviewed by hand. An upgrade over a running app (Restart Manager closing the app and its node) hasn't been tried on a desktop.
+   - **Flathub:** the manifest hasn't been built (`flatpak-builder`) or submitted. Before submitting: point it at a release that has `moveIntoFlatpak`, add screenshots to the metainfo, verify `murmur.info` for the id. Unknown: whether the GNOME runtime needs the bundled jsoncpp, and whether the card's OpenCL driver is reachable for GPU mining from the sandbox (the node falls back to the processor and says why).

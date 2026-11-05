@@ -93,6 +93,16 @@ void main() {
         const NodeSync(history: (0, 16883)));
   });
 
+  test('a peer on a newer protocol is read from the output: the app needs updating', () {
+    // The node's own words (v0.16.0), with the address it dropped.
+    expect(newerPeerProtocol('[net] peer 203.0.113.7:7878 speaks protocol v18 (we speak v17); disconnecting'), 18);
+    expect(newerPeerProtocol('[net] peer [2001:db8::1]:7878 speaks protocol v19 (we speak v17); disconnecting\r'), 19);
+    // An older peer is its own problem, not this node's.
+    expect(newerPeerProtocol('[net] peer 203.0.113.7:7878 speaks protocol v16 (we speak v17); disconnecting'), isNull);
+    expect(newerPeerProtocol('[net] peer 203.0.113.7:7878 is on a different network; disconnecting'), isNull);
+    expect(newerPeerProtocol('[sync] at height 12 of 40 from 203.0.113.7:7878'), isNull);
+  });
+
   test('what the node says of its GPU miner is read from its output', () {
     expect(gpuMiningOf('[gpu] mining on NVIDIA GeForce RTX 3060'),
         const GpuMining(GpuMiningState.mining, device: 'NVIDIA GeForce RTX 3060'));
@@ -361,6 +371,9 @@ class _RecordingNode extends LocalNode {
 
   @override
   NodeSync sync = const NodeSync();
+
+  @override
+  int? peersNewer;
 
   /// The node reports on its GPU miner.
   void say(GpuMining? status) {

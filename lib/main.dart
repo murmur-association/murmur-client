@@ -10,6 +10,7 @@ import 'services/node_client.dart';
 import 'services/notifier.dart';
 import 'services/own_messages.dart';
 import 'services/storage.dart';
+import 'services/updates.dart';
 import 'ui/address_page.dart';
 import 'ui/brand.dart';
 import 'ui/common.dart';
@@ -24,6 +25,9 @@ Future<void> main() async {
   // On Linux, a locked keyring that can't ask would hang the app at its
   // first use: checked first (services/keyring.dart).
   await checkKeyring();
+  // The first run as a Flatpak takes along what the app kept outside the
+  // sandbox before (services/updates.dart).
+  await moveIntoFlatpak();
   final prefs = Preferences();
   await prefs.load();
   final client = MurmurClient();

@@ -384,3 +384,10 @@ jobs:
     - run: dart run tool/package_desktop.dart --tag smoke
     - run: powershell -NoProfile -ExecutionPolicy Bypass -File tool\fetch_test_graphics.ps1 -Into build\desktop-package\murmur-client-smoke-windows-x64
     - run: dart run tool/desktop_smoke_test.dart --wallet-storage build\desktop-package\murmur-client-smoke-windows-x64
+    # The installer the release builds (windows/installer/murmur.iss), from
+    # the same folder: built, installed silently as winget does, removed.
+    - run: |
+        $version = (Select-String -Path pubspec.yaml -Pattern '^version:\s*([0-9.]+)').Matches[0].Groups[1].Value
+        powershell -NoProfile -ExecutionPolicy Bypass -File tool\windows_installer.ps1 -Version $version `
+          -Source build\desktop-package\murmur-client-smoke-windows-x64 -Output build\installer\murmur-client-smoke-setup.exe -Check
+        if ($LASTEXITCODE -ne 0) { exit 1 }

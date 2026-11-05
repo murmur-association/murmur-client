@@ -760,6 +760,29 @@ class MurmurClient extends ChangeNotifier {
     return now - _headers.timestampAt(height - 1)! > 20 * net.targetBlockSecs;
   }
 
+  /// The newest protocol version a node has greeted this client with, when
+  /// that's above the one it speaks: the network has moved on, and this app
+  /// (and the node it runs, pinned with it) must be updated to follow it.
+  /// Kept for the session, whichever node is tried next.
+  int? get newerProtocolSeen => _newerProtocolSeen;
+  int? _newerProtocolSeen;
+
+  /// How far past the release's checkpoint the chain has grown before a
+  /// release looks old ([releaseLooksOld]): 30 days of blocks.
+  static const releaseAgeDays = 30;
+
+  /// Whether this build's checkpoint lies more than [releaseAgeDays] of
+  /// blocks below the tip. Every release ships a checkpoint about a day old
+  /// (AGENTS.md, Recipes), so this build is about that old, and a newer one
+  /// is probably out. Worked out from checked heights only: nothing is asked
+  /// of anyone (rule 2).
+  bool get releaseLooksOld {
+    final net = network;
+    final cp = net?.checkpoint;
+    if (net == null || cp == null || height <= cp.height) return false;
+    return (height - cp.height) * net.targetBlockSecs > releaseAgeDays * 86400;
+  }
+
   // ---- proven state -------------------------------------------------------------
 
   /// Keeps `key` proven at the tip; returns what's proven so far, if anything.
@@ -2181,7 +2204,7 @@ class MurmurClient extends ChangeNotifier {
           lastFailure ??= e;
           break;
         }
-        lastFailure = e;
+        if (!_saysAppOutdated(lastFailure)) lastFailure = e;
         continue;
       }
       if (gen != _generation) {
@@ -2208,12 +2231,15 @@ class MurmurClient extends ChangeNotifier {
         // The node speaks first.
         final hello = await helloWaiter.future.timeout(const Duration(seconds: 30));
         if (hello.version != protocolVersion) {
+          if (hello.version > protocolVersion && hello.version > (_newerProtocolSeen ?? 0)) {
+            _newerProtocolSeen = hello.version;
+          }
           throw LinkError(LinkErrorKind.version, nodeVersion: hello.version);
         }
         return hello;
       } catch (e) {
         if (e is _Aborted || gen != _generation) return null;
-        lastFailure = e;
+        if (!_saysAppOutdated(lastFailure)) lastFailure = e;
         await _sub?.cancel();
         _sub = null;
         _channel?.close();
@@ -2225,6 +2251,12 @@ class MurmurClient extends ChangeNotifier {
     }
     throw lastFailure ?? TransportException('no address to try');
   }
+
+  /// Whether `failure` was a node on a newer protocol: that says the most
+  /// (this app is out of date), so another node's later failure mustn't
+  /// replace it as the one reported.
+  static bool _saysAppOutdated(Object? failure) =>
+      failure is LinkError && failure.kind == LinkErrorKind.version && failure.nodeVersion > protocolVersion;
 
   /// Tries per connect: natively, one per address (a DNS seed lists a few);
   /// in a browser, the same name again (a passing failure may clear).

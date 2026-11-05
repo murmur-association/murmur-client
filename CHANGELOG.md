@@ -5,6 +5,10 @@ Newest first. Each release is a `vX.Y.Z` tag matching `version` in `pubspec.yaml
 ## Unreleased
 
 - **New: French and Korean.** The app speaks both, follows a French or Korean device by itself, and the Threads language filter recognises threads written in them.
+- **New: the app says when it's out of date.** A node on a newer protocol now gets "update the app" with a **Get the new version** button (the newest release's page, opened on the tap), not the bare protocol numbers; the app's own node says the same when its peers have moved on; and the Chain tab says a newer version is probably out once the app's release is over a month old. Nothing is asked of anyone to tell: it all comes from the chain and the node's own output.
+- **New: a Windows installer.** Each release adds `murmur-client-vX.Y.Z-windows-x64-setup.exe`: per user, no administrator rights, a Start menu entry, and a newer one updates in place, keeping settings and wallet. The zip stays. winget's manifests come with it, for publishing to winget.
+- **New: Flatpak packaging** for Flathub (`linux/flatpak/`). Its first run takes along the settings and own messages of the app run from the archive; the wallet stays in the desktop's keyring.
+- **Fixed: a forgotten passphrase no longer blocks making or importing a wallet** when invitation cards are on the device. A new wallet shares the cards' passphrase, so restoring from the seed asked for the very passphrase that was forgotten. The app now offers to let the cards' key go: the wallet gets a new passphrase, and cards not yet claimed stay listed but can no longer be shown, printed or cancelled from that device (their tokens stay on the cards).
 
 ## v0.10.3: scheduled release, with what was waiting (2026-11-04)
 

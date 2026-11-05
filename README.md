@@ -155,7 +155,7 @@ A tag of the form `vX.Y.Z` runs the release workflow; plain commits get the regr
 - `check-checkpoint` stops the release if the shipped checkpoint isn't on the live testnet's chain, or is over a week old.
 - `public-node-tests` runs a short read-only test of the client against the live testnet.
 - `build-web` builds the testnet page as above, with `--base-href /`.
-- `build-windows` and `build-linux` build the desktop apps for the testnet and archive each with its own node and the notices (and on Windows the Visual C++ runtime), as `murmur-client-vX.Y.Z-windows-x64.zip` and `murmur-client-vX.Y.Z-linux-x64.tar.gz`. Each first tries the packaged app with the same test (`tool/desktop_smoke_test.dart --wallet-storage`; on Linux inside `tool/linux_session.sh`, which gives it a virtual display and a keyring): its node starts and stops with it, a node left by a killed app is replaced, and a wallet is saved through the real keyring. If one fails, the release goes on without that download.
+- `build-windows` and `build-linux` build the desktop apps for the testnet and archive each with its own node and the notices (and on Windows the Visual C++ runtime), as `murmur-client-vX.Y.Z-windows-x64.zip` and `murmur-client-vX.Y.Z-linux-x64.tar.gz`. Each first tries the packaged app with the same test (`tool/desktop_smoke_test.dart --wallet-storage`; on Linux inside `tool/linux_session.sh`, which gives it a virtual display and a keyring): its node starts and stops with it, a node left by a killed app is replaced, and a wallet is saved through the real keyring. If one fails, the release goes on without that download. `build-windows` also builds the installer `murmur-client-vX.Y.Z-windows-x64-setup.exe` from the same folder (`tool/windows_installer.ps1`, which installs it silently once, checks it and removes it) and winget's manifests for it, `winget-manifests-vX.Y.Z.zip` (see [Desktop updates](#desktop-updates)).
 - `package` zips the page with LICENSE and NOTICE as `murmur-web-vX.Y.Z.zip`, and writes one `SHA256SUMS` for the page and each desktop app built, so anyone can check the live page or a download against a release, or host the page themselves.
 - `deploy-web` uploads the page with `wrangler pages deploy` to the Pages project `murmur-app` (`CF_PAGES_PROJECT` in `release.yml`).
 - `release` then creates the GitHub Release "Murmur client vX.Y.Z", with its CHANGELOG section, the archives and `SHA256SUMS` attached.
@@ -208,6 +208,22 @@ dart run tool/bundle_node.dart --from <murmur-node>  # or a binary you built
 ```
 
 App stores don't allow mining on the device, so builds for them should leave the node out, or at least mining.
+
+## Desktop updates
+
+On this network an outdated desktop app doesn't just miss features: after a protocol change it can't reach any node, and neither can its own node. The app never asks anyone whether a newer version exists (rule 2 in [AGENTS.md](AGENTS.md)). It tells from what it already has:
+
+- **A node on a newer protocol** (its Hello): the banner says to update the app, with **Get the new version**, which opens the newest release's page on the tap (Windows and Linux archives), or says to reload the page (web) or to use the system's updates (Flatpak).
+- **The app's own node** dropping peers on a newer protocol (its `[net] peer … speaks protocol v…` line): its card says the same.
+- **The release's age:** when the chain is 30 days of blocks past the checkpoint this build shipped (each release ships one about a day old), the Chain tab says a newer version is probably out.
+
+The updating itself is left to the systems' package managers:
+
+- **Windows: the installer and winget.** The installer installs per user, without administrator rights, into `%LOCALAPPDATA%\Programs\Murmur`, with a Start menu entry; a newer one closes the app and its node and updates in place, keeping settings and wallet (`windows/installer/murmur.iss`, Inno Setup). For winget, each release attaches `winget-manifests-vX.Y.Z.zip` (`tool/winget_manifest.dart`): a pull request to [microsoft/winget-pkgs](https://github.com/microsoft/winget-pkgs) adding its folder publishes the version, and then `winget install MurmurAssociation.Murmur` and `winget upgrade` work. The first submission is reviewed by hand; later ones can be sent by a bot (wingetcreate or Komac, with a token of their own).
+- **Linux: Flathub.** `linux/flatpak/` holds the manifest, the desktop entry and the metainfo. Flathub builds from the release's Linux archive, and its bot opens a pull request in Flathub's copy of the manifest for each release (`x-checker-data`; `"automerge-flathubbot-prs": true` in that repository's `flathub.json` merges them unattended). On its first run the Flatpak copies the app's settings and the user's own messages from `~/.local/share` into the sandbox, and keeps the wallet in the desktop's keyring, where the archive's app kept it. To submit: a release that holds the copying code, the manifest pointed at it, screenshots in the metainfo, the domain `murmur.info` verified for the id `info.murmur.client`, then a pull request to [flathub/flathub](https://github.com/flathub/flathub).
+- **macOS:** no release yet. It needs Developer ID signing and notarisation first; then a Homebrew cask, or Sparkle inside the app. Not the Mac App Store: its sandbox would keep the app's node from running.
+
+Neither the installer nor the apps are signed yet, so Windows' SmartScreen warns of an unknown publisher on a download.
 
 ## Layout
 

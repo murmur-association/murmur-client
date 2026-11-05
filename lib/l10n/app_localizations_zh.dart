@@ -131,6 +131,31 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String get errAppOutdated => '网络已改用比此应用更新的协议。请更新应用以继续使用。';
+
+  @override
+  String get errAppOutdatedWeb => '网络已改用比此页面更新的协议。请重新加载页面以获取新版本。';
+
+  @override
+  String get errAppOutdatedSystem => '网络已改用比此应用更新的协议。请通过系统的软件更新来更新应用。';
+
+  @override
+  String get getNewVersion => '获取新版本';
+
+  @override
+  String get appMaybeOld => '此版本的应用已**超过一个月**：很可能已有更新的版本。';
+
+  @override
+  String get appMaybeOldSystem => '此版本的应用已**超过一个月**：系统的软件更新中很可能已有更新的版本。';
+
+  @override
+  String get localNodeOutdated => '网络已改用**更新的协议**：在应用更新之前，此节点无法跟上网络。';
+
+  @override
+  String get localNodeOutdatedSystem =>
+      '网络已改用**更新的协议**：在通过系统的软件更新更新应用之前，此节点无法跟上网络。';
+
+  @override
   String errSyncFailed(String cause) {
     return '同步失败：$cause';
   }
@@ -1485,6 +1510,19 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get removeAnywayBody => '无法解锁钱包。移除会从此设备删除其密钥：只有种子备份能找回它。';
+
+  @override
+  String get forgetCardsKeyTitle => '无法解锁你的邀请卡';
+
+  @override
+  String get forgetCardsKeyBody =>
+      '新钱包会沿用邀请卡的口令或通行密钥。如果你已经没有它，可以放弃邀请卡的密钥：钱包会设置新的口令，尚未领取的卡将无法再在此设备上显示、打印或取消。卡上的代币仍留在卡中。';
+
+  @override
+  String get forgetCardsKeyAction => '放弃邀请卡的密钥';
+
+  @override
+  String get inviteCodeLost => '此设备上已没有该代码';
 
   @override
   String get protectionDevice => '密钥已用本设备的锁屏加密';

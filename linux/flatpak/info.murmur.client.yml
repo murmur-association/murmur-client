@@ -1,0 +1,88 @@
+# Murmur as a Flatpak, for Flathub (README, "Desktop updates"). Flathub keeps
+# its copy of this file in github.com/flathub/info.murmur.client, and builds
+# from it: the release's Linux archive (the same one a user unpacks), not the
+# source. Its bot (flatpak-external-data-checker, `x-checker-data` below)
+# watches this repository's releases and opens a pull request there for each
+# new one, which brings the update to every installed copy.
+#
+# Build and run it locally:
+#   flatpak-builder --user --install --force-clean build/flatpak linux/flatpak/info.murmur.client.yml
+#   flatpak run info.murmur.client
+#
+# Permissions, each for something the app does:
+# - network: the node the user chose, and the app's own node's peers;
+# - wayland, x11 and ipc: the window; dri: drawing, and mining on the
+#   graphics card (the node falls back to the processor where the card's
+#   driver isn't reachable from the sandbox, and says so);
+# - org.freedesktop.secrets, with SECRET_BACKEND=service: the wallet stays
+#   in the desktop's own keyring, where the app outside a Flatpak kept it,
+#   so a user moving to the Flatpak keeps their wallet, and the app's check
+#   for a locked keyring (services/keyring.dart) still talks to it;
+# - org.freedesktop.Notifications: the notifications the app raises itself;
+# - read-only, three folders of ~/.local/share: what the app kept there
+#   outside a Flatpak (its settings, and the user's own messages), copied
+#   into the sandbox on the first run (services/updates_io.dart).
+id: info.murmur.client
+runtime: org.gnome.Platform
+runtime-version: '49'
+sdk: org.gnome.Sdk
+command: murmur_client
+finish-args:
+  - --share=network
+  - --share=ipc
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --device=dri
+  - --talk-name=org.freedesktop.secrets
+  - --env=SECRET_BACKEND=service
+  - --talk-name=org.freedesktop.Notifications
+  - --filesystem=xdg-data/info.murmur.client:ro
+  - --filesystem=xdg-data/murmur_client:ro
+  - --filesystem=xdg-data/murmur-client/own:ro
+cleanup:
+  - /include
+  - /lib/pkgconfig
+  - /lib/cmake
+modules:
+  # The wallet's storage plugin (flutter_secure_storage) links it.
+  - name: jsoncpp
+    buildsystem: meson
+    config-opts:
+      - --buildtype=release
+      - -Dtests=false
+    sources:
+      - type: archive
+        url: https://github.com/open-source-parsers/jsoncpp/archive/refs/tags/1.9.6.tar.gz
+        sha256: f93b6dd7ce796b13d02c108bc9f79812245a82e577581c4c9aabe57075c90ea2
+
+  - name: murmur
+    buildsystem: simple
+    build-commands:
+      # The app, its node and miner, as released (tool/package_desktop.dart).
+      - mkdir -p /app/murmur
+      - cp -a . /app/murmur/
+      - rm /app/murmur/info.murmur.client.desktop /app/murmur/info.murmur.client.metainfo.xml
+      # The app finds its libraries, its assets and its node beside the
+      # executable it resolves to, so a link is enough.
+      - mkdir -p /app/bin
+      - ln -s /app/murmur/murmur_client /app/bin/murmur_client
+      - install -Dm644 info.murmur.client.desktop /app/share/applications/info.murmur.client.desktop
+      - install -Dm644 info.murmur.client.metainfo.xml /app/share/metainfo/info.murmur.client.metainfo.xml
+      - install -Dm644 data/app_icon.png /app/share/icons/hicolor/256x256/apps/info.murmur.client.png
+    sources:
+      - type: archive
+        only-arches:
+          - x86_64
+        url: https://github.com/murmur-association/murmur-client/releases/download/v0.10.3/murmur-client-v0.10.3-linux-x64.tar.gz
+        sha256: 5c35e1cc0f32dd4a256ff3f71ad40435515bb64e8ab98a73a96a6ca0b622fc1e
+        x-checker-data:
+          type: json
+          url: https://api.github.com/repos/murmur-association/murmur-client/releases/latest
+          version-query: .tag_name | sub("^v"; "")
+          url-query: .assets[] | select(.name | test("-linux-x64\\.tar\\.gz$")) | .browser_download_url
+          timestamp-query: .published_at
+          is-main-source: true
+      - type: file
+        path: info.murmur.client.desktop
+      - type: file
+        path: info.murmur.client.metainfo.xml

@@ -6,10 +6,11 @@ import 'package:flutter/material.dart';
 
 import '../crypto/wallet.dart';
 import '../services/key_vault.dart';
-import '../services/storage.dart' show KeyringUnavailable;
+import '../services/storage.dart' show InviteStore, KeyringUnavailable;
 import 'common.dart';
 import 'glyphs.dart';
 import 'brand.dart';
+import 'invitations_page.dart' show inviteStore;
 
 /// "Are you sure": `title`, `body`, and the `action` button (red when
 /// `destructive`).
@@ -191,8 +192,24 @@ Future<bool> protectWallet(BuildContext context, Future<void> Function(VaultProm
     await save(DialogPrompts(context));
     return true;
   } on VaultLocked catch (e) {
-    // A wrong passphrase: the one the invitation cards are under, which a
-    // new wallet shares.
+    // A new wallet shares the passphrase or passkey the invitation cards
+    // are under. A user who no longer has it may let the cards' key go,
+    // or no wallet could ever be made or imported on this device again.
+    if (context.mounted && await InviteStore.keyShared() && context.mounted) {
+      final l = context.l10n;
+      final letGo = await confirmAction(context,
+          title: l.forgetCardsKeyTitle, body: l.forgetCardsKeyBody, action: l.forgetCardsKeyAction, destructive: true);
+      if (letGo && context.mounted) {
+        try {
+          await inviteStore.forgetKey();
+        } on KeyringUnavailable {
+          if (context.mounted) showSnack(context, l.keyringUnavailable);
+          return false;
+        }
+        return context.mounted && await protectWallet(context, save);
+      }
+      return false;
+    }
     if (context.mounted) showSnack(context, e.wrongPassphrase ? context.l10n.wrongPassphrase : context.l10n.authFailed);
     return false;
   } on KeyringUnavailable {

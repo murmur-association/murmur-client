@@ -1,0 +1,16 @@
+[Desktop Entry]
+Type=Application
+Name=Murmur
+Comment=A light client for the Murmur network
+Comment[de]=Ein leichter Client für das Murmur-Netzwerk
+Comment[es]=Un cliente ligero para la red Murmur
+Comment[fr]=Un client léger pour le réseau Murmur
+Comment[it]=Un client leggero per la rete Murmur
+Comment[nl]=Een lichte client voor het Murmur-netwerk
+Comment[pt]=Um cliente leve para a rede Murmur
+Exec=murmur_client
+Icon=info.murmur.client
+Terminal=false
+Categories=Network;Chat;
+Keywords=forum;threads;wallet;node;
+StartupWMClass=info.murmur.client

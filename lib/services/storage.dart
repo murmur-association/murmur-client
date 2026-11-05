@@ -466,7 +466,8 @@ class InviteRecord {
       this.funder,
       this.tookBack = false,
       this.sealed,
-      this.plainCode});
+      this.plainCode,
+      this.codeLost = false});
 
   /// The card's address (hex): public, and what tells cards apart.
   final String address;
@@ -490,6 +491,14 @@ class InviteRecord {
   /// next unlock, or when cards are next made.
   String? plainCode;
 
+  /// The code was sealed to a key this device no longer has
+  /// ([InviteStore.forgetKey]): the card can't be shown, printed or
+  /// cancelled from here any more, only followed on the chain.
+  bool codeLost;
+
+  /// Whether the code can still be read, after unlocking.
+  bool get readable => !codeLost && (sealed != null || plainCode != null);
+
   Map<String, Object> toJson() => {
         'address': address,
         'amount': amount,
@@ -499,6 +508,7 @@ class InviteRecord {
         'tookBack': tookBack,
         if (sealed != null) 'sealed': sealed!,
         if (plainCode != null) 'code': plainCode!,
+        if (codeLost) 'codeLost': true,
       };
 
   /// A stored record; null for one that can't be read. `address` is given
@@ -509,7 +519,8 @@ class InviteRecord {
     final code = j['code'], sealed = j['sealed'];
     final at = address ?? j['address'];
     if (at is! String || amount is! int || serial is! int || batch is! int) return null;
-    if (sealed is! Map && code is! String) return null;
+    final lost = j['codeLost'] == true;
+    if (sealed is! Map && code is! String && !lost) return null;
     return InviteRecord(
         address: at,
         amount: amount,
@@ -518,7 +529,8 @@ class InviteRecord {
         funder: funder is String ? funder : null,
         tookBack: j['tookBack'] == true,
         sealed: sealed is Map ? sealed.map((k, v) => MapEntry('$k', '$v')) : null,
-        plainCode: code is String ? code : null);
+        plainCode: code is String ? code : null,
+        codeLost: lost && sealed is! Map && code is! String);
   }
 }
 
@@ -636,6 +648,7 @@ class InviteStore extends ChangeNotifier {
   /// The codes of `records`, for one use, after the device's check or the
   /// passphrase (every time). Throws [VaultLocked].
   Future<List<String>> unlock(List<InviteRecord> records, VaultPrompts prompts, {required String reason}) async {
+    if (records.any((r) => !r.readable)) throw const VaultLocked(false);
     var secret = await _protect(prompts, reason);
     if (secret != null) {
       await _save();
@@ -643,6 +656,31 @@ class InviteStore extends ChangeNotifier {
       secret = await openSeed(_vault!, prompts, reason: reason);
     }
     return [for (final r in records) utf8.decode(await openSealed(r.sealed!, secret))];
+  }
+
+  /// Whether the cards' key is under a passphrase or a passkey, which a new
+  /// wallet must share ([sealSeed] with `alongside`).
+  static Future<bool> keyShared() async =>
+      switch ((await storedVault())?['protection']) { 'passphrase' || 'passkey' => true, _ => false };
+
+  /// Forgets the cards' key, for a user who no longer has its passphrase or
+  /// passkey: otherwise no wallet could be made or imported on this device,
+  /// since a new wallet must share it. The codes sealed to it can never be
+  /// read again, so their cards are kept only to be followed on the chain
+  /// ([InviteRecord.codeLost]); codes still in the clear stay, and are
+  /// sealed to the next key. The next cards make that key, under the
+  /// wallet's passphrase or passkey.
+  Future<void> forgetKey() async {
+    await load();
+    final vault = _vault;
+    if (vault != null) await forgetSeed(vault);
+    for (final r in invites) {
+      if (r.sealed == null) continue;
+      r.sealed = null;
+      r.codeLost = true;
+    }
+    _vault = null;
+    await _save();
   }
 
   Future<void> markTookBack(InviteRecord r) async {

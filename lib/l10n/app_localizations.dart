@@ -272,6 +272,54 @@ abstract class AppLocalizations {
   /// **'The node speaks protocol {node}; this client speaks protocol {ours}.'**
   String errVersion(int node, int ours);
 
+  /// Link error: the node speaks a newer protocol than this desktop app; the fix is updating the app
+  ///
+  /// In en, this message translates to:
+  /// **'The network has moved to a newer protocol than this app speaks. Update the app to keep using it.'**
+  String get errAppOutdated;
+
+  /// Link error on the web: the node speaks a newer protocol than this page; reloading gets the new one
+  ///
+  /// In en, this message translates to:
+  /// **'The network has moved to a newer protocol than this page speaks. Reload the page to get the new version.'**
+  String get errAppOutdatedWeb;
+
+  /// Link error in a Flatpak: the node speaks a newer protocol; the system's software updates bring the new app
+  ///
+  /// In en, this message translates to:
+  /// **'The network has moved to a newer protocol than this app speaks. Update it from your system\'s software updates.'**
+  String get errAppOutdatedSystem;
+
+  /// Button: opens the newest release's page, with its downloads
+  ///
+  /// In en, this message translates to:
+  /// **'Get the new version'**
+  String get getNewVersion;
+
+  /// Chain tab: this build's checkpoint is over a month behind the tip, so a newer release is probably out. Keep the ** markers
+  ///
+  /// In en, this message translates to:
+  /// **'This version of the app is **over a month old**: a newer one is probably available.'**
+  String get appMaybeOld;
+
+  /// Chain tab, Flatpak: as appMaybeOld, the update coming from the system's software updates. Keep the ** markers
+  ///
+  /// In en, this message translates to:
+  /// **'This version of the app is **over a month old**: your system\'s software updates probably have a newer one.'**
+  String get appMaybeOldSystem;
+
+  /// The app's own node: its peers speak a newer protocol, so it can't follow until the app is updated. Keep the ** markers
+  ///
+  /// In en, this message translates to:
+  /// **'The network has moved to a **newer protocol**: this node can\'t follow it until the app is updated.'**
+  String get localNodeOutdated;
+
+  /// As localNodeOutdated, in a Flatpak (updated by the system). Keep the ** markers
+  ///
+  /// In en, this message translates to:
+  /// **'The network has moved to a **newer protocol**: this node can\'t follow it until the app is updated from your system\'s software updates.'**
+  String get localNodeOutdatedSystem;
+
   /// No description provided for @errSyncFailed.
   ///
   /// In en, this message translates to:
@@ -2293,6 +2341,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The wallet couldn\'t be unlocked. Removing it deletes its key from this device: only your seed backup can bring it back.'**
   String get removeAnywayBody;
+
+  /// Dialog when a new or imported wallet can't open the invitation cards' passphrase or passkey, which it must share
+  ///
+  /// In en, this message translates to:
+  /// **'Can\'t unlock your invitation cards'**
+  String get forgetCardsKeyTitle;
+
+  /// No description provided for @forgetCardsKeyBody.
+  ///
+  /// In en, this message translates to:
+  /// **'A new wallet takes the passphrase or passkey your invitation cards are under. If you no longer have it, let the cards\' key go: the wallet gets a new passphrase, and cards not yet claimed can no longer be shown, printed or cancelled from this device. Their tokens stay on the cards.'**
+  String get forgetCardsKeyBody;
+
+  /// No description provided for @forgetCardsKeyAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Let the cards\' key go'**
+  String get forgetCardsKeyAction;
+
+  /// Invitations list: a card whose code was sealed to a key the device let go
+  ///
+  /// In en, this message translates to:
+  /// **'Code no longer on this device'**
+  String get inviteCodeLost;
 
   /// Wallet tab: how the key is protected (Android/iOS/macOS key store)
   ///

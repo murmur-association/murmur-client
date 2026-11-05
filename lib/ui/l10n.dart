@@ -10,6 +10,7 @@ import '../l10n/app_localizations.dart';
 import '../protocol/models.dart' show unitsPerToken;
 import '../protocol/wire.dart' show protocolVersion;
 import '../services/node_client.dart';
+import '../services/updates.dart';
 
 export '../l10n/app_localizations.dart';
 
@@ -161,6 +162,12 @@ String linkErrorText(AppLocalizations l, LinkError e) => switch (e.kind) {
       LinkErrorKind.closed => l.errClosed,
       LinkErrorKind.timeout => l.errTimeout,
       LinkErrorKind.protocol => l.errProtocol(e.detail),
+      // A node ahead of this app: the network moved on, and updating is the fix.
+      LinkErrorKind.version when e.nodeVersion > protocolVersion => switch (installed) {
+          Installed.web => l.errAppOutdatedWeb,
+          Installed.flatpak => l.errAppOutdatedSystem,
+          _ => l.errAppOutdated,
+        },
       LinkErrorKind.version => l.errVersion(e.nodeVersion, protocolVersion),
       LinkErrorKind.syncFailed =>
         l.errSyncFailed(e.cause == null ? e.detail : linkErrorText(l, e.cause!)),

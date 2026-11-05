@@ -134,6 +134,37 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
+  String get errAppOutdated =>
+      'Das Netzwerk nutzt inzwischen ein neueres Protokoll als diese App. Aktualisiere die App, um sie weiter zu verwenden.';
+
+  @override
+  String get errAppOutdatedWeb =>
+      'Das Netzwerk nutzt inzwischen ein neueres Protokoll als diese Seite. Lade die Seite neu, um die neue Version zu erhalten.';
+
+  @override
+  String get errAppOutdatedSystem =>
+      'Das Netzwerk nutzt inzwischen ein neueres Protokoll als diese App. Aktualisiere sie über die Softwareaktualisierung deines Systems.';
+
+  @override
+  String get getNewVersion => 'Neue Version holen';
+
+  @override
+  String get appMaybeOld =>
+      'Diese Version der App ist **über einen Monat alt**: Wahrscheinlich gibt es eine neuere.';
+
+  @override
+  String get appMaybeOldSystem =>
+      'Diese Version der App ist **über einen Monat alt**: Die Softwareaktualisierung deines Systems hat wahrscheinlich eine neuere.';
+
+  @override
+  String get localNodeOutdated =>
+      'Das Netzwerk nutzt ein **neueres Protokoll**: Dieser Knoten kann ihm erst folgen, wenn die App aktualisiert ist.';
+
+  @override
+  String get localNodeOutdatedSystem =>
+      'Das Netzwerk nutzt ein **neueres Protokoll**: Dieser Knoten kann ihm erst folgen, wenn die App über die Softwareaktualisierung deines Systems aktualisiert ist.';
+
+  @override
   String errSyncFailed(String cause) {
     return 'Synchronisierung fehlgeschlagen: $cause';
   }
@@ -1553,6 +1584,20 @@ class AppLocalizationsDe extends AppLocalizations {
   @override
   String get removeAnywayBody =>
       'Die Wallet konnte nicht entsperrt werden. Wenn du sie entfernst, wird ihr Schlüssel von diesem Gerät gelöscht: Nur deine Seed-Sicherung kann sie zurückholen.';
+
+  @override
+  String get forgetCardsKeyTitle =>
+      'Einladungskarten lassen sich nicht entsperren';
+
+  @override
+  String get forgetCardsKeyBody =>
+      'Eine neue Wallet übernimmt die Passphrase oder den Passkey deiner Einladungskarten. Hast du sie nicht mehr, gib den Schlüssel der Karten auf: Die Wallet bekommt eine neue Passphrase, und noch nicht eingelöste Karten können auf diesem Gerät nicht mehr angezeigt, gedruckt oder storniert werden. Ihre Token bleiben auf den Karten.';
+
+  @override
+  String get forgetCardsKeyAction => 'Schlüssel der Karten aufgeben';
+
+  @override
+  String get inviteCodeLost => 'Code nicht mehr auf diesem Gerät';
 
   @override
   String get protectionDevice =>

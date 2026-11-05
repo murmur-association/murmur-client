@@ -60,6 +60,10 @@ class ProcessLocalNode extends LocalNode {
   GpuMining? _gpu;
   NodeSync _sync = const NodeSync();
   bool _stopping = false;
+  int? _peersNewer;
+
+  @override
+  int? get peersNewer => _peersNewer;
 
   @override
   GpuMining? get gpu => _gpu;
@@ -102,6 +106,7 @@ class ProcessLocalNode extends LocalNode {
     // Asked to mine on the card: starting, until the node says more.
     _gpu = args.contains('--gpu') ? const GpuMining(GpuMiningState.starting) : null;
     _sync = const NodeSync();
+    _peersNewer = null;
     _set(LocalNodeState.starting);
     await Directory(dataDir).create(recursive: true);
     // A node left running by a session that crashed would share this data
@@ -128,6 +133,11 @@ class ProcessLocalNode extends LocalNode {
       final sync = _sync.after(line);
       if (sync != _sync) {
         _sync = sync;
+        notifyListeners();
+      }
+      final newer = newerPeerProtocol(line);
+      if (newer != null && newer > (_peersNewer ?? 0)) {
+        _peersNewer = newer;
         notifyListeners();
       }
       final gpu = _gpu == null ? null : gpuMiningOf(line);

@@ -211,6 +211,17 @@ class NodeSync {
   }
 }
 
+/// The protocol version a peer speaks, when `line` is the node saying it
+/// dropped one for speaking another ("[net] peer <address> speaks protocol
+/// v<n> (we speak v<m>); disconnecting") and that version is newer than the
+/// node's own: the network has moved on without this node.
+int? newerPeerProtocol(String line) {
+  final m = RegExp(r'^\[net\] peer .* speaks protocol v(\d+) \(we speak v(\d+)\)').firstMatch(line);
+  if (m == null) return null;
+  final theirs = int.parse(m.group(1)!), ours = int.parse(m.group(2)!);
+  return theirs > ours ? theirs : null;
+}
+
 /// The peer-to-peer port a node reports at startup ("[net] listening for
 /// peers on 127.0.0.1:<port>"), if `line` is that line.
 int? listeningPort(String line) {
@@ -244,6 +255,11 @@ abstract class LocalNode extends ChangeNotifier {
 
   /// How far it has come with the chain, while running.
   NodeSync get sync;
+
+  /// The newest protocol version its peers were dropped for speaking, when
+  /// newer than its own: this node, pinned with the app, can't follow the
+  /// network until the app is updated. Kept until it's started again.
+  int? get peersNewer;
 
   bool get available => state != LocalNodeState.unavailable;
 

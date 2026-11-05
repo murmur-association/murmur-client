@@ -131,6 +131,37 @@ class AppLocalizationsKo extends AppLocalizations {
   }
 
   @override
+  String get errAppOutdated =>
+      '네트워크가 이 앱보다 새로운 프로토콜로 바뀌었습니다. 계속 사용하려면 앱을 업데이트하세요.';
+
+  @override
+  String get errAppOutdatedWeb =>
+      '네트워크가 이 페이지보다 새로운 프로토콜로 바뀌었습니다. 페이지를 새로 고쳐 새 버전을 받으세요.';
+
+  @override
+  String get errAppOutdatedSystem =>
+      '네트워크가 이 앱보다 새로운 프로토콜로 바뀌었습니다. 시스템의 소프트웨어 업데이트에서 앱을 업데이트하세요.';
+
+  @override
+  String get getNewVersion => '새 버전 받기';
+
+  @override
+  String get appMaybeOld =>
+      '이 버전의 앱은 **한 달 넘게 지났습니다**. 더 새로운 버전이 나왔을 가능성이 높습니다.';
+
+  @override
+  String get appMaybeOldSystem =>
+      '이 버전의 앱은 **한 달 넘게 지났습니다**. 시스템의 소프트웨어 업데이트에 더 새로운 버전이 있을 가능성이 높습니다.';
+
+  @override
+  String get localNodeOutdated =>
+      '네트워크가 **새로운 프로토콜**로 바뀌었습니다. 앱을 업데이트하기 전까지 이 노드는 네트워크를 따라갈 수 없습니다.';
+
+  @override
+  String get localNodeOutdatedSystem =>
+      '네트워크가 **새로운 프로토콜**로 바뀌었습니다. 시스템의 소프트웨어 업데이트에서 앱을 업데이트하기 전까지 이 노드는 네트워크를 따라갈 수 없습니다.';
+
+  @override
   String errSyncFailed(String cause) {
     return '동기화 실패: $cause';
   }
@@ -1498,6 +1529,19 @@ class AppLocalizationsKo extends AppLocalizations {
   @override
   String get removeAnywayBody =>
       '지갑의 잠금을 해제할 수 없었습니다. 삭제하면 이 기기에서 키가 지워지며, 시드 백업으로만 되찾을 수 있습니다.';
+
+  @override
+  String get forgetCardsKeyTitle => '초대 카드의 잠금을 해제할 수 없습니다';
+
+  @override
+  String get forgetCardsKeyBody =>
+      '새 지갑은 초대 카드와 같은 암호 문구 또는 패스키를 사용합니다. 더 이상 갖고 있지 않다면 카드의 키를 포기하세요. 지갑은 새 암호 문구를 받고, 아직 받지 않은 카드는 이 기기에서 더 이상 표시, 인쇄, 취소할 수 없습니다. 토큰은 카드에 남습니다.';
+
+  @override
+  String get forgetCardsKeyAction => '카드의 키 포기';
+
+  @override
+  String get inviteCodeLost => '이 기기에 더 이상 코드가 없습니다';
 
   @override
   String get protectionDevice => '이 기기의 잠금으로 암호화된 키';

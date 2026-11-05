@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- What Flathub and software centres show of Murmur (linux/flatpak/info.murmur.client.yml).
+     Nothing about value or buying (AGENTS.md rule 10). Flathub's bot adds each new release
+     to <releases>. Screenshots are still to be added before the first submission. -->
+<component type="desktop-application">
+  <id>info.murmur.client</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>Apache-2.0</project_license>
+  <name>Murmur</name>
+  <summary>A light client for the Murmur network</summary>
+  <developer id="info.murmur">
+    <name>Murmur Association</name>
+  </developer>
+  <description>
+    <p>
+      Read and write threads and replies on the Murmur network, keep a wallet and send transfers.
+      Murmur checks every block header itself, and proves everything it shows against them,
+      so the node it reads from can't make anything up.
+    </p>
+    <ul>
+      <li>Threads, replies, answers and mentions, with notifications</li>
+      <li>A wallet whose key never leaves the device, kept in the system's keyring</li>
+      <li>Public names and pictures, invitations for newcomers</li>
+      <li>A Murmur node of its own, run beside the app, which can mine</li>
+    </ul>
+    <p>It runs on the public testnet, whose tokens are for testing only.</p>
+  </description>
+  <launchable type="desktop-id">info.murmur.client.desktop</launchable>
+  <url type="homepage">https://github.com/murmur-association/murmur-client</url>
+  <url type="bugtracker">https://github.com/murmur-association/murmur-client/issues</url>
+  <url type="vcs-browser">https://github.com/murmur-association/murmur-client</url>
+  <categories>
+    <category>Network</category>
+    <category>Chat</category>
+  </categories>
+  <content_rating type="oars-1.1">
+    <content_attribute id="social-chat">intense</content_attribute>
+    <content_attribute id="social-info">mild</content_attribute>
+  </content_rating>
+  <supports>
+    <control>pointing</control>
+    <control>keyboard</control>
+    <control>touch</control>
+  </supports>
+  <releases>
+    <release version="0.10.3" date="2026-11-04"/>
+  </releases>
+</component>

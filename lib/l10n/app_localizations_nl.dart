@@ -134,6 +134,37 @@ class AppLocalizationsNl extends AppLocalizations {
   }
 
   @override
+  String get errAppOutdated =>
+      'Het netwerk gebruikt inmiddels een nieuwer protocol dan deze app. Werk de app bij om hem te blijven gebruiken.';
+
+  @override
+  String get errAppOutdatedWeb =>
+      'Het netwerk gebruikt inmiddels een nieuwer protocol dan deze pagina. Laad de pagina opnieuw om de nieuwe versie te krijgen.';
+
+  @override
+  String get errAppOutdatedSystem =>
+      'Het netwerk gebruikt inmiddels een nieuwer protocol dan deze app. Werk hem bij via de software-updates van je systeem.';
+
+  @override
+  String get getNewVersion => 'Nieuwe versie downloaden';
+
+  @override
+  String get appMaybeOld =>
+      'Deze versie van de app is **meer dan een maand oud**: er is waarschijnlijk een nieuwere.';
+
+  @override
+  String get appMaybeOldSystem =>
+      'Deze versie van de app is **meer dan een maand oud**: de software-updates van je systeem hebben waarschijnlijk een nieuwere.';
+
+  @override
+  String get localNodeOutdated =>
+      'Het netwerk gebruikt een **nieuwer protocol**: deze node kan het pas volgen als de app is bijgewerkt.';
+
+  @override
+  String get localNodeOutdatedSystem =>
+      'Het netwerk gebruikt een **nieuwer protocol**: deze node kan het pas volgen als de app via de software-updates van je systeem is bijgewerkt.';
+
+  @override
   String errSyncFailed(String cause) {
     return 'Synchroniseren mislukt: $cause';
   }
@@ -1544,6 +1575,20 @@ class AppLocalizationsNl extends AppLocalizations {
   @override
   String get removeAnywayBody =>
       'De wallet kon niet worden ontgrendeld. Verwijderen wist de sleutel van dit apparaat: alleen je seed-back-up kan hem terugbrengen.';
+
+  @override
+  String get forgetCardsKeyTitle =>
+      'Je uitnodigingskaarten kunnen niet worden ontgrendeld';
+
+  @override
+  String get forgetCardsKeyBody =>
+      'Een nieuwe wallet neemt de wachtzin of passkey van je uitnodigingskaarten over. Heb je die niet meer, geef dan de sleutel van de kaarten op: de wallet krijgt een nieuwe wachtzin, en kaarten die nog niet geïnd zijn kunnen op dit apparaat niet meer worden getoond, afgedrukt of geannuleerd. Hun tokens blijven op de kaarten.';
+
+  @override
+  String get forgetCardsKeyAction => 'Sleutel van de kaarten opgeven';
+
+  @override
+  String get inviteCodeLost => 'Code niet meer op dit apparaat';
 
   @override
   String get protectionDevice =>

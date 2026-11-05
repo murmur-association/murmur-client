@@ -134,6 +134,37 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
+  String get errAppOutdated =>
+      'Le réseau utilise désormais un protocole plus récent que cette application. Mettez l\'application à jour pour continuer à l\'utiliser.';
+
+  @override
+  String get errAppOutdatedWeb =>
+      'Le réseau utilise désormais un protocole plus récent que cette page. Rechargez la page pour obtenir la nouvelle version.';
+
+  @override
+  String get errAppOutdatedSystem =>
+      'Le réseau utilise désormais un protocole plus récent que cette application. Mettez-la à jour depuis les mises à jour logicielles de votre système.';
+
+  @override
+  String get getNewVersion => 'Obtenir la nouvelle version';
+
+  @override
+  String get appMaybeOld =>
+      'Cette version de l\'application a **plus d\'un mois** : une version plus récente est sans doute disponible.';
+
+  @override
+  String get appMaybeOldSystem =>
+      'Cette version de l\'application a **plus d\'un mois** : les mises à jour logicielles de votre système en proposent sans doute une plus récente.';
+
+  @override
+  String get localNodeOutdated =>
+      'Le réseau utilise un **protocole plus récent** : ce nœud ne pourra pas le suivre tant que l\'application n\'est pas mise à jour.';
+
+  @override
+  String get localNodeOutdatedSystem =>
+      'Le réseau utilise un **protocole plus récent** : ce nœud ne pourra pas le suivre tant que l\'application n\'est pas mise à jour depuis les mises à jour logicielles de votre système.';
+
+  @override
   String errSyncFailed(String cause) {
     return 'Échec de la synchronisation : $cause';
   }
@@ -1550,6 +1581,20 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get removeAnywayBody =>
       'Le portefeuille n\'a pas pu être déverrouillé. Le supprimer efface sa clé de cet appareil : seule la sauvegarde de votre graine permet de le retrouver.';
+
+  @override
+  String get forgetCardsKeyTitle =>
+      'Impossible de déverrouiller vos cartes d\'invitation';
+
+  @override
+  String get forgetCardsKeyBody =>
+      'Un nouveau portefeuille reprend la phrase secrète ou la clé d\'accès de vos cartes d\'invitation. Si vous ne l\'avez plus, abandonnez la clé des cartes : le portefeuille reçoit une nouvelle phrase secrète, et les cartes pas encore récupérées ne pourront plus être affichées, imprimées ni annulées depuis cet appareil. Leurs jetons restent sur les cartes.';
+
+  @override
+  String get forgetCardsKeyAction => 'Abandonner la clé des cartes';
+
+  @override
+  String get inviteCodeLost => 'Code absent de cet appareil';
 
   @override
   String get protectionDevice =>
