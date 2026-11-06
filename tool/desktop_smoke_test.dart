@@ -1005,19 +1005,26 @@ class _WindowsPackage extends _Windows {
     if (!_plantedPid.existsSync() || _plantedPid.readAsStringSync().trim() != '${planted.pid}') {
       throw _Failed("the package changed the installer's copy's pid file ${_plantedPid.path}");
     }
-    for (final path in [_settings.path, '${_data.path}\\node-store']) {
-      if (FileSystemEntity.typeSync(path) != FileSystemEntityType.notFound) {
-        throw _Failed('the package wrote $path in the real %APPDATA%, not in its own folder');
-      }
+    // New folders under %APPDATA% go to the package's own copy, but writes
+    // beneath a folder that exists in the real one go through to it
+    // (Windows 10 1903 and later): the installer's copy made murmur-client,
+    // so node-store may be in either. What matters is that it isn't node.
+    // The settings folder didn't exist in the real %APPDATA% here, so the
+    // package's went to its own copy.
+    if (FileSystemEntity.typeSync(_settings.path) != FileSystemEntityType.notFound) {
+      throw _Failed('the package made ${_settings.path} in the real %APPDATA%, not in its own folder');
     }
     if (!File('$_private\\Murmur Association\\Murmur\\shared_preferences.json').existsSync()) {
       throw _Failed('the settings are missing from $_private: the package kept them elsewhere');
     }
-    if (!Directory('$_private\\murmur-client\\node-store').existsSync()) {
-      throw _Failed("the package's node kept no data in $_private\\murmur-client\\node-store");
+    final stores = [for (final base in [_private, _data.parent.path]) '$base\\murmur-client\\node-store'];
+    final store = stores.where((path) => Directory(path).existsSync()).firstOrNull;
+    if (store == null) throw _Failed("the package's node kept no data in node-store (${stores.join(' or ')})");
+    final installers = Directory('${_data.path}\\node').listSync().map((e) => e.path.split('\\').last).toList();
+    if (installers.length != 1 || installers.single != 'app-node.pid') {
+      throw _Failed("the package wrote in the installer's copy's node folder: $installers");
     }
-    print("its node ran in its own folder ($_private\\murmur-client\\node-store), the installer's was left "
-        'running, and nothing was written in the real %APPDATA%');
+    print("its node ran in $store, the installer's was left running in its own folder, untouched");
   }
 
   /// A notification's click while the app is closed: Windows starts the

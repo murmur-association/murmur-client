@@ -44,9 +44,10 @@ String _dataDir() {
 
 /// The node's data folder under `base` (public for tests). A Microsoft
 /// Store build keeps its own: a package reads the real %APPDATA% merged with
-/// its private copy of it, so with the installer's copy also on the
-/// computer, the Store's would otherwise find that one's node (its pid file,
-/// which a start takes for a node left by a crash and stops, and its data).
+/// its private copy of it, and writes beneath folders the installer's copy
+/// made go through to the real ones, so the Store's would otherwise find
+/// that copy's node (its pid file, which a start takes for a node left by a
+/// crash and stops, and its data).
 String localNodeDataDir(String base, String sep, {bool store = storeBuild}) =>
     '$base${sep}murmur-client$sep${store ? 'node-store' : 'node'}';
 
