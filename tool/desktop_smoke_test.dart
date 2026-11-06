@@ -221,8 +221,11 @@ class _SmokeTest {
       // Not this test's child: its end is watched for instead.
       app = _app = launched;
       unawaited(() async {
+        // Gone at two looks in a row, so one failed look isn't an exit.
+        var missed = 0;
         while (_app == app && _appExit == null) {
-          if (!await _alive(app)) _appExit = -1;
+          missed = await _alive(app) ? 0 : missed + 1;
+          if (missed >= 2) _appExit = -1;
           await Future<void>.delayed(const Duration(milliseconds: 500));
         }
       }());
@@ -768,7 +771,23 @@ class _Windows extends Desktop {
           ])
             '$name ${File('$_system32\\$name').existsSync() ? 'yes' : 'NO'}',
         ].join(', ')}',
+        ..._crashes(),
       ];
+
+  /// What Windows recorded of the app or its node crashing in the last
+  /// quarter of an hour (Windows Error Reporting, in the Application log):
+  /// the faulting module and exception code, which a packaged app, whose
+  /// output nobody reads, says nowhere else.
+  List<String> _crashes() {
+    final r = Process.runSync('powershell', [
+      '-NoProfile', '-Command', //
+      r"Get-WinEvent -FilterHashtable @{LogName='Application'; ProviderName='Application Error','Windows Error Reporting','.NET Runtime'; StartTime=(Get-Date).AddMinutes(-15)} -ErrorAction SilentlyContinue | "
+          r"Where-Object { $_.Message -match 'murmur' } | Select-Object -First 4 | "
+          r"ForEach-Object { '--- ' + $_.TimeCreated.ToString('HH:mm:ss') + ' ' + $_.ProviderName + ' ' + $_.Id; $_.Message }",
+    ]);
+    final lines = const LineSplitter().convert('${r.stdout}').where((l) => l.trim().isNotEmpty).take(80).toList();
+    return lines.isEmpty ? ['no crash of the app or its node recorded by Windows'] : ['crashes Windows recorded:', ...lines.map((l) => '    $l')];
+  }
 }
 
 class _Mac extends Desktop {
