@@ -195,8 +195,35 @@ class _SmokeTest {
   Future<void> _close(int node) async {
     final app = _app!;
     desktop.closeWindow(app.pid, 'Murmur');
-    await _waitFor(20, "the app didn't exit after its window was closed", () => _appExit != null);
+    try {
+      await _waitFor(20, "the app didn't exit after its window was closed", () => _appExit != null);
+    } on _Failed {
+      if (Platform.isMacOS) await _whyStillRunning(app.pid);
+      rethrow;
+    }
     await _waitFor(10, 'the node kept running after the app closed', () async => !await _alive(node));
+  }
+
+  /// For a Mac app that took a quit request and kept running: where its main
+  /// thread waits (`sample`), and whether a second request ends it, which
+  /// tells a first request lost in the Flutter shell's asynchronous exit
+  /// (the app's exit handler answers later) from an app that can't quit.
+  Future<void> _whyStillRunning(int pid) async {
+    final sampled = await Process.run('sample', ['$pid', '2']);
+    final lines = const LineSplitter().convert('${sampled.stdout}${sampled.stderr}');
+    final main = lines.indexWhere((l) => l.contains('Thread_') && l.contains('main-thread'));
+    print("the app's main thread, sampled:");
+    for (final l in (main < 0 ? lines : lines.skip(main)).take(60)) {
+      print('    $l');
+    }
+    desktop.closeWindow(pid, 'Murmur');
+    final until = DateTime.now().add(const Duration(seconds: 10));
+    while (_appExit == null && DateTime.now().isBefore(until)) {
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+    }
+    print(_appExit != null
+        ? 'a second quit request ended it (exit code $_appExit)'
+        : 'a second quit request did not end it either');
   }
 
   Future<void> startAndStop() async {
