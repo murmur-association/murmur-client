@@ -133,17 +133,11 @@ Future<void> main(List<String> args) async {
     if (desktop is _WindowsPackage) {
       await desktop.checkApart(planted!, test.alive);
       await desktop.toastActivation(bundle);
-      if (desktop.quickExits.isNotEmpty) throw _Failed('the app stopped by itself: ${desktop.quickExits.join('; ')}');
     }
     final skipped = walletStorage ? await test.walletStorage() : null;
     print(skipped == null ? 'OK' : 'OK, but for the wallet check, which could not be tried here');
   } on _Failed catch (e) {
     print('FAILED: ${e.what}');
-    if (desktop is _WindowsPackage) {
-      for (final quick in desktop.quickExits) {
-        print('  before that: $quick');
-      }
-    }
     for (final line in await test.report()) {
       print('  $line');
     }
@@ -213,6 +207,9 @@ class _SmokeTest {
   /// returns.
   Future<int> _start() async {
     _said.clear();
+    // The last app forgotten first: its exit watcher may look once more,
+    // and must not mark the new one as exited while Windows starts it.
+    _app = null;
     _appExit = null;
     final int app;
     final launched = await desktop.launch(bundle);
@@ -227,11 +224,8 @@ class _SmokeTest {
       // Not this test's child: its end is watched for instead.
       app = _app = launched;
       unawaited(() async {
-        // Gone at two looks in a row, so one failed look isn't an exit.
-        var missed = 0;
         while (_app == app && _appExit == null) {
-          missed = await _alive(app) ? 0 : missed + 1;
-          if (missed >= 2) _appExit = -1;
+          if (!await _alive(app) && _app == app) _appExit = -1;
           await Future<void>.delayed(const Duration(milliseconds: 500));
         }
       }());
@@ -962,24 +956,8 @@ class _WindowsPackage extends _Windows {
 
   Future<Set<int>> _apps(String bundle) async => {for (final p in await _processes('$bundle\\$app')) p.pid};
 
-  /// Starts that exited by themselves within seconds, with their exit code:
-  /// a failure at the end even when a later start worked.
-  final quickExits = <String>[];
-
   @override
   Future<int?> launch(String bundle) async {
-    final pid = await _launchOnce(bundle);
-    // Not our child, so its exit code is read through a handle opened now.
-    final exit = _exitCode(pid);
-    final quick = await exit.then<String?>((code) => code).timeout(const Duration(seconds: 3), onTimeout: () => null);
-    if (quick == null) return pid;
-    quickExits.add('app $pid exited with code $quick within 3 s of its start');
-    print('the app ($pid) exited with code $quick within 3 s of its start; starting it again in 5 s');
-    await Future<void>.delayed(const Duration(seconds: 5));
-    return _launchOnce(bundle);
-  }
-
-  Future<int> _launchOnce(String bundle) async {
     final before = await _apps(bundle);
     // ShellExecute of the app's entry in the Start menu's folder: Windows
     // starts it in its package, as a click there does.
@@ -988,16 +966,9 @@ class _WindowsPackage extends _Windows {
     while (DateTime.now().isBefore(deadline)) {
       final started = (await _apps(bundle)).difference(before);
       if (started.isNotEmpty) return started.first;
-      await Future<void>.delayed(const Duration(milliseconds: 100));
+      await Future<void>.delayed(const Duration(milliseconds: 500));
     }
     throw _Failed('Windows started no $app from the package $family');
-  }
-
-  /// The exit code of a process this didn't start, or 'unknown'.
-  Future<String> _exitCode(int pid) async {
-    final out = await _powershell(r'$p = Get-Process -Id ' '$pid' r' -ErrorAction SilentlyContinue; '
-        r"if ($p) { $null = $p.Handle; $p.WaitForExit(); $p.ExitCode } else { 'unknown (gone before its handle was opened)' }");
-    return out.isEmpty ? 'unknown' : out;
   }
 
   @override
