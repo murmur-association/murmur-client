@@ -235,8 +235,10 @@ jobs:
   # turns jobs away again, go back to both of those.
   acceptance-ios:
     name: 'acceptance: [ios]'
-    runs-on: macos-latest
+    runs-on: macos-15-intel
     timeout-minutes: 60
+    env:
+      ACCEPTANCE_SLOW: "1"
     steps:
     - uses: actions/checkout@v4
       with:
@@ -264,10 +266,11 @@ jobs:
   # notification centre.
   acceptance-macos:
     name: 'acceptance: [macos]'
-    runs-on: macos-latest
+    runs-on: macos-15-intel
     timeout-minutes: 60
     env:
       ACCEPTANCE_NO_NOTIFICATIONS: "1"
+      ACCEPTANCE_SLOW: "1"
     steps:
     - uses: actions/checkout@v4
       with:
@@ -364,7 +367,7 @@ jobs:
   # its button from outside needs Accessibility; check 3 is reported as not
   # tried, the key store's password dialog having nobody to answer it.
   smoke-macos:
-    runs-on: macos-latest
+    runs-on: macos-15-intel
     timeout-minutes: 45
     steps:
     - uses: actions/checkout@v4
