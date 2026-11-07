@@ -55,7 +55,7 @@ void main() {
   // What a check notes about the flavour at hand, for the driver to print.
   void Function(String) noted(String topic) => (note) {
         debugPrint('$topic: $note');
-        ((binding.reportData ??= {}).putIfAbsent('notes', () => <String>[]) as List).add(': ');
+        ((binding.reportData ??= {}).putIfAbsent('notes', () => <String>[]) as List).add('$topic: $note');
       };
 
   // What numbers do differs between a browser and the rest: the header
