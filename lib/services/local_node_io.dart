@@ -62,6 +62,16 @@ class ProcessLocalNode extends LocalNode {
   @override
   final String dataDir;
 
+  /// The node's last lines of output, oldest first (at most 60), for a
+  /// test's report when something it waited for didn't happen.
+  List<String> get recentOutput => List.of(_recent);
+  final _recent = <String>[];
+
+  void _keep(String line) {
+    _recent.add(line);
+    if (_recent.length > 60) _recent.removeAt(0);
+  }
+
   late LocalNodeState _state;
   Process? _process;
   int? _port;
@@ -134,6 +144,7 @@ class ProcessLocalNode extends LocalNode {
     await _pidFile.writeAsString('${process.pid}');
     process.stdout.transform(utf8.decoder).transform(const LineSplitter()).listen((line) {
       if (!identical(_process, process)) return;
+      _keep(line);
       final p = listeningPort(line);
       if (p != null) {
         _port = p;
@@ -157,6 +168,7 @@ class ProcessLocalNode extends LocalNode {
     });
     process.stderr.transform(utf8.decoder).transform(const LineSplitter()).listen((line) {
       if (line.trim().isNotEmpty) _problem = line.trim();
+      if (identical(_process, process)) _keep(line);
     });
     unawaited(process.exitCode.then((_) => _exited(process, asked: _stopping)));
   }

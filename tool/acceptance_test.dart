@@ -302,7 +302,7 @@ void main() {
             });
           }
         }));
-    expect(output.failed(await flutter.exitCode, 'the acceptance tests on $_device'), isFalse,
+    expect(output.failed(await flutter.exitCode, 'the acceptance tests on $_device', node: node.node.recentOutput), isFalse,
         reason: 'the acceptance tests on $_device');
     if (android != null) expect(backgroundJobRan, isTrue, reason: "the app's background job, run as Android runs it");
     // A cancel and a pick from each source the device offers (Android has

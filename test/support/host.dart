@@ -69,15 +69,27 @@ class DeviceOutput {
       }));
 
   /// Whether the run, ended with `exitCode`, failed: `flutter drive` can
-  /// end with 0 after tests that failed. If so, the last lines become an
-  /// annotation titled `what`.
-  bool failed(int exitCode, String what) {
+  /// end with 0 after tests that failed. If so, an annotation titled `what`
+  /// holds every failure the app reported (its own annotations, which
+  /// GitHub didn't always take from an iPhone's output), then the last
+  /// lines, then `node`'s, the test node's last lines if given.
+  bool failed(int exitCode, String what, {List<String> node = const []}) {
     final failed = exitCode != 0 || _device.any((line) => line.contains('Some tests failed') || line.contains('[E]'));
     if (failed && Platform.environment['GITHUB_ACTIONS'] == 'true') {
-      final tail = _said.skip(_said.length > 60 ? _said.length - 60 : 0).join('\n');
+      final reported = [
+        for (final line in _device)
+          if (line.indexOf('::error ') case final at when at >= 0)
+            line
+                .substring(line.indexOf('::', at + 8) + 2)
+                .replaceAll('%0A', '\n')
+                .replaceAll('%0D', '')
+                .replaceAll('%25', '%'),
+      ];
+      final tail = _said.skip(_said.length > 40 ? _said.length - 40 : 0).join('\n');
       String escaped(String s) => s.replaceAll('%', '%25').replaceAll('\r', '%0D').replaceAll('\n', '%0A');
       print('::error title=${escaped(what).replaceAll(':', '%3A').replaceAll(',', '%2C')}'
-          '::${escaped('exit code $exitCode; last lines:\n$tail')}');
+          '::${escaped('exit code $exitCode\n${reported.map((r) => 'failed: $r\n').join()}last lines:\n$tail'
+              '${node.isEmpty ? '' : "\nthe node's last lines:\n${node.join('\n')}"}')}');
     }
     return failed;
   }
