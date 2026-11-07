@@ -280,9 +280,15 @@ class AndroidSystem {
 
   /// Runs the app's background job now, as the system would; whether the
   /// app's log then shows its Dart side ran (`marker`, within `timeout`).
+  ///
+  /// The log isn't cleared first: a periodic job with no initial delay may
+  /// already have run by itself, between the app scheduling it and asking
+  /// for this, and WorkManager then skips the forced run as early for its
+  /// period. Clearing the log lost that run's marker, and the check waited
+  /// for one that never came. The marker can only be there once the app
+  /// scheduled the job, on an emulator booted for this run.
   Future<bool> runBackgroundJob(({String? namespace, String id}) job, String marker,
       {Duration timeout = const Duration(minutes: 3)}) async {
-    await adb(['logcat', '-c']);
     final namespace = job.namespace == null ? '' : '-n ${job.namespace} ';
     print('android: running the background job: ${(await _shell('cmd jobscheduler run -f $namespace$package ${job.id}')).trim()}');
     final deadline = DateTime.now().add(timeout);
