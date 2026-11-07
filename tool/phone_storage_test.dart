@@ -13,13 +13,13 @@
 
 // ignore_for_file: avoid_print
 
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:murmur_client/crypto/wallet.dart';
 
 import '../integration_test/support/acceptance_protocol.dart';
+import '../test/support/host.dart';
 import '../test/support/test_node.dart';
 import 'android_system.dart';
 
@@ -38,7 +38,10 @@ void main() {
     final host = emulator ? '10.0.2.2' : '127.0.0.1';
     final android = emulator ? AndroidSystem(device, androidApplicationId()!) : null;
     final args = [
-      'test', _suite, '-d', device,
+      'test',
+      _suite,
+      '-d',
+      device,
       '--dart-define=ACCEPTANCE_NODE=$host:${node.port}',
       '--dart-define=ACCEPTANCE_HEIGHT=$_blocks',
     ];
@@ -52,23 +55,20 @@ void main() {
     };
     final flutter = await Process.start(Platform.isWindows ? 'flutter.bat' : 'flutter', args,
         environment: environment, includeParentEnvironment: false, runInShell: Platform.isWindows);
-    final said = <String>[];
+    final output = DeviceOutput();
     var cleared = false;
-    for (final stream in [flutter.stdout, flutter.stderr]) {
-      stream.transform(const Utf8Decoder(allowMalformed: true)).transform(const LineSplitter()).listen((line) {
-        said.add(line);
-        print(line);
-        if (android != null && line.contains(phoneClearCachesRequest)) {
-          android.clearCaches().then((done) async {
-            print('android: $done');
-            cleared = true;
-            await android.tellApp(phoneCachesCleared);
-          });
-        }
-      });
-    }
-    expect(await flutter.exitCode, 0, reason: 'the phone storage test on $device');
-    expect(said.where((line) => line.contains('Some tests failed') || line.contains('[E]')), isEmpty);
+    output.capture(() => eachLine(flutter, (line) {
+          output.add(line);
+          if (android != null && line.contains(phoneClearCachesRequest)) {
+            android.clearCaches().then((done) async {
+              print('android: $done');
+              cleared = true;
+              await android.tellApp(phoneCachesCleared);
+            });
+          }
+        }));
+    expect(output.failed(await flutter.exitCode, 'the phone storage test on $device'), isFalse,
+        reason: 'the phone storage test on $device');
     if (android != null) expect(cleared, isTrue, reason: 'the system cleared the caches when the app asked');
   }, skip: nodeSkip, timeout: const Timeout(Duration(minutes: 30)));
 }

@@ -281,44 +281,40 @@ void main() {
     };
     final flutter = await Process.start(Platform.isWindows ? 'flutter.bat' : 'flutter', args,
         environment: environment, includeParentEnvironment: false, runInShell: Platform.isWindows);
-    final said = <String>[];
-    eachLine(flutter, (line) {
-      said.add(line);
-      print(line);
-      // A failure's annotation the app printed (acceptance_test.dart) comes
-      // after a prefix on some devices (Android's "I/flutter (…): "), and
-      // GitHub reads a workflow command only at the start of a line.
-      final command = line.indexOf('::error ');
-      if (command > 0) print(line.substring(command));
-      if (chooser == 'host' && (line.contains(chooserPickRequest) || line.contains(chooserCancelRequest))) {
-        unawaited(answerChooser(line));
-      }
-      if (android == null) return;
-      final click = line.indexOf(androidClickRequest);
-      if (click >= 0) {
-        final title = line.substring(click + androidClickRequest.length).trim();
-        android.clickNotification(title).then((done) => print('android: clicked "$title": $done'));
-      } else if (line.contains(androidBackgroundJobRequest)) {
-        _runBackgroundJob(android).then((ran) async {
-          backgroundJobRan = ran;
-          print('android: the background job ran: $ran');
-          // The app waits for this before it switches notifications off,
-          // which cancels the job.
-          await android.tellApp(androidBackgroundJobDone);
-        });
-      }
-    });
-    expect(await flutter.exitCode, 0, reason: 'the acceptance tests on $_device');
-    // `flutter drive` can end with 0 after tests that failed.
-    expect(said.where((line) => line.contains('Some tests failed') || line.contains('[E]')), isEmpty);
+    final output = DeviceOutput();
+    output.capture(() => eachLine(flutter, (line) {
+          output.add(line);
+          if (chooser == 'host' && (line.contains(chooserPickRequest) || line.contains(chooserCancelRequest))) {
+            unawaited(answerChooser(line));
+          }
+          if (android == null) return;
+          final click = line.indexOf(androidClickRequest);
+          if (click >= 0) {
+            final title = line.substring(click + androidClickRequest.length).trim();
+            android.clickNotification(title).then((done) => print('android: clicked "$title": $done'));
+          } else if (line.contains(androidBackgroundJobRequest)) {
+            _runBackgroundJob(android).then((ran) async {
+              backgroundJobRan = ran;
+              print('android: the background job ran: $ran');
+              // The app waits for this before it switches notifications off,
+              // which cancels the job.
+              await android.tellApp(androidBackgroundJobDone);
+            });
+          }
+        }));
+    expect(output.failed(await flutter.exitCode, 'the acceptance tests on $_device', node: node.node.recentOutput), isFalse,
+        reason: 'the acceptance tests on $_device');
     if (android != null) expect(backgroundJobRan, isTrue, reason: "the app's background job, run as Android runs it");
     // A cancel and a pick from each source the device offers (Android has
     // two), each done in the system's own chooser.
     if (chooser == 'host') {
-      expect(chooserDone, [
-        for (final _ in android != null ? [1, 2] : [1]) 'cancel: true',
-        for (final _ in android != null ? [1, 2] : [1]) 'pick: true',
-      ], reason: "the system's picture chooser, worked from outside the app");
+      expect(
+          chooserDone,
+          [
+            for (final _ in android != null ? [1, 2] : [1]) 'cancel: true',
+            for (final _ in android != null ? [1, 2] : [1]) 'pick: true',
+          ],
+          reason: "the system's picture chooser, worked from outside the app");
     }
   }, skip: nodeSkip, timeout: Timeout(Duration(minutes: _slow ? 150 : 30)));
 }

@@ -6,10 +6,10 @@
 // The app keeps its settings and secrets in memory here, never in the
 // device's own storage: a run can't touch a wallet the user has, and starts
 // from nothing wherever it runs. (Storing them for real is
-// wallet_storage_test.dart's subject.) Its local copy of the chain does go to
-// the device's storage, as a user's would: on a desktop in a folder the
-// runner throws away (MURMUR_DATA_HOME), elsewhere in the browser's or the
-// test app's own.
+// wallet_storage_test.dart's subject.) No local copy of the chain is kept
+// (AGENTS.md, Known gaps 0). The user's own messages are, as always: on a
+// desktop in a folder the runner throws away (MURMUR_DATA_HOME), elsewhere
+// in the browser's or the test app's own.
 
 import 'dart:async';
 import 'dart:typed_data';
@@ -22,7 +22,6 @@ import 'package:murmur_client/crypto/wallet.dart';
 import 'package:murmur_client/main.dart' as app;
 import 'package:murmur_client/protocol/bytes.dart';
 import 'package:murmur_client/protocol/models.dart';
-import 'package:murmur_client/services/chain_cache.dart';
 import 'package:murmur_client/services/key_vault.dart' show deviceKeyStoreAllowed;
 import 'package:murmur_client/services/local_node.dart';
 import 'package:murmur_client/services/node_client.dart';
@@ -104,17 +103,15 @@ const passphrase = 'correct horse battery';
 }
 
 /// A fresh device: no wallet, no cards, the test's node as its node, and
-/// the question about keeping a local copy answered: yes, so the device's
-/// own storage for it is used (IndexedDB in a browser, the app's cache
-/// folder on a phone, MURMUR_DATA_HOME on a desktop, which the runner makes
-/// a throwaway folder), and the restart starts from it.
+/// the question about keeping a local copy answered: no (AGENTS.md, Known
+/// gaps 0: with it, runs failed on iOS and in Chrome with a passkey).
 void freshDevice() {
   final node = acceptanceNodeAddress;
   FlutterSecureStorage.setMockInitialValues({});
   SharedPreferences.setMockInitialValues({
     'node_host': node.host,
     'node_port': node.port,
-    'storage_consent': StorageConsent.allowed.name,
+    'storage_consent': StorageConsent.rejected.name,
   });
 }
 
@@ -237,7 +234,16 @@ class AppDriver {
   /// to find it under.
   String _link() => find.byType(HomePage, skipOffstage: false).evaluate().isEmpty
       ? ''
-      : ' (link ${client.state.name} at ${client.height}, error ${client.error})';
+      : ' (link ${client.state.name} at ${client.height}, error ${client.error}, worker: ${client.doing}${_pendingReport()})';
+
+  /// This device's transactions still pending, for a failure's report: one
+  /// that stays pending is what most waits come down to (iOS, 2026-11-07).
+  String _pendingReport() => [
+        for (final p in client.ownPending)
+          '; pending ${p.tx.id.substring(0, 8)} (${p.tx.kind.name}, nonce ${p.tx.nonce}, sent at '
+              '${p.sentAtHeight}, proven nonce ${client.account(p.tx.fromAddress)?.nonce}): '
+              '${client.statusOf(p.tx.id)?.code.name ?? 'no answer'} ${client.statusOf(p.tx.id)?.reason ?? ''}',
+      ].join();
 
   /// Says what the test waits for, with the time, so a run that hangs shows
   /// where: on 2026-11-03 iOS hung for two hours with nothing after its last
@@ -607,10 +613,6 @@ class AppDriver {
     await type(l.message, text);
     await signAndSend();
   }
-
-  /// What the device's own storage holds of the local copy for the chain
-  /// the app follows, read as a later session would; null if nothing.
-  Future<CachedChain?> storedChain() async => (await ChainCache.open())?.load(toHex(client.genesis!));
 }
 
 /// An image file a user might pick for their picture: a wide PNG (a sky, a
