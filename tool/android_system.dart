@@ -27,7 +27,25 @@ class AndroidSystem {
   /// The PIN set for the screen lock a fingerprint needs.
   static const pin = '4711';
 
-  Future<ProcessResult> adb(List<String> args) => Process.run('adb', ['-s', serial, ...args]);
+  /// Runs adb on this device. A call that hasn't ended within `timeout` is
+  /// killed and gives exit code -1 with what it had said: one that never
+  /// ended once held up the background job's check (2026-11-07), whose
+  /// poll looks at its time only between calls.
+  Future<ProcessResult> adb(List<String> args, {Duration timeout = const Duration(minutes: 1)}) async {
+    final process = await Process.start('adb', ['-s', serial, ...args]);
+    final out = StringBuffer(), err = StringBuffer();
+    final reading = [
+      process.stdout.transform(const SystemEncoding().decoder).forEach(out.write),
+      process.stderr.transform(const SystemEncoding().decoder).forEach(err.write),
+    ];
+    final code = await process.exitCode.timeout(timeout, onTimeout: () {
+      process.kill(ProcessSignal.sigkill);
+      print('android: adb ${args.join(' ')} took over ${timeout.inSeconds} s, and was stopped');
+      return -1;
+    });
+    await Future.wait(reading).timeout(const Duration(seconds: 5), onTimeout: () => []);
+    return ProcessResult(process.pid, code, '$out', '$err');
+  }
 
   Future<String> _shell(String command) async => '${(await adb(['shell', command])).stdout}';
 
@@ -305,13 +323,21 @@ class AndroidSystem {
   /// for this, and WorkManager then skips the forced run as early for its
   /// period. Clearing the log lost that run's marker, and the check waited
   /// for one that never came. The marker can only be there once the app
-  /// scheduled the job, on an emulator booted for this run.
+  /// scheduled the job, on an emulator booted for this run. Only the lines
+  /// that hold the marker are asked for (`-e`), not the whole log each time,
+  /// which grows through the run (spaces as any character: adb hands logcat
+  /// its words through the device's shell).
   Future<bool> runBackgroundJob(({String? namespace, String id}) job, String marker,
       {Duration timeout = const Duration(minutes: 3)}) async {
     final namespace = job.namespace == null ? '' : '-n ${job.namespace} ';
     print('android: running the background job: ${(await _shell('cmd jobscheduler run -f $namespace$package ${job.id}')).trim()}');
-    return poll(() async => '${(await adb(['logcat', '-d'])).stdout}'.contains(marker),
-        timeout: timeout, every: const Duration(seconds: 5));
+    final ran = await poll(
+        () async => '${(await adb(['logcat', '-d', '-e', RegExp.escape(marker).replaceAll(' ', '.')], timeout: const Duration(seconds: 30))).stdout}'
+            .contains(marker),
+        timeout: timeout,
+        every: const Duration(seconds: 5));
+    print('android: the job\'s marker ${ran ? 'is' : 'is not'} in the log');
+    return ran;
   }
 }
 
