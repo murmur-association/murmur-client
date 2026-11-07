@@ -10,6 +10,24 @@ Newest first. Each release is a `vX.Y.Z` tag matching `version` in `pubspec.yaml
 - **New: Flatpak packaging** for Flathub (`linux/flatpak/`). Its first run takes along the settings and own messages of the app run from the archive; the wallet stays in the desktop's keyring.
 - **Fixed: a forgotten passphrase no longer blocks making or importing a wallet** when invitation cards are on the device. A new wallet shares the cards' passphrase, so restoring from the seed asked for the very passphrase that was forgotten. The app now offers to let the cards' key go: the wallet gets a new passphrase, and cards not yet claimed stay listed but can no longer be shown, printed or cancelled from that device (their tokens stay on the cards).
 
+## v0.10.6: checkpoint refresh (2026-11-07)
+
+No protocol or network change.
+
+- **Changed: the testnet checkpoint** is now block 17,100, refreshed from the live network by the scheduled release.
+
+## v0.10.5: checkpoint refresh (2026-11-06)
+
+No protocol or network change.
+
+- **Changed: the testnet checkpoint** is now block 14,200, refreshed from the live network by the scheduled release.
+
+## v0.10.4: checkpoint refresh (2026-11-05)
+
+No protocol or network change.
+
+- **Changed: the testnet checkpoint** is now block 11,300, refreshed from the live network by the scheduled release.
+
 ## v0.10.3: scheduled release, with what was waiting (2026-11-04)
 
 - **Changed: the testnet checkpoint** is now block 8,500, refreshed from the live network by the scheduled release.
