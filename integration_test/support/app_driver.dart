@@ -237,7 +237,16 @@ class AppDriver {
   /// to find it under.
   String _link() => find.byType(HomePage, skipOffstage: false).evaluate().isEmpty
       ? ''
-      : ' (link ${client.state.name} at ${client.height}, error ${client.error})';
+      : ' (link ${client.state.name} at ${client.height}, error ${client.error}${_pendingReport()})';
+
+  /// This device's transactions still pending, for a failure's report: one
+  /// that stays pending is what most waits come down to (iOS, 2026-11-07).
+  String _pendingReport() => [
+        for (final p in client.ownPending)
+          '; pending ${p.tx.id.substring(0, 8)} (${p.tx.kind.name}, nonce ${p.tx.nonce}, sent at '
+              '${p.sentAtHeight}, proven nonce ${client.account(p.tx.fromAddress)?.nonce}): '
+              '${client.statusOf(p.tx.id)?.code.name ?? 'no answer'} ${client.statusOf(p.tx.id)?.reason ?? ''}',
+      ].join();
 
   /// Says what the test waits for, with the time, so a run that hangs shows
   /// where: on 2026-11-03 iOS hung for two hours with nothing after its last

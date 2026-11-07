@@ -1,10 +1,11 @@
 // How a picture file is read on the flavour at hand: the public name
-// dialog reads the user's file with the engine (`pictureFromImage`), and a
-// browser's engine decodes with the browser. Safari once couldn't read the
-// suite's own sample (2026-11-07), and `pictureFromImage` says only that it
-// couldn't, so each step is tried here on its own and reported (`note`):
-// on the suite's sample and, in a browser, on the page's own icon, a PNG
-// from an ordinary encoder.
+// dialog reads the user's file with `pictureFromImage`, through the engine,
+// or in a browser through the browser (services/picture_pixels_web.dart),
+// since Safari wouldn't give the engine's decoded pixels back
+// (InvalidStateError, 2026-11-07). That must read the suite's sample and,
+// in a browser, the page's own icon, a PNG from an ordinary encoder. Each
+// step of the engine's own read is also tried, and what fails is reported
+// (`note`), so a browser that refuses it is seen.
 
 import 'dart:typed_data';
 import 'dart:ui' as ui;

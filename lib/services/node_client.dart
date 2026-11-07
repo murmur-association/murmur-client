@@ -911,6 +911,10 @@ class MurmurClient extends ChangeNotifier {
     return next;
   }
 
+  /// This device's own transactions not yet mined (what a test reports when
+  /// one stays pending).
+  Iterable<PendingTx> get ownPending => _pending.values.where((p) => p.mine);
+
   /// What the node answered when this client submitted `txid`.
   TxStatus? statusOf(String txid) => _statuses[txid];
 
