@@ -257,9 +257,10 @@ jobs:
   # here, which needs the runner's logged-in session). Safari's driver can't
   # grant notifications nor fill a file input, so the runner skips the
   # notification test and hands a picture over in the chooser's place.
-  # Allowed to fail while it's new: its first run (2026-11-05) failed for a
-  # reason not yet read from its log, and a release waits on this workflow.
-  # Take this line out once it passes.
+  # Allowed to fail while it's new, since a release waits on this workflow:
+  # it first passed on 2026-11-07, one run after it failed once to read the
+  # sample picture (the "pictures" check now notes each decode step). Take
+  # this line out once it has passed a while.
   acceptance-safari:
     name: 'acceptance: [safari]'
     runs-on: macos-latest
