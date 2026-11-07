@@ -30,9 +30,12 @@ class AndroidSystem {
   /// Runs adb on this device. A call that hasn't ended within `timeout` is
   /// killed and gives exit code -1 with what it had said: one that never
   /// ended once held up the background job's check (2026-11-07), whose
-  /// poll looks at its time only between calls.
-  Future<ProcessResult> adb(List<String> args, {Duration timeout = const Duration(minutes: 1)}) async {
+  /// poll looks at its time only between calls. Its input is closed at
+  /// once, as `Process.run` does: `adb shell` hands it to the device, and
+  /// with it left open calls waited until they were stopped.
+  Future<ProcessResult> adb(List<String> args, {Duration timeout = const Duration(minutes: 3)}) async {
     final process = await Process.start('adb', ['-s', serial, ...args]);
+    unawaited(process.stdin.close());
     final out = StringBuffer(), err = StringBuffer();
     final reading = [
       process.stdout.transform(const SystemEncoding().decoder).forEach(out.write),
