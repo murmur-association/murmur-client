@@ -11,7 +11,10 @@ import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:murmur_client/protocol/profile.dart' show profileSide;
 import 'package:murmur_client/services/picture.dart';
+import 'package:murmur_client/services/picture_pixels_io.dart'
+    if (dart.library.js_interop) 'package:murmur_client/services/picture_pixels_web.dart';
 
 import 'app_driver.dart' show samplePictureFile;
 import 'page_file_io.dart' if (dart.library.js_interop) 'page_file_web.dart';
@@ -31,7 +34,13 @@ void pictureTests(void Function(String note) note) {
       final pixels = await image.toByteData(format: ui.ImageByteFormat.rawStraightRgba);
       if (pixels == null) note('$what: no pixels from the decoded image');
     } catch (e) {
-      note('$what: $step failed: $e');
+      note("$what: the engine's $step failed: $e");
+    }
+    // What pictureFromImage reads with, which it doesn't say when it fails.
+    try {
+      await decodePixels(bytes, profileSide * 4);
+    } catch (e) {
+      note('$what: decodePixels failed: $e');
     }
     return await pictureFromImage(bytes) != null;
   }

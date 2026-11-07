@@ -237,7 +237,7 @@ class AppDriver {
   /// to find it under.
   String _link() => find.byType(HomePage, skipOffstage: false).evaluate().isEmpty
       ? ''
-      : ' (link ${client.state.name} at ${client.height}, error ${client.error}${_pendingReport()})';
+      : ' (link ${client.state.name} at ${client.height}, error ${client.error}, worker: ${client.doing}${_pendingReport()})';
 
   /// This device's transactions still pending, for a failure's report: one
   /// that stays pending is what most waits come down to (iOS, 2026-11-07).

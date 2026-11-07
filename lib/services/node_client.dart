@@ -2491,6 +2491,7 @@ class MurmurClient extends ChangeNotifier {
   // ---- requests -----------------------------------------------------------------
 
   Future<T> _request<T>(Completer<T> waiter, Message msg) {
+    _now('waiting for the answer to ${msg.runtimeType}');
     _send(msg);
     return waiter.future.timeout(_requestTimeout);
   }
@@ -2510,6 +2511,22 @@ class MurmurClient extends ChangeNotifier {
   /// waiting) isn't lost.
   bool _poked = false;
 
+  /// What the worker is doing, and since when ([doing]).
+  String _doing = 'not started';
+  DateTime _doingSince = DateTime.now();
+
+  void _now(String doing) {
+    _doing = doing;
+    _doingSince = DateTime.now();
+  }
+
+  /// What the worker is doing and for how long, for a report when a wait
+  /// for the client times out (the acceptance tests): an iPhone's client
+  /// once stopped following new blocks while its link stayed live
+  /// (2026-11-07).
+  String get doing => '$_doing for ${DateTime.now().difference(_doingSince).inSeconds} s'
+      '${_needHeaders ? ', headers wanted' : ''}';
+
   void _wake() {
     _poked = true;
     final w = _wakeup;
@@ -2523,14 +2540,17 @@ class MurmurClient extends ChangeNotifier {
     try {
       while (gen == _generation) {
         _poked = false;
+        _now('a step');
         final didSomething = await _step(gen);
         if (gen != _generation) return;
+        _now('saving to the local copy');
         await _flushCache();
         if (didSomething) {
           notifyListeners();
           continue;
         }
         if (_poked) continue;
+        _now('nothing to do');
         final wakeup = _wakeup = Completer<void>();
         await wakeup.future;
       }
