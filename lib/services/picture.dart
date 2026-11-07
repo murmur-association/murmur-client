@@ -1,18 +1,16 @@
 // Turning an image the user picked into a profile picture (PROTOCOL.md
 // Section 7.8): its middle square, shrunk to 32 x 32, reduced to 16 colours.
-// The engine decodes the user's own file here, or in a browser the browser
-// does (picture_pixels_web.dart); what others publish is never decoded by
-// either (protocol/profile.dart reads those).
+// The engine decodes the user's own file here; what others publish is never
+// decoded by it (protocol/profile.dart reads those).
 //
-// Nothing is drawn by the engine: the decoded pixels are read and averaged
-// here. Drawing the image and reading it back failed on a machine with
-// software graphics (Windows' CI runner: "operation failed"), and left the
-// dialog waiting.
+// Nothing is drawn: the decoded pixels are read and averaged here. Drawing
+// the image and reading it back failed on a machine with software graphics
+// (Windows' CI runner: "operation failed"), and left the dialog waiting.
 
 import 'dart:typed_data';
+import 'dart:ui' as ui;
 
 import '../protocol/profile.dart';
-import 'picture_pixels_io.dart' if (dart.library.js_interop) 'picture_pixels_web.dart';
 
 /// The largest file taken, in bytes: past it, a photo isn't worth decoding
 /// for 32 x 32 pixels.
@@ -23,12 +21,22 @@ const maxPictureFileBytes = 20 * 1000 * 1000;
 const _decoded = profileSide * 4;
 
 /// The profile picture made from an image file's bytes (PNG, JPEG, GIF,
-/// WebP, BMP: what the engine, or the browser, decodes), or null if they
-/// can't be made one. Transparent parts come out white.
+/// WebP, BMP: what the engine decodes), or null if they can't be made one.
+/// Transparent parts come out white.
 Future<ProfilePicture?> pictureFromImage(Uint8List bytes) async {
   try {
-    final (rgba, width, height) = await decodePixels(bytes, _decoded);
-    return rgba == null ? null : pictureFromRgb(middleSquare(rgba, width, height));
+    final buffer = await ui.ImmutableBuffer.fromUint8List(bytes);
+    // Decoded straight to about the size needed, not the photo's own.
+    final codec = await ui.instantiateImageCodecWithSize(buffer, getTargetSize: (w, h) {
+      final scale = _decoded / (w < h ? w : h);
+      return scale >= 1
+          ? ui.TargetImageSize(width: w, height: h)
+          : ui.TargetImageSize(width: (w * scale).ceil(), height: (h * scale).ceil());
+    });
+    final image = (await codec.getNextFrame()).image;
+    final pixels = await image.toByteData(format: ui.ImageByteFormat.rawStraightRgba);
+    if (pixels == null) return null;
+    return pictureFromRgb(middleSquare(pixels.buffer.asUint8List(), image.width, image.height));
     // Whatever the engine throws (not only Exceptions): no picture, which
     // the dialog says, rather than a dialog left waiting.
   } catch (_) {

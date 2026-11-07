@@ -1,23 +1,20 @@
 // How a picture file is read on the flavour at hand: the public name
-// dialog reads the user's file with `pictureFromImage`, through the engine,
-// or in a browser through the browser (services/picture_pixels_web.dart),
-// since Safari wouldn't give the engine's decoded pixels back
-// (InvalidStateError, 2026-11-07). That must read the suite's sample and,
-// in a browser, the page's own icon, a PNG from an ordinary encoder. Each
-// step of the engine's own read is also tried, and what fails is reported
-// (`note`), so a browser that refuses it is seen.
+// dialog reads the user's file with the engine (`pictureFromImage`), which
+// must read the suite's sample and, in a browser, the page's own icon, a
+// PNG from an ordinary encoder. `pictureFromImage` says only that it
+// couldn't, so each step is also tried on its own and the one that fails
+// is reported (`note`), with, in a browser, whether a plain canvas reads
+// back at all: Safari, driven on GitHub's Mac, refused the engine every
+// image's pixels (InvalidStateError, 2026-11-07).
 
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:murmur_client/protocol/profile.dart' show profileSide;
 import 'package:murmur_client/services/picture.dart';
-import 'package:murmur_client/services/picture_pixels_io.dart'
-    if (dart.library.js_interop) 'package:murmur_client/services/picture_pixels_web.dart';
 
 import 'app_driver.dart' show samplePictureFile;
-import 'page_file_io.dart' if (dart.library.js_interop) 'page_file_web.dart';
+import 'page_io.dart' if (dart.library.js_interop) 'page_web.dart';
 
 void pictureTests(void Function(String note) note) {
   /// Each step of a decode, as `pictureFromImage` takes them, noting the
@@ -34,13 +31,7 @@ void pictureTests(void Function(String note) note) {
       final pixels = await image.toByteData(format: ui.ImageByteFormat.rawStraightRgba);
       if (pixels == null) note('$what: no pixels from the decoded image');
     } catch (e) {
-      note("$what: the engine's $step failed: $e");
-    }
-    // What pictureFromImage reads with, which it doesn't say when it fails.
-    try {
-      await decodePixels(bytes, profileSide * 4);
-    } catch (e) {
-      note('$what: decodePixels failed: $e');
+      note('$what: $step failed: $e');
     }
     return await pictureFromImage(bytes) != null;
   }
@@ -50,6 +41,9 @@ void pictureTests(void Function(String note) note) {
     final icon = page == null || await read("the page's icon", page);
     final sample = await read("the suite's sample", await samplePictureFile());
     if (page != null) note("the page's icon ${icon ? 'is' : 'is not'} read");
+    if (!sample || !icon) {
+      if (canvasReadBack() case final canvas?) note(canvas);
+    }
     expect(sample, isTrue, reason: "the suite's sample picture");
     expect(icon, isTrue, reason: "the page's icon");
   });

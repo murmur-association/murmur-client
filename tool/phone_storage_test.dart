@@ -38,7 +38,10 @@ void main() {
     final host = emulator ? '10.0.2.2' : '127.0.0.1';
     final android = emulator ? AndroidSystem(device, androidApplicationId()!) : null;
     final args = [
-      'test', _suite, '-d', device,
+      'test',
+      _suite,
+      '-d',
+      device,
       '--dart-define=ACCEPTANCE_NODE=$host:${node.port}',
       '--dart-define=ACCEPTANCE_HEIGHT=$_blocks',
     ];
@@ -54,16 +57,16 @@ void main() {
         environment: environment, includeParentEnvironment: false, runInShell: Platform.isWindows);
     final output = DeviceOutput();
     var cleared = false;
-    eachLine(flutter, (line) {
-      output.add(line);
-      if (android != null && line.contains(phoneClearCachesRequest)) {
-        android.clearCaches().then((done) async {
-          print('android: $done');
-          cleared = true;
-          await android.tellApp(phoneCachesCleared);
-        });
-      }
-    });
+    output.capture(() => eachLine(flutter, (line) {
+          output.add(line);
+          if (android != null && line.contains(phoneClearCachesRequest)) {
+            android.clearCaches().then((done) async {
+              print('android: $done');
+              cleared = true;
+              await android.tellApp(phoneCachesCleared);
+            });
+          }
+        }));
     expect(output.failed(await flutter.exitCode, 'the phone storage test on $device'), isFalse,
         reason: 'the phone storage test on $device');
     if (android != null) expect(cleared, isTrue, reason: 'the system cleared the caches when the app asked');
