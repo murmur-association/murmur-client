@@ -76,6 +76,23 @@ void main() {
       await _until(() => client.error != null);
       expect(client.error!.kind, LinkErrorKind.version);
       expect(client.retryAt, isNull, reason: 'retrying cannot fix a version mismatch');
+      expect(client.newerProtocolSeen, isNull, reason: 'an older node says nothing of this app');
+    });
+
+    test('a node on a newer protocol says the app is out of date, whatever failed after it', () async {
+      final newer = await FakeNode.bind(InternetAddress.loopbackIPv4, 0, version: protocolVersion + 1);
+      addTearDown(newer.close);
+      final old = await FakeNode.bind(InternetAddress('127.0.0.2'), newer.port, version: protocolVersion - 1);
+      addTearDown(old.close);
+      // Tried in either order: the newer one's failure is what's reported.
+      resolveOverride = (_) async => [InternetAddress.loopbackIPv4, InternetAddress('127.0.0.2')];
+      final client = MurmurClient();
+      addTearDown(client.dispose);
+      await client.connect('seed.test', newer.port);
+      await _until(() => client.error != null);
+      expect(client.error!.kind, LinkErrorKind.version);
+      expect(client.error!.nodeVersion, protocolVersion + 1);
+      expect(client.newerProtocolSeen, protocolVersion + 1);
     });
   });
 

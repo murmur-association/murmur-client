@@ -123,7 +123,7 @@ class _InvitationsPageState extends State<InvitationsPage> {
           // (A selection is kept while a new card is still being checked.)
           final selectable = [
             for (final r in records)
-              if (states[r.address] == InviteState.waiting) r
+              if (states[r.address] == InviteState.waiting && r.readable) r
           ];
           final chosen = [
             for (final r in selectable)
@@ -192,7 +192,7 @@ class _InvitationsPageState extends State<InvitationsPage> {
                     record: r,
                     state: states[r.address]!,
                     selected: _selected.contains(r.address),
-                    onSelected: states[r.address] != InviteState.waiting
+                    onSelected: states[r.address] != InviteState.waiting || !r.readable
                         ? null
                         : (on) => setState(() => on ? _selected.add(r.address) : _selected.remove(r.address)),
                   ),
@@ -523,7 +523,7 @@ class _InviteTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l = context.l10n;
-    final waiting = state == InviteState.waiting;
+    final waiting = state == InviteState.waiting && record.readable;
     final done = _done(state);
     final small =
         Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant);
@@ -541,7 +541,7 @@ class _InviteTile extends StatelessWidget {
         Text(
           switch (state) {
             InviteState.checking => l.inviteChecking,
-            InviteState.waiting => l.inviteWaitingState,
+            InviteState.waiting => record.readable ? l.inviteWaitingState : l.inviteCodeLost,
             InviteState.claimed => l.inviteClaimed,
             InviteState.cancelled => l.inviteCancelled,
           },

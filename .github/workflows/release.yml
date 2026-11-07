@@ -11,7 +11,11 @@
 #    stops the release before anything is built.
 # 2. The builds: the public testnet page, and the Windows and Linux apps
 #    (already tried as packaged by the regression's smoke tests, on the same
-#    commit: tool/desktop_smoke_test.dart). The desktop apps may fail without
+#    commit: tool/desktop_smoke_test.dart); for Windows also an installer
+#    (windows/installer/murmur.iss), installed and removed once, and winget's
+#    manifests for it (tool/winget_manifest.dart), and the Microsoft Store's
+#    MSIX package (a build that never mines, kept as the run's artifact for
+#    Partner Center, not released). The desktop apps may fail without
 #    holding back the page: that release then has no such download.
 # 3. The page as an archive with LICENSE and NOTICE, and one SHA256SUMS for
 #    everything released; the page deployed to app.murmur.info (Cloudflare
@@ -129,12 +133,13 @@ jobs:
         path: build/web/
         if-no-files-found: error
 
-  # The Windows app as a zip to unpack and run: the app, the pinned node
-  # beside it, the Visual C++ runtime and the notices, with the testnet's
-  # seed as its node. The same app, built with its own node on the demo
-  # network, passed the regression's smoke test on this commit (its node
-  # starts and stops with it, a node left by a killed app is replaced, a
-  # wallet is saved through Windows' storage), so it isn't tried again here.
+  # The Windows app as a zip to unpack and run, and as an installer: the
+  # app, the pinned node beside it, the Visual C++ runtime and the notices,
+  # with the testnet's seed as its node. The same app, built with its own
+  # node on the demo network, passed the regression's smoke test on this
+  # commit (its node starts and stops with it, a node left by a killed app
+  # is replaced, a wallet is saved through Windows' storage), so it isn't
+  # tried again here.
   build-windows:
     needs: [version, regression, check-checkpoint, public-node-tests]
     runs-on: windows-latest
@@ -154,10 +159,57 @@ jobs:
         --dart-define=MURMUR_NODE_HOST=testnet-seed.murmur.info --dart-define=MURMUR_NODE_PORT=7878
     - run: dart run tool/bundle_node.dart
     - run: dart run tool/package_desktop.dart --tag $env:TAG
+    # The installer, from the same staged folder as the zip: per user, with a
+    # Start menu entry, updating in place (windows/installer/murmur.iss);
+    # installed silently, as winget does, checked and removed once.
+    - run: |
+        $version = $env:TAG.Substring(1)
+        powershell -NoProfile -ExecutionPolicy Bypass -File tool\windows_installer.ps1 -Version $version `
+          -Source "build\desktop-package\murmur-client-$env:TAG-windows-x64" `
+          -Output "dist\murmur-client-$env:TAG-windows-x64-setup.exe" -Check
+        if ($LASTEXITCODE -ne 0) { exit 1 }
+    # winget's manifests for it, attached to the release for a pull request
+    # to microsoft/winget-pkgs (README, "Desktop updates").
+    - run: |
+        dart run tool/winget_manifest.dart --tag $env:TAG --installer "dist\murmur-client-$env:TAG-windows-x64-setup.exe" --out build\winget
+        if ($LASTEXITCODE -ne 0) { exit 1 }
+        tar -a -c -f "dist\winget-manifests-$env:TAG.zip" -C build\winget manifests
     - uses: actions/upload-artifact@v4
       with:
         name: windows
-        path: dist/murmur-client-*-windows-x64.zip
+        path: |
+          dist/murmur-client-*-windows-x64.zip
+          dist/murmur-client-*-windows-x64-setup.exe
+          dist/winget-manifests-*.zip
+        if-no-files-found: error
+    # The Microsoft Store's package, after what's released above so that a
+    # failure here never costs the installer: a build with MURMUR_STORE (no
+    # mining, which the Store's policies refuse), staged without
+    # murmur-miner, packed as MSIX (windows/msix/AppxManifest.xml) with the
+    # identity Partner Center gave the app (the repository's variables
+    # MSIX_IDENTITY_NAME, MSIX_PUBLISHER, MSIX_PUBLISHER_DISPLAY_NAME), and
+    # installed and removed once. Left unsigned (the Store signs it) and kept
+    # as this run's artifact `microsoft-store`, for submitting in Partner
+    # Center; never attached to the GitHub Release, since Windows installs an
+    # unsigned package only from the Store.
+    - run: >-
+        flutter build windows --release --dart-define=MURMUR_STORE=true
+        --dart-define=MURMUR_NODE_HOST=testnet-seed.murmur.info --dart-define=MURMUR_NODE_PORT=7878
+    - run: dart run tool/bundle_node.dart
+    - run: dart run tool/package_desktop.dart --tag $env:TAG --store
+    - env:
+        MSIX_IDENTITY_NAME: ${{ vars.MSIX_IDENTITY_NAME }}
+        MSIX_PUBLISHER: ${{ vars.MSIX_PUBLISHER }}
+        MSIX_PUBLISHER_DISPLAY_NAME: ${{ vars.MSIX_PUBLISHER_DISPLAY_NAME }}
+      run: |
+        powershell -NoProfile -ExecutionPolicy Bypass -File tool\msix_package.ps1 -Version $env:TAG.Substring(1) `
+          -Source "build\desktop-package\murmur-client-$env:TAG-windows-x64-store" `
+          -Output "dist\store\murmur-client-$env:TAG-windows-x64.msix" -Check
+        if ($LASTEXITCODE -ne 0) { exit 1 }
+    - uses: actions/upload-artifact@v4
+      with:
+        name: microsoft-store
+        path: dist/store/murmur-client-*-windows-x64.msix
         if-no-files-found: error
 
   # The Linux app as an archive to unpack and run, with the testnet's seed

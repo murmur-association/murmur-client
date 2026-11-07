@@ -4,6 +4,7 @@ import '../protocol/bytes.dart';
 import '../services/local_node.dart';
 import '../services/node_client.dart';
 import '../services/storage.dart';
+import '../services/updates.dart';
 import 'block_page.dart';
 import 'brand.dart';
 import 'common.dart';
@@ -171,6 +172,12 @@ class _ChainSummary extends StatelessWidget {
                 style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
               ),
             ),
+          // A build whose checkpoint the chain left a month behind is about
+          // that old: a newer one is probably out. Not on the web, where the
+          // page is always the one served now, and not once a node has said
+          // the network moved on (the banner says that, more firmly).
+          if (client.releaseLooksOld && client.newerProtocolSeen == null && installed != Installed.web)
+            _UpdateHint(text: systemUpdates ? l.appMaybeOldSystem : l.appMaybeOld),
           Row(children: [
             Expanded(
               child: Text(
@@ -208,6 +215,34 @@ class _ChainSummary extends StatelessWidget {
           ),
         ]),
       ),
+    );
+  }
+}
+
+/// A newer version is out, or needed: why, and where the release page has
+/// it, when it has a download for this copy (services/updates.dart).
+class _UpdateHint extends StatelessWidget {
+  const _UpdateHint({required this.text, this.warning = false});
+
+  final String text;
+
+  /// Needed, not just likely: a warning's colour.
+  final bool warning;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final small = theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        InfoPoint(Glyph.warning, text, style: small, color: warning ? StatusColors.of(context).pending : null),
+        if (canDownloadUpdate)
+          Align(
+            alignment: AlignmentDirectional.centerEnd,
+            child: TextButton(onPressed: () => openLink(latestReleaseUrl), child: Text(context.l10n.getNewVersion)),
+          ),
+      ]),
     );
   }
 }
@@ -292,8 +327,19 @@ class _LocalNodeCardState extends State<_LocalNodeCard> {
                 onChanged: prefs.setRunLocalNode,
               ),
               if (prefs.runLocalNode && status != null) Text(status, style: small),
+              // Its peers, or the node the client reads from, are on a newer
+              // protocol: this node, pinned with the app, is left behind.
+              if (prefs.runLocalNode && (node.peersNewer != null || scope.client.newerProtocolSeen != null)) ...[
+                const SizedBox(height: 8),
+                _UpdateHint(
+                  text: systemUpdates ? l.localNodeOutdatedSystem : l.localNodeOutdated,
+                  warning: true,
+                ),
+              ],
               if (prefs.runLocalNode && node.state == LocalNodeState.running) ..._progress(context, node.sync, small),
-              if (prefs.runLocalNode) ...[
+              // Not in a Microsoft Store build, whose policies refuse mining
+              // on the device (updates.dart, storeBuild).
+              if (prefs.runLocalNode && localNodeMiningAllowed) ...[
                 const Divider(height: 24),
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,

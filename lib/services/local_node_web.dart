@@ -29,6 +29,9 @@ class _NoLocalNode extends LocalNode {
   NodeSync get sync => const NodeSync();
 
   @override
+  int? get peersNewer => null;
+
+  @override
   Future<void> start(List<String> args) async {}
 
   @override

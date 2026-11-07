@@ -2,7 +2,8 @@
 // is `murmur-node` (`.exe` on Windows) next to the app's executable, put
 // there by tool/bundle_node.dart; MURMUR_NODE_BIN overrides it (tests). The
 // data folder is murmur-client/node in the user's application data folder,
-// beside the chain cache.
+// beside the chain cache (murmur-client/node-store in a Microsoft Store
+// build: localNodeDataDir).
 
 import 'dart:async';
 import 'dart:convert';
@@ -10,6 +11,7 @@ import 'dart:io';
 
 import 'chain_cache_io.dart' show chainCacheBase;
 import 'local_node.dart';
+import 'updates.dart' show storeBuild;
 
 LocalNode createLocalNode() {
   final desktop = Platform.isWindows || Platform.isLinux || Platform.isMacOS;
@@ -36,9 +38,17 @@ String _dataDir() {
   if (override != null) return override;
   // Beside the chain cache, wherever that goes (MURMUR_DATA_HOME included).
   final base = chainCacheBase(phone: false, env: env, temp: Directory.systemTemp.path);
-  final sep = Platform.pathSeparator;
-  return '$base${sep}murmur-client${sep}node';
+  return localNodeDataDir(base, Platform.pathSeparator);
 }
+
+/// The node's data folder under `base` (public for tests). A Microsoft
+/// Store build keeps its own: a package reads the real %APPDATA% merged with
+/// its private copy of it, and writes beneath folders the installer's copy
+/// made go through to the real ones, so the Store's would otherwise find
+/// that copy's node (its pid file, which a start takes for a node left by a
+/// crash and stops, and its data).
+String localNodeDataDir(String base, String sep, {bool store = storeBuild}) =>
+    '$base${sep}murmur-client$sep${store ? 'node-store' : 'node'}';
 
 /// A node run as a child process (public so tests can point it anywhere).
 class ProcessLocalNode extends LocalNode {
@@ -59,6 +69,10 @@ class ProcessLocalNode extends LocalNode {
   GpuMining? _gpu;
   NodeSync _sync = const NodeSync();
   bool _stopping = false;
+  int? _peersNewer;
+
+  @override
+  int? get peersNewer => _peersNewer;
 
   @override
   GpuMining? get gpu => _gpu;
@@ -101,6 +115,7 @@ class ProcessLocalNode extends LocalNode {
     // Asked to mine on the card: starting, until the node says more.
     _gpu = args.contains('--gpu') ? const GpuMining(GpuMiningState.starting) : null;
     _sync = const NodeSync();
+    _peersNewer = null;
     _set(LocalNodeState.starting);
     await Directory(dataDir).create(recursive: true);
     // A node left running by a session that crashed would share this data
@@ -127,6 +142,11 @@ class ProcessLocalNode extends LocalNode {
       final sync = _sync.after(line);
       if (sync != _sync) {
         _sync = sync;
+        notifyListeners();
+      }
+      final newer = newerPeerProtocol(line);
+      if (newer != null && newer > (_peersNewer ?? 0)) {
+        _peersNewer = newer;
         notifyListeners();
       }
       final gpu = _gpu == null ? null : gpuMiningOf(line);

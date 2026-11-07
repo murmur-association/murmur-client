@@ -322,6 +322,80 @@ void main() {
       await expectLater(wallets.unlock(wrongOnce, reason: 'fund'), wrong);
     });
 
+    test('a forgotten passphrase: letting the cards\' key go lets a wallet choose a new one', () async {
+      final (waiting, waitingCode) = await _card(1);
+      final (claimed, claimedCode) = await _card(2);
+      final store = InviteStore();
+      await store.load();
+      await store.add([waiting, claimed], [waitingCode, claimedCode], TestPrompts('forgotten', null), reason: 'test');
+      expect(await InviteStore.keyShared(), isTrue);
+
+      final wallets = WalletController();
+      await expectLater(wallets.create(TestPrompts('new one', 'no idea'), reason: 'test'), wrong);
+
+      await store.forgetKey();
+      expect(await InviteStore.keyShared(), isFalse);
+      expect(await InviteStore.storedVault(), isNull);
+      final setup = TestPrompts('new one', null);
+      await wallets.create(setup, reason: 'test');
+      expect((setup.setupAsked, setup.asked), (1, 0), reason: 'a passphrase of its own');
+
+      // The cards stay listed, to be followed on the chain, but their codes
+      // are gone for good, in this session and the next.
+      final later = InviteStore();
+      await later.load();
+      expect([for (final r in later.invites) r.address], [waiting.address, claimed.address]);
+      expect(later.invites.every((r) => r.codeLost && !r.readable && r.sealed == null), isTrue);
+      await expectLater(later.unlock(later.invites, TestPrompts(null, 'new one'), reason: 'test'),
+          throwsA(isA<VaultLocked>()));
+
+      // New cards take the new wallet's passphrase, and can be read.
+      final (fresh, freshCode) = await _card(3);
+      await later.add([fresh], [freshCode], TestPrompts(null, 'new one'), reason: 'test');
+      expect(await later.unlock([later.invites.last], TestPrompts(null, 'new one'), reason: 'test'), [freshCode]);
+    });
+
+    testWidgets('a new wallet that can\'t open the cards\' passphrase offers to let their key go', (tester) async {
+      await tester.runAsync(() async {
+        final (record, code) = await _card(1);
+        await inviteStore.load();
+        await inviteStore.add([record], [code], TestPrompts('forgotten', null), reason: 'test');
+      });
+      await tester.pumpWidget(MaterialApp(
+        theme: lightTheme,
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: const Scaffold(body: SizedBox()),
+      ));
+      final context = tester.element(find.byType(SizedBox));
+      final l = context.l10n;
+      // Stands in for saving a wallet: refused while the cards' key is
+      // shared, as sealSeed does with a wrong passphrase.
+      var tries = 0;
+      Future<void> save(VaultPrompts _) async {
+        tries++;
+        if (await InviteStore.keyShared()) throw const VaultLocked(true);
+      }
+
+      // Declined: nothing changes.
+      var done = protectWallet(context, save);
+      await tester.pumpAndSettle();
+      expect(find.text(l.forgetCardsKeyTitle), findsOneWidget);
+      await tester.tap(find.text(l.cancel));
+      await tester.pumpAndSettle();
+      expect(await done, isFalse);
+      expect(await tester.runAsync(InviteStore.keyShared), isTrue);
+
+      // Accepted: the key goes, and saving is tried again.
+      done = protectWallet(context, save);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(l.forgetCardsKeyAction));
+      await tester.pumpAndSettle();
+      expect(await done, isTrue);
+      expect(tries, 3);
+      expect(inviteStore.invites.single.codeLost, isTrue);
+    });
+
     test('with neither there, the first one chooses it', () async {
       final wallets = WalletController();
       final setup = TestPrompts('correct horse', null);

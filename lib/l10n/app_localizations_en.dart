@@ -134,6 +134,37 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get errAppOutdated =>
+      'The network has moved to a newer protocol than this app speaks. Update the app to keep using it.';
+
+  @override
+  String get errAppOutdatedWeb =>
+      'The network has moved to a newer protocol than this page speaks. Reload the page to get the new version.';
+
+  @override
+  String get errAppOutdatedSystem =>
+      'The network has moved to a newer protocol than this app speaks. Update it from your system\'s software updates.';
+
+  @override
+  String get getNewVersion => 'Get the new version';
+
+  @override
+  String get appMaybeOld =>
+      'This version of the app is **over a month old**: a newer one is probably available.';
+
+  @override
+  String get appMaybeOldSystem =>
+      'This version of the app is **over a month old**: your system\'s software updates probably have a newer one.';
+
+  @override
+  String get localNodeOutdated =>
+      'The network has moved to a **newer protocol**: this node can\'t follow it until the app is updated.';
+
+  @override
+  String get localNodeOutdatedSystem =>
+      'The network has moved to a **newer protocol**: this node can\'t follow it until the app is updated from your system\'s software updates.';
+
+  @override
   String errSyncFailed(String cause) {
     return 'Sync failed: $cause';
   }
@@ -1536,6 +1567,19 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get removeAnywayBody =>
       'The wallet couldn\'t be unlocked. Removing it deletes its key from this device: only your seed backup can bring it back.';
+
+  @override
+  String get forgetCardsKeyTitle => 'Can\'t unlock your invitation cards';
+
+  @override
+  String get forgetCardsKeyBody =>
+      'A new wallet takes the passphrase or passkey your invitation cards are under. If you no longer have it, let the cards\' key go: the wallet gets a new passphrase, and cards not yet claimed can no longer be shown, printed or cancelled from this device. Their tokens stay on the cards.';
+
+  @override
+  String get forgetCardsKeyAction => 'Let the cards\' key go';
+
+  @override
+  String get inviteCodeLost => 'Code no longer on this device';
 
   @override
   String get protectionDevice => 'Key encrypted with this device\'s lock';

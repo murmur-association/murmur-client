@@ -74,6 +74,18 @@ set_target_properties(${BINARY_NAME}
 # them to the application.
 include(flutter/generated_plugins.cmake)
 
+# flutter_secure_storage_linux bundles nlohmann's json.hpp, whose literal
+# operators (`operator "" _json`) newer clang reports as deprecated; with
+# the -Werror above, that stops the build (seen on GitHub's ubuntu-26.04
+# image). The warning is in the plugin's copy of a third-party header, not
+# in our code, so it's silenced for that target only, and only where the
+# compiler knows it (an unknown -Wno- flag is itself an error under clang).
+include(CheckCXXCompilerFlag)
+check_cxx_compiler_flag(-Wdeprecated-literal-operator HAS_DEPRECATED_LITERAL_OPERATOR)
+if(HAS_DEPRECATED_LITERAL_OPERATOR AND TARGET flutter_secure_storage_linux_plugin)
+  target_compile_options(flutter_secure_storage_linux_plugin PRIVATE -Wno-deprecated-literal-operator)
+endif()
+
 
 # === Installation ===
 # By default, "installing" just makes a relocatable bundle in the build

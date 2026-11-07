@@ -134,6 +134,37 @@ class AppLocalizationsIt extends AppLocalizations {
   }
 
   @override
+  String get errAppOutdated =>
+      'La rete usa ormai un protocollo più recente di questa app. Aggiorna l\'app per continuare a usarla.';
+
+  @override
+  String get errAppOutdatedWeb =>
+      'La rete usa ormai un protocollo più recente di questa pagina. Ricarica la pagina per avere la nuova versione.';
+
+  @override
+  String get errAppOutdatedSystem =>
+      'La rete usa ormai un protocollo più recente di questa app. Aggiornala dagli aggiornamenti software del tuo sistema.';
+
+  @override
+  String get getNewVersion => 'Scarica la nuova versione';
+
+  @override
+  String get appMaybeOld =>
+      'Questa versione dell\'app ha **più di un mese**: probabilmente ne esiste una più recente.';
+
+  @override
+  String get appMaybeOldSystem =>
+      'Questa versione dell\'app ha **più di un mese**: probabilmente gli aggiornamenti software del tuo sistema ne hanno una più recente.';
+
+  @override
+  String get localNodeOutdated =>
+      'La rete usa un **protocollo più recente**: questo nodo non potrà seguirla finché l\'app non sarà aggiornata.';
+
+  @override
+  String get localNodeOutdatedSystem =>
+      'La rete usa un **protocollo più recente**: questo nodo non potrà seguirla finché l\'app non sarà aggiornata dagli aggiornamenti software del tuo sistema.';
+
+  @override
   String errSyncFailed(String cause) {
     return 'Sincronizzazione non riuscita: $cause';
   }
@@ -1549,6 +1580,20 @@ class AppLocalizationsIt extends AppLocalizations {
   @override
   String get removeAnywayBody =>
       'Non è stato possibile sbloccare il portafoglio. Rimuoverlo cancella la sua chiave da questo dispositivo: solo la copia del seed potrà recuperarlo.';
+
+  @override
+  String get forgetCardsKeyTitle =>
+      'Impossibile sbloccare le tue carte d\'invito';
+
+  @override
+  String get forgetCardsKeyBody =>
+      'Un nuovo portafoglio usa la passphrase o la passkey delle tue carte d\'invito. Se non l\'hai più, rinuncia alla chiave delle carte: il portafoglio riceve una nuova passphrase, e le carte non ancora riscattate non potranno più essere mostrate, stampate o annullate da questo dispositivo. I loro token restano sulle carte.';
+
+  @override
+  String get forgetCardsKeyAction => 'Rinuncia alla chiave delle carte';
+
+  @override
+  String get inviteCodeLost => 'Codice non più su questo dispositivo';
 
   @override
   String get protectionDevice =>

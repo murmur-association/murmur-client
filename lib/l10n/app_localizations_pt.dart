@@ -133,6 +133,37 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String get errAppOutdated =>
+      'A rede passou a usar um protocolo mais recente do que esta aplicação. Atualize a aplicação para continuar a usá-la.';
+
+  @override
+  String get errAppOutdatedWeb =>
+      'A rede passou a usar um protocolo mais recente do que esta página. Recarregue a página para obter a nova versão.';
+
+  @override
+  String get errAppOutdatedSystem =>
+      'A rede passou a usar um protocolo mais recente do que esta aplicação. Atualize-a através das atualizações de software do seu sistema.';
+
+  @override
+  String get getNewVersion => 'Obter a nova versão';
+
+  @override
+  String get appMaybeOld =>
+      'Esta versão da aplicação tem **mais de um mês**: provavelmente existe uma mais recente.';
+
+  @override
+  String get appMaybeOldSystem =>
+      'Esta versão da aplicação tem **mais de um mês**: as atualizações de software do seu sistema provavelmente têm uma mais recente.';
+
+  @override
+  String get localNodeOutdated =>
+      'A rede passou a usar um **protocolo mais recente**: este nó só a poderá seguir depois de a aplicação ser atualizada.';
+
+  @override
+  String get localNodeOutdatedSystem =>
+      'A rede passou a usar um **protocolo mais recente**: este nó só a poderá seguir depois de a aplicação ser atualizada através das atualizações de software do seu sistema.';
+
+  @override
   String errSyncFailed(String cause) {
     return 'A sincronização falhou: $cause';
   }
@@ -1542,6 +1573,20 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String get removeAnywayBody =>
       'Não foi possível desbloquear a carteira. Removê-la apaga a sua chave deste dispositivo: só a cópia da semente a pode recuperar.';
+
+  @override
+  String get forgetCardsKeyTitle =>
+      'Não é possível desbloquear os seus cartões de convite';
+
+  @override
+  String get forgetCardsKeyBody =>
+      'Uma carteira nova usa a frase-passe ou a chave de acesso dos seus cartões de convite. Se já não a tem, abdique da chave dos cartões: a carteira recebe uma frase-passe nova, e os cartões ainda por resgatar deixam de poder ser mostrados, impressos ou cancelados neste dispositivo. Os seus tokens ficam nos cartões.';
+
+  @override
+  String get forgetCardsKeyAction => 'Abdicar da chave dos cartões';
+
+  @override
+  String get inviteCodeLost => 'Código já não está neste dispositivo';
 
   @override
   String get protectionDevice =>

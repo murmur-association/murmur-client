@@ -3,9 +3,11 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 
 import '../protocol/models.dart';
+import '../protocol/wire.dart' show protocolVersion;
 import '../services/node_client.dart';
 import '../services/storage.dart';
 import '../services/transport.dart';
+import '../services/updates.dart';
 import 'brand.dart';
 import 'chain_tab.dart';
 import 'common.dart';
@@ -227,6 +229,12 @@ class _HomePageState extends State<HomePage> with RouteAware, WidgetsBindingObse
               }),
               leading: const MurmurIcon(Glyph.error),
               actions: [
+                // The network moved to a newer protocol: the release page
+                // has the version that follows it (opened on the tap only).
+                if (client.error!.kind == LinkErrorKind.version &&
+                    client.error!.nodeVersion > protocolVersion &&
+                    canDownloadUpdate)
+                  FilledButton(onPressed: () => openLink(latestReleaseUrl), child: Text(l.getNewVersion)),
                 if (client.state == LinkState.disconnected)
                   TextButton(
                     onPressed: () => client.connect(

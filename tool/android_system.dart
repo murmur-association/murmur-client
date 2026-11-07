@@ -134,12 +134,29 @@ class AndroidSystem {
     return came ? now : null;
   }
 
-  /// Cancels the chooser the app opens, as the Back key does; false if none
-  /// came.
+  /// Whether only this app and the system's bar are on the screen.
+  Future<bool> _onlyApp() async {
+    final now = await screen();
+    return ({for (final n in now) n.attributes['package'] ?? ''}..removeAll({'', package, 'com.android.systemui'}))
+        .isEmpty;
+  }
+
+  /// Cancels the chooser the app opens, as the Back key does, and checks it
+  /// went; false if none came, or it stayed. A Back pressed while the photo
+  /// picker is still opening can be lost (a run waited three minutes on a
+  /// picker that one Back had been reported to cancel), so it's pressed
+  /// again while the chooser is still on the screen, and never once it's
+  /// gone: a Back too many would close the app's own dialog.
   Future<bool> cancelChooser() async {
     if (await _chooser() == null) return false;
-    await _shell('input keyevent KEYCODE_BACK');
-    return true;
+    for (var press = 0; press < 3; press++) {
+      await _shell('input keyevent KEYCODE_BACK');
+      for (var look = 0; look < 5; look++) {
+        await Future<void>.delayed(const Duration(seconds: 1));
+        if (await _onlyApp()) return true;
+      }
+    }
+    return false;
   }
 
   /// Picks [pictureName] in the chooser the app opens: the photo picker (its
@@ -269,11 +286,28 @@ class AndroidSystem {
   Future<void> tellApp(String name) =>
       adb(['shell', "run-as $package sh -c 'mkdir -p files && touch files/$name'"]);
 
+  /// Has the system clear apps' cache folders, as it does when storage runs
+  /// short: asked to free far more than the device holds, it clears them
+  /// all (the phone storage test, tool/phone_storage_test.dart). Returns
+  /// what pm said, and what is left of the app's cache folder.
+  Future<String> clearCaches() async {
+    final r = await adb(['shell', 'pm', 'trim-caches', '999G']);
+    final left = await _shell("run-as $package sh -c 'ls -R cache 2>&1 | head -n 20'");
+    return 'pm trim-caches: exit code ${r.exitCode} ${'${r.stdout}${r.stderr}'.trim()}; '
+        'left in the cache folder: ${left.trim().isEmpty ? 'nothing' : left.trim().replaceAll('\n', ' ')}';
+  }
+
   /// Runs the app's background job now, as the system would; whether the
   /// app's log then shows its Dart side ran (`marker`, within `timeout`).
+  ///
+  /// The log isn't cleared first: a periodic job with no initial delay may
+  /// already have run by itself, between the app scheduling it and asking
+  /// for this, and WorkManager then skips the forced run as early for its
+  /// period. Clearing the log lost that run's marker, and the check waited
+  /// for one that never came. The marker can only be there once the app
+  /// scheduled the job, on an emulator booted for this run.
   Future<bool> runBackgroundJob(({String? namespace, String id}) job, String marker,
       {Duration timeout = const Duration(minutes: 3)}) async {
-    await adb(['logcat', '-c']);
     final namespace = job.namespace == null ? '' : '-n ${job.namespace} ';
     print('android: running the background job: ${(await _shell('cmd jobscheduler run -f $namespace$package ${job.id}')).trim()}');
     return poll(() async => '${(await adb(['logcat', '-d'])).stdout}'.contains(marker),

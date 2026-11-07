@@ -131,6 +131,37 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
+  String get errAppOutdated =>
+      'ネットワークはこのアプリより新しいプロトコルに移行しました。引き続き使うにはアプリを更新してください。';
+
+  @override
+  String get errAppOutdatedWeb =>
+      'ネットワークはこのページより新しいプロトコルに移行しました。ページを再読み込みして新しいバージョンを取得してください。';
+
+  @override
+  String get errAppOutdatedSystem =>
+      'ネットワークはこのアプリより新しいプロトコルに移行しました。システムのソフトウェア更新からアプリを更新してください。';
+
+  @override
+  String get getNewVersion => '新しいバージョンを入手';
+
+  @override
+  String get appMaybeOld =>
+      'このバージョンのアプリは**1か月以上前**のものです。より新しいバージョンが出ている可能性があります。';
+
+  @override
+  String get appMaybeOldSystem =>
+      'このバージョンのアプリは**1か月以上前**のものです。システムのソフトウェア更新に新しいバージョンがある可能性があります。';
+
+  @override
+  String get localNodeOutdated =>
+      'ネットワークは**新しいプロトコル**に移行しました。アプリを更新するまで、このノードはネットワークに追従できません。';
+
+  @override
+  String get localNodeOutdatedSystem =>
+      'ネットワークは**新しいプロトコル**に移行しました。システムのソフトウェア更新でアプリを更新するまで、このノードはネットワークに追従できません。';
+
+  @override
   String errSyncFailed(String cause) {
     return '同期に失敗しました：$cause';
   }
@@ -1498,6 +1529,19 @@ class AppLocalizationsJa extends AppLocalizations {
   @override
   String get removeAnywayBody =>
       'ウォレットのロックを解除できませんでした。削除するとこの端末から鍵が消えます。戻せるのはシードのバックアップだけです。';
+
+  @override
+  String get forgetCardsKeyTitle => '招待カードのロックを解除できません';
+
+  @override
+  String get forgetCardsKeyBody =>
+      '新しいウォレットは、招待カードと同じパスフレーズまたはパスキーを使います。それがもう手元にない場合は、カードの鍵を手放してください。ウォレットには新しいパスフレーズが設定され、まだ受け取られていないカードはこの端末で表示・印刷・取り消しができなくなります。トークンはカードに残ります。';
+
+  @override
+  String get forgetCardsKeyAction => 'カードの鍵を手放す';
+
+  @override
+  String get inviteCodeLost => 'コードはこの端末にありません';
 
   @override
   String get protectionDevice => '鍵はこの端末のロックで暗号化されています';

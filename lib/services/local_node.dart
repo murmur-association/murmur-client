@@ -22,11 +22,15 @@
 // shipped beside it, and mines on the processor whenever the card can't be
 // used. What the app shows of it comes from the node's own output (the
 // "[gpu]" lines), never from its control port.
+//
+// A Microsoft Store build never mines (updates.dart, storeBuild): the
+// Store's policies refuse apps that mine on the device.
 
 import 'package:flutter/foundation.dart';
 
 import '../protocol/network.dart';
 import 'local_node_io.dart' if (dart.library.js_interop) 'local_node_web.dart' as impl;
+import 'updates.dart' show storeBuild;
 
 enum LocalNodeState {
   /// No node binary next to the app, or not a desktop build.
@@ -46,6 +50,9 @@ const localNodeSpec = String.fromEnvironment('MURMUR_LOCAL_NODE_SPEC', defaultVa
 /// The network [localNodeSpec] names, for its checkpoint.
 NetworkInfo get localNodeNetwork => localNodeSpec == 'demo' ? NetworkInfo.demo : NetworkInfo.whitepaper;
 
+/// Whether this build may mine at all: not one for the Microsoft Store.
+const localNodeMiningAllowed = !storeBuild;
+
 /// Default share of one CPU core the node may mine with.
 const defaultLocalNodeCpu = 25;
 
@@ -58,6 +65,7 @@ List<String> localNodeArgs({
   int cpuPct = defaultLocalNodeCpu,
   bool gpu = false,
   Checkpoint? checkpoint,
+  bool allowMining = localNodeMiningAllowed,
 }) =>
     [
       '--daemon',
@@ -79,7 +87,7 @@ List<String> localNodeArgs({
       // already has a chain ignores it.
       if (checkpoint != null && checkpoint.wellFormed) ...['--checkpoint', '${checkpoint.height}:${checkpoint.hash}'],
       if (address != null) ...['--keep-author', address],
-      if (mine && address != null) ...[
+      if (mine && allowMining && address != null) ...[
         '--mine-to', address,
         '--mine-cpu', '${cpuPct.clamp(1, 100)}',
         // Only with mining (the node refuses --gpu without --mine-to), and
@@ -211,6 +219,17 @@ class NodeSync {
   }
 }
 
+/// The protocol version a peer speaks, when `line` is the node saying it
+/// dropped one for speaking another ("[net] peer <address> speaks protocol
+/// v<n> (we speak v<m>); disconnecting") and that version is newer than the
+/// node's own: the network has moved on without this node.
+int? newerPeerProtocol(String line) {
+  final m = RegExp(r'^\[net\] peer .* speaks protocol v(\d+) \(we speak v(\d+)\)').firstMatch(line);
+  if (m == null) return null;
+  final theirs = int.parse(m.group(1)!), ours = int.parse(m.group(2)!);
+  return theirs > ours ? theirs : null;
+}
+
 /// The peer-to-peer port a node reports at startup ("[net] listening for
 /// peers on 127.0.0.1:<port>"), if `line` is that line.
 int? listeningPort(String line) {
@@ -244,6 +263,11 @@ abstract class LocalNode extends ChangeNotifier {
 
   /// How far it has come with the chain, while running.
   NodeSync get sync;
+
+  /// The newest protocol version its peers were dropped for speaking, when
+  /// newer than its own: this node, pinned with the app, can't follow the
+  /// network until the app is updated. Kept until it's started again.
+  int? get peersNewer;
 
   bool get available => state != LocalNodeState.unavailable;
 

@@ -139,6 +139,37 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
+  String get errAppOutdated =>
+      'انتقلت الشبكة إلى بروتوكول أحدث مما يستخدمه هذا التطبيق. حدّث التطبيق لتواصل استخدامه.';
+
+  @override
+  String get errAppOutdatedWeb =>
+      'انتقلت الشبكة إلى بروتوكول أحدث مما تستخدمه هذه الصفحة. أعد تحميل الصفحة للحصول على الإصدار الجديد.';
+
+  @override
+  String get errAppOutdatedSystem =>
+      'انتقلت الشبكة إلى بروتوكول أحدث مما يستخدمه هذا التطبيق. حدّثه من تحديثات البرامج في نظامك.';
+
+  @override
+  String get getNewVersion => 'احصل على الإصدار الجديد';
+
+  @override
+  String get appMaybeOld =>
+      'عمر هذا الإصدار من التطبيق **أكثر من شهر**: على الأرجح يتوفر إصدار أحدث.';
+
+  @override
+  String get appMaybeOldSystem =>
+      'عمر هذا الإصدار من التطبيق **أكثر من شهر**: على الأرجح تتضمن تحديثات البرامج في نظامك إصدارًا أحدث.';
+
+  @override
+  String get localNodeOutdated =>
+      'انتقلت الشبكة إلى **بروتوكول أحدث**: لن تتمكن هذه العقدة من متابعتها حتى يُحدَّث التطبيق.';
+
+  @override
+  String get localNodeOutdatedSystem =>
+      'انتقلت الشبكة إلى **بروتوكول أحدث**: لن تتمكن هذه العقدة من متابعتها حتى يُحدَّث التطبيق من تحديثات البرامج في نظامك.';
+
+  @override
   String errSyncFailed(String cause) {
     return 'فشلت المزامنة: $cause';
   }
@@ -1569,6 +1600,19 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get removeAnywayBody =>
       'تعذّر فتح المحفظة. إزالتها تحذف مفتاحها من هذا الجهاز: لن تستعيدها إلا نسخة البذرة الاحتياطية.';
+
+  @override
+  String get forgetCardsKeyTitle => 'تعذّر فتح بطاقات الدعوة';
+
+  @override
+  String get forgetCardsKeyBody =>
+      'تأخذ المحفظة الجديدة عبارة المرور أو مفتاح المرور الذي تحميه بطاقات دعوتك. إن لم يعد لديك، فتخلَّ عن مفتاح البطاقات: تحصل المحفظة على عبارة مرور جديدة، ولن يعود بالإمكان عرض البطاقات التي لم تُستلم بعد أو طباعتها أو إلغاؤها من هذا الجهاز. تبقى رموزها على البطاقات.';
+
+  @override
+  String get forgetCardsKeyAction => 'التخلّي عن مفتاح البطاقات';
+
+  @override
+  String get inviteCodeLost => 'لم يعد الرمز على هذا الجهاز';
 
   @override
   String get protectionDevice => 'المفتاح مشفّر بقفل هذا الجهاز';

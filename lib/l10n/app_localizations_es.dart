@@ -134,6 +134,37 @@ class AppLocalizationsEs extends AppLocalizations {
   }
 
   @override
+  String get errAppOutdated =>
+      'La red ya usa un protocolo más reciente que esta aplicación. Actualiza la aplicación para seguir usándola.';
+
+  @override
+  String get errAppOutdatedWeb =>
+      'La red ya usa un protocolo más reciente que esta página. Recarga la página para obtener la nueva versión.';
+
+  @override
+  String get errAppOutdatedSystem =>
+      'La red ya usa un protocolo más reciente que esta aplicación. Actualízala desde las actualizaciones de software de tu sistema.';
+
+  @override
+  String get getNewVersion => 'Obtener la nueva versión';
+
+  @override
+  String get appMaybeOld =>
+      'Esta versión de la aplicación tiene **más de un mes**: probablemente haya una más reciente.';
+
+  @override
+  String get appMaybeOldSystem =>
+      'Esta versión de la aplicación tiene **más de un mes**: probablemente las actualizaciones de software de tu sistema tengan una más reciente.';
+
+  @override
+  String get localNodeOutdated =>
+      'La red ya usa un **protocolo más reciente**: este nodo no podrá seguirla hasta que actualices la aplicación.';
+
+  @override
+  String get localNodeOutdatedSystem =>
+      'La red ya usa un **protocolo más reciente**: este nodo no podrá seguirla hasta que actualices la aplicación desde las actualizaciones de software de tu sistema.';
+
+  @override
   String errSyncFailed(String cause) {
     return 'Falló la sincronización: $cause';
   }
@@ -1546,6 +1577,20 @@ class AppLocalizationsEs extends AppLocalizations {
   @override
   String get removeAnywayBody =>
       'No se ha podido desbloquear la cartera. Quitarla borra su clave de este dispositivo: solo tu copia de la semilla podrá recuperarla.';
+
+  @override
+  String get forgetCardsKeyTitle =>
+      'No se pueden desbloquear tus tarjetas de invitación';
+
+  @override
+  String get forgetCardsKeyBody =>
+      'Una cartera nueva usa la frase de paso o la llave de acceso de tus tarjetas de invitación. Si ya no la tienes, renuncia a la clave de las tarjetas: la cartera recibe una frase de paso nueva, y las tarjetas aún sin canjear ya no podrán mostrarse, imprimirse ni cancelarse desde este dispositivo. Sus tokens se quedan en las tarjetas.';
+
+  @override
+  String get forgetCardsKeyAction => 'Renunciar a la clave de las tarjetas';
+
+  @override
+  String get inviteCodeLost => 'El código ya no está en este dispositivo';
 
   @override
   String get protectionDevice =>

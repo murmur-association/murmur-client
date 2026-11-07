@@ -50,6 +50,20 @@ void main() {
     expect(full, isNot(contains('--gpu')), reason: 'off unless asked');
     expect(localNodeArgs(dataDir: '/d', address: a, gpu: true), isNot(contains('--gpu')));
     expect(localNodeArgs(dataDir: '/d', mine: true, gpu: true), isNot(contains('--gpu')), reason: 'no address to pay');
+    // A Microsoft Store build never mines, whatever the settings say; the
+    // rest of the node (its wallet's messages kept) is the same.
+    final store = localNodeArgs(dataDir: '/d', address: a, mine: true, gpu: true, allowMining: false);
+    expect(store, isNot(contains('--mine-to')));
+    expect(store, isNot(contains('--gpu')));
+    expect(store, containsAllInOrder(['--keep-author', a]));
+    expect(localNodeMiningAllowed, isTrue, reason: 'a build without MURMUR_STORE mines when asked');
+  });
+
+  test("a Store build's node keeps a data folder of its own, apart from the installer's", () {
+    // Both copies may be installed; the package reads the real folder
+    // merged with its own, so sharing one would let it stop the other's node.
+    expect(localNodeDataDir(r'C:\a', r'\', store: false), r'C:\a\murmur-client\node');
+    expect(localNodeDataDir(r'C:\a', r'\', store: true), r'C:\a\murmur-client\node-store');
   });
 
   test("how far the node has come is read from its output's stable lines", () {
@@ -91,6 +105,16 @@ void main() {
     // A restart, or another peer, checks from genesis again.
     expect(const NodeSync(history: (9000, 16883)).after('[check] checking the chain from the genesis block to height 16883 again'),
         const NodeSync(history: (0, 16883)));
+  });
+
+  test('a peer on a newer protocol is read from the output: the app needs updating', () {
+    // The node's own words (v0.16.0), with the address it dropped.
+    expect(newerPeerProtocol('[net] peer 203.0.113.7:7878 speaks protocol v18 (we speak v17); disconnecting'), 18);
+    expect(newerPeerProtocol('[net] peer [2001:db8::1]:7878 speaks protocol v19 (we speak v17); disconnecting\r'), 19);
+    // An older peer is its own problem, not this node's.
+    expect(newerPeerProtocol('[net] peer 203.0.113.7:7878 speaks protocol v16 (we speak v17); disconnecting'), isNull);
+    expect(newerPeerProtocol('[net] peer 203.0.113.7:7878 is on a different network; disconnecting'), isNull);
+    expect(newerPeerProtocol('[sync] at height 12 of 40 from 203.0.113.7:7878'), isNull);
   });
 
   test('what the node says of its GPU miner is read from its output', () {
@@ -361,6 +385,9 @@ class _RecordingNode extends LocalNode {
 
   @override
   NodeSync sync = const NodeSync();
+
+  @override
+  int? peersNewer;
 
   /// The node reports on its GPU miner.
   void say(GpuMining? status) {
