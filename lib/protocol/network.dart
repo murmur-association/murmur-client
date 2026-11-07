@@ -99,7 +99,7 @@ class NetworkInfo {
     halvingInterval: 4200000,
     maxBlockBytes: 1000000,
     burnPayoutBlocks: 2880,
-    checkpoint: Checkpoint(8500, '000000c4eb2d8385417e0f60b1b8014280f7b80b6ec0667fe22c6db0a57da61c'),
+    checkpoint: Checkpoint(17100, '00000162f671f80a486714af4174e220356c398fb5b3824960829f3a801c018e'),
   );
 
   static const demo = NetworkInfo(
