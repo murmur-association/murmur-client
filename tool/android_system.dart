@@ -133,12 +133,29 @@ class AndroidSystem {
     return null;
   }
 
-  /// Cancels the chooser the app opens, as the Back key does; false if none
-  /// came.
+  /// Whether only this app and the system's bar are on the screen.
+  Future<bool> _onlyApp() async {
+    final now = await screen();
+    return ({for (final n in now) n.attributes['package'] ?? ''}..removeAll({'', package, 'com.android.systemui'}))
+        .isEmpty;
+  }
+
+  /// Cancels the chooser the app opens, as the Back key does, and checks it
+  /// went; false if none came, or it stayed. A Back pressed while the photo
+  /// picker is still opening can be lost (a run waited three minutes on a
+  /// picker that one Back had been reported to cancel), so it's pressed
+  /// again while the chooser is still on the screen, and never once it's
+  /// gone: a Back too many would close the app's own dialog.
   Future<bool> cancelChooser() async {
     if (await _chooser() == null) return false;
-    await _shell('input keyevent KEYCODE_BACK');
-    return true;
+    for (var press = 0; press < 3; press++) {
+      await _shell('input keyevent KEYCODE_BACK');
+      for (var look = 0; look < 5; look++) {
+        await Future<void>.delayed(const Duration(seconds: 1));
+        if (await _onlyApp()) return true;
+      }
+    }
+    return false;
   }
 
   /// Picks [pictureName] in the chooser the app opens: the photo picker (its
