@@ -50,6 +50,20 @@ void main() {
     expect(full, isNot(contains('--gpu')), reason: 'off unless asked');
     expect(localNodeArgs(dataDir: '/d', address: a, gpu: true), isNot(contains('--gpu')));
     expect(localNodeArgs(dataDir: '/d', mine: true, gpu: true), isNot(contains('--gpu')), reason: 'no address to pay');
+    // A Microsoft Store build never mines, whatever the settings say; the
+    // rest of the node (its wallet's messages kept) is the same.
+    final store = localNodeArgs(dataDir: '/d', address: a, mine: true, gpu: true, allowMining: false);
+    expect(store, isNot(contains('--mine-to')));
+    expect(store, isNot(contains('--gpu')));
+    expect(store, containsAllInOrder(['--keep-author', a]));
+    expect(localNodeMiningAllowed, isTrue, reason: 'a build without MURMUR_STORE mines when asked');
+  });
+
+  test("a Store build's node keeps a data folder of its own, apart from the installer's", () {
+    // Both copies may be installed; the package reads the real folder
+    // merged with its own, so sharing one would let it stop the other's node.
+    expect(localNodeDataDir(r'C:\a', r'\', store: false), r'C:\a\murmur-client\node');
+    expect(localNodeDataDir(r'C:\a', r'\', store: true), r'C:\a\murmur-client\node-store');
   });
 
   test("how far the node has come is read from its output's stable lines", () {

@@ -388,7 +388,8 @@ jobs:
   # refuses it for the runner's account.
   smoke-windows:
     runs-on: windows-latest
-    timeout-minutes: 45
+    # Two builds, the installer, the Store's package and its certification.
+    timeout-minutes: 90
     defaults:
       run:
         shell: pwsh
@@ -424,3 +425,32 @@ jobs:
         powershell -NoProfile -ExecutionPolicy Bypass -File tool\windows_installer.ps1 -Version $version `
           -Source build\desktop-package\murmur-client-smoke-windows-x64 -Output build\installer\murmur-client-smoke-setup.exe -Check
         if ($LASTEXITCODE -ne 0) { exit 1 }
+    # The Microsoft Store's package (windows/msix/AppxManifest.xml), as the
+    # release makes it: a build with MURMUR_STORE (no mining), staged without
+    # murmur-miner. Packed as the Store gets it and put through the Windows
+    # App Certification Kit, installed and removed; then packed again with
+    # the software graphics this runner needs to draw, installed, and tried
+    # as the Start menu starts it (desktop_smoke_test.dart --packaged: its
+    # node beside an installer's copy's, its own folder, a notification's
+    # click).
+    - run: flutter build windows --release --dart-define=MURMUR_LOCAL_NODE_SPEC=demo --dart-define=MURMUR_STORE=true
+    - run: dart run tool/bundle_node.dart
+    - run: dart run tool/package_desktop.dart --tag smoke --store
+    - run: |
+        $version = (Select-String -Path pubspec.yaml -Pattern '^version:\s*([0-9.]+)').Matches[0].Groups[1].Value
+        powershell -NoProfile -ExecutionPolicy Bypass -File tool\msix_package.ps1 -Version $version `
+          -Source build\desktop-package\murmur-client-smoke-windows-x64-store -Output build\msix\murmur-client-smoke.msix -Check -Certify
+        if ($LASTEXITCODE -ne 0) { exit 1 }
+    - run: powershell -NoProfile -ExecutionPolicy Bypass -File tool\fetch_test_graphics.ps1 -Into build\desktop-package\murmur-client-smoke-windows-x64-store
+    - run: |
+        $version = (Select-String -Path pubspec.yaml -Pattern '^version:\s*([0-9.]+)').Matches[0].Groups[1].Value
+        powershell -NoProfile -ExecutionPolicy Bypass -File tool\msix_package.ps1 -Version $version `
+          -Source build\desktop-package\murmur-client-smoke-windows-x64-store -Output build\msix\murmur-client-smoke-graphics.msix `
+          -Check -Smoke -AllowTestGraphics
+        if ($LASTEXITCODE -ne 0) { exit 1 }
+    - if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: msix-certification-report
+        path: build/msix/*.wack.xml
+        if-no-files-found: ignore

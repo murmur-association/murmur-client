@@ -10,7 +10,9 @@
 // ios/Runner/Assets.xcassets/AppIcon.appiconset (the iPhone's, opaque), its
 // launch screen's logo and background (LaunchImage, LaunchBackground), the
 // Android app's icons, launch logo and colours (android/app/src/main/res), the
-// Mac's icon (macos/Runner/Assets.xcassets/AppIcon.appiconset) and
+// Mac's icon (macos/Runner/Assets.xcassets/AppIcon.appiconset), the Microsoft
+// Store package's logos (windows/msix/Assets, each at its scale and target
+// size, which tool/msix_package.ps1 indexes with makepri) and
 // build/brand_preview.png.
 
 import 'dart:convert';
@@ -201,6 +203,24 @@ Future<void> _writeAndroid(String res) async {
 }
 
 /// The badge at `size`, as an image.
+/// The MSIX package's logos (windows/msix/AppxManifest.xml names them
+/// unqualified; the package's resource index picks the file): the Start
+/// menu's tile, the taskbar's and list icon (also at the target sizes
+/// Windows asks for, plated and unplated), and the Store's logo.
+Future<void> _writeMsix(String dir) async {
+  Directory(dir).createSync(recursive: true);
+  for (final (name, size) in const [('Square150x150Logo', 150), ('Square44x44Logo', 44), ('StoreLogo', 50)]) {
+    for (final scale in const [100, 200]) {
+      await _writePng(await _badge(size * scale ~/ 100), '$dir/$name.scale-$scale.png');
+    }
+  }
+  for (final size in const [16, 24, 32, 48, 256]) {
+    final image = await _badge(size);
+    await _writePng(image, '$dir/Square44x44Logo.targetsize-$size.png');
+    await _writePng(image, '$dir/Square44x44Logo.targetsize-${size}_altform-unplated.png');
+  }
+}
+
 Future<ui.Image> _badge(int size) {
   final recorder = ui.PictureRecorder();
   paintBadge(Canvas(recorder), Size(size.toDouble(), size.toDouble()));
@@ -285,6 +305,7 @@ void main() {
       for (final size in const [16, 32, 64, 128, 256, 512, 1024]) {
         await _writePng(await _badge(size), 'macos/Runner/Assets.xcassets/AppIcon.appiconset/app_icon_$size.png');
       }
+      await _writeMsix('windows/msix/Assets');
     });
   });
 

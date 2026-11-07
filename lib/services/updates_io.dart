@@ -5,7 +5,7 @@ import 'dart:io';
 import 'updates.dart';
 
 Installed get installed {
-  if (Platform.isWindows) return Installed.download;
+  if (Platform.isWindows) return storeBuild ? Installed.store : Installed.download;
   if (Platform.isLinux) return Platform.environment.containsKey('FLATPAK_ID') ? Installed.flatpak : Installed.download;
   return Installed.other;
 }

@@ -25,6 +25,10 @@ enum Installed {
   /// A Flatpak (Flathub): the system's software updates bring the new one.
   flatpak,
 
+  /// From the Microsoft Store (a build with `MURMUR_STORE`): the Store
+  /// brings the new one.
+  store,
+
   /// A phone, or a Mac: no published download yet, so nothing to point at.
   other,
 }
@@ -34,6 +38,17 @@ Installed get installed => impl.installed;
 
 /// Whether the release page has a download for this copy.
 bool get canDownloadUpdate => installed == Installed.download;
+
+/// Whether the system brings updates by itself (Flathub, the Microsoft
+/// Store), so the user is pointed at its software updates.
+bool get systemUpdates => installed == Installed.flatpak || installed == Installed.store;
+
+/// A build for the Microsoft Store (`--dart-define=MURMUR_STORE=true`,
+/// packaged by tool/msix_package.ps1). The Store's policies refuse apps
+/// that mine on the device, so such a build never mines: the app's own node
+/// runs without `--mine-to`, and the package carries no murmur-miner
+/// (README, "Desktop updates").
+const storeBuild = bool.fromEnvironment('MURMUR_STORE');
 
 /// On Linux, the first time the app runs as a Flatpak: copies what the app
 /// kept outside the sandbox before (its settings, and the user's own

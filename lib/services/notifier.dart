@@ -7,6 +7,18 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
+import 'updates.dart' show storeBuild;
+
+/// The COM class Windows starts the app through when one of its
+/// notifications is clicked: the installer's Start menu shortcut names
+/// [installerToastActivator] (windows/installer/murmur.iss), the Microsoft
+/// Store package's manifest [storeToastActivator]
+/// (windows/msix/AppxManifest.xml). Two, since both copies may be installed
+/// side by side, and a click must start the copy that showed it. Never
+/// change either: installed copies hold them.
+const installerToastActivator = '6f3c2a51-9d84-4e0b-b7a2-5c1e8f04d3a9';
+const storeToastActivator = '13cb96cb-b216-4987-9d52-128da9a29306';
+
 /// Where notifications go. The app's is [SystemNotifier]; tests give their own.
 abstract class Notifier {
   /// Starts it: `open` is called with a notification's payload when the user
@@ -80,11 +92,13 @@ class SystemNotifier implements Notifier {
         android: const AndroidInitializationSettings('@drawable/ic_stat_murmur'),
         linux: LinuxInitializationSettings(defaultActionName: openLabel),
         // An app installed without a package names itself to Windows here:
-        // the company and product the app's settings live under.
+        // the company and product the app's settings live under. A package
+        // (the Microsoft Store's) is named by its identity instead, and
+        // only its activator counts.
         windows: const WindowsInitializationSettings(
           appName: 'Murmur',
           appUserModelId: 'MurmurAssociation.Murmur',
-          guid: '6f3c2a51-9d84-4e0b-b7a2-5c1e8f04d3a9',
+          guid: storeBuild ? storeToastActivator : installerToastActivator,
         ),
         web: const WebInitializationSettings(),
         iOS: _darwinSettings,

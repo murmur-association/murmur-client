@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The Microsoft Store package's manifest, filled in by tool/msix_package.ps1:
+  {IDENTITY_NAME}, {PUBLISHER} and {PUBLISHER_DISPLAY_NAME} are what Partner
+  Center gives the app (Product identity), {VERSION} the release's, as
+  x.y.z.0 (the Store keeps the fourth number). The app inside is a build
+  with MURMUR_STORE (lib/services/updates.dart, storeBuild): no mining, and
+  no murmur-miner in the package.
+
+  A desktop app with full trust (runFullTrust): it starts its own node as a
+  child, which runs inside the package too, with a data folder of its own
+  (lib/services/local_node_io.dart). Its notifications are clicked back
+  through the COM class below (storeToastActivator in
+  lib/services/notifier.dart), not the installer's, since both copies may be
+  installed side by side: never change it.
+-->
+<Package
+  xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:desktop="http://schemas.microsoft.com/appx/manifest/desktop/windows10"
+  xmlns:com="http://schemas.microsoft.com/appx/manifest/com/windows10"
+  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+  IgnorableNamespaces="uap desktop com rescap">
+
+  <Identity Name="{IDENTITY_NAME}" Publisher="{PUBLISHER}" Version="{VERSION}" ProcessorArchitecture="x64" />
+
+  <Properties>
+    <DisplayName>Murmur</DisplayName>
+    <PublisherDisplayName>{PUBLISHER_DISPLAY_NAME}</PublisherDisplayName>
+    <Logo>Assets\StoreLogo.png</Logo>
+  </Properties>
+
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.17763.0" MaxVersionTested="10.0.26100.0" />
+  </Dependencies>
+
+  <!-- The app's languages (lib/l10n), English first. -->
+  <Resources>
+    <Resource Language="en-us" />
+    <Resource Language="ar" />
+    <Resource Language="de" />
+    <Resource Language="es" />
+    <Resource Language="fr" />
+    <Resource Language="it" />
+    <Resource Language="ja" />
+    <Resource Language="ko" />
+    <Resource Language="nl" />
+    <Resource Language="pt" />
+    <Resource Language="zh-hans" />
+  </Resources>
+
+  <Applications>
+    <Application Id="Murmur" Executable="murmur_client.exe" EntryPoint="Windows.FullTrustApplication">
+      <uap:VisualElements
+        DisplayName="Murmur"
+        Description="Murmur: messages and threads on the Murmur chain, checked by this app itself."
+        BackgroundColor="transparent"
+        Square150x150Logo="Assets\Square150x150Logo.png"
+        Square44x44Logo="Assets\Square44x44Logo.png" />
+      <Extensions>
+        <desktop:Extension Category="windows.toastNotificationActivation">
+          <desktop:ToastNotificationActivation ToastActivatorCLSID="13cb96cb-b216-4987-9d52-128da9a29306" />
+        </desktop:Extension>
+        <com:Extension Category="windows.comServer">
+          <com:ComServer>
+            <com:ExeServer Executable="murmur_client.exe" Arguments="-ToastActivated" DisplayName="Murmur">
+              <com:Class Id="13cb96cb-b216-4987-9d52-128da9a29306" />
+            </com:ExeServer>
+          </com:ComServer>
+        </com:Extension>
+      </Extensions>
+    </Application>
+  </Applications>
+
+  <Capabilities>
+    <Capability Name="internetClient" />
+    <rescap:Capability Name="runFullTrust" />
+  </Capabilities>
+</Package>

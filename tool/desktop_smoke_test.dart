@@ -5,6 +5,7 @@
 //
 //   dart run tool/desktop_smoke_test.dart [--wallet-storage] <folder>
 //   tool/linux_session.sh dart run tool/desktop_smoke_test.dart [--wallet-storage] <folder>     # on Linux
+//   dart run tool/desktop_smoke_test.dart --packaged <family> <install folder>     # an installed MSIX
 //
 // 1. The app starts, makes its window, and runs its own node as a child
 //    when that's switched on; closing the window stops both. The app
@@ -16,6 +17,13 @@
 //    is saved through the system's secure storage, found again, unlocked
 //    and removed (integration_test/wallet_storage_test.dart, inside the
 //    app).
+// 4. With --packaged (Windows: the Microsoft Store's package, installed by
+//    tool/msix_package.ps1 -Smoke): the app is started as the Start menu
+//    starts it, and checks 1 and 2 run on it beside a node of the
+//    installer's copy, recorded in the real %APPDATA%; the package must
+//    leave that node and its pid file alone and write only in its own
+//    folder. 5. A notification's click (its activator, asked for over COM)
+//    starts the app in its package.
 //
 // What differs between the systems is in [Desktop]: where the app keeps its
 // settings, how its window and its node are found, and what each system
@@ -50,8 +58,17 @@ final _sep = Platform.pathSeparator;
 Future<void> main(List<String> args) async {
   final walletStorage = args.contains('--wallet-storage');
   final rest = args.where((a) => a != '--wallet-storage').toList();
+  String? family;
+  if (rest.length == 3 && rest[0] == '--packaged') {
+    if (!Platform.isWindows) {
+      stderr.writeln('--packaged tries an installed MSIX package, on Windows');
+      exit(2);
+    }
+    family = rest[1];
+    rest.removeRange(0, 2);
+  }
   final desktop = Platform.isWindows
-      ? _Windows()
+      ? (family == null ? _Windows() : _WindowsPackage(family))
       : Platform.isMacOS
           ? _Mac()
           : _Linux() as Desktop;
@@ -83,7 +100,7 @@ Future<void> main(List<String> args) async {
     return;
   }
   if (rest.length != 1) {
-    stderr.writeln('usage: dart run tool/desktop_smoke_test.dart [--wallet-storage] <app folder>');
+    stderr.writeln('usage: dart run tool/desktop_smoke_test.dart [--wallet-storage | --packaged <family>] <app folder>');
     exit(2);
   }
   final bundle = Directory(rest.single).absolute.path;
@@ -107,10 +124,16 @@ Future<void> main(List<String> args) async {
     exit(1);
   }
   final test = _SmokeTest(desktop, bundle);
+  Process? planted;
   try {
     desktop.switchOwnNodeOn();
+    if (desktop is _WindowsPackage) planted = await desktop.plantInstallersNode(bundle);
     await test.startAndStop();
     await test.leftoverNode();
+    if (desktop is _WindowsPackage) {
+      await desktop.checkApart(planted!, test.alive);
+      await desktop.toastActivation(bundle);
+    }
     final skipped = walletStorage ? await test.walletStorage() : null;
     print(skipped == null ? 'OK' : 'OK, but for the wallet check, which could not be tried here');
   } on _Failed catch (e) {
@@ -120,6 +143,7 @@ Future<void> main(List<String> args) async {
     }
     exitCode = 1;
   } finally {
+    planted?.kill(ProcessSignal.sigkill);
     await test.stopEverything();
     desktop.cleanUp();
   }
@@ -149,7 +173,9 @@ class _SmokeTest {
   final Desktop desktop;
   final String bundle;
 
-  Process? _app;
+  /// The app's process id: started by this test, or by Windows for a
+  /// package (Desktop.launch).
+  int? _app;
   int? _appExit;
   final _said = <String>[];
 
@@ -163,6 +189,8 @@ class _SmokeTest {
       await Future<void>.delayed(const Duration(milliseconds: 500));
     }
   }
+
+  Future<bool> alive(int pid) => _alive(pid);
 
   Future<bool> _alive(int pid) async => Platform.isWindows
       ? (await Process.run('tasklist', ['/FI', 'PID eq $pid', '/NH'])).stdout.toString().contains(' $pid ')
@@ -179,26 +207,43 @@ class _SmokeTest {
   /// returns.
   Future<int> _start() async {
     _said.clear();
+    // The last app forgotten first: its exit watcher may look once more,
+    // and must not mark the new one as exited while Windows starts it.
+    _app = null;
     _appExit = null;
-    final app = _app = await Process.start(_appProgram, const [], workingDirectory: bundle);
-    for (final stream in [app.stdout, app.stderr]) {
-      stream.transform(const Utf8Decoder(allowMalformed: true)).transform(const LineSplitter()).listen(_said.add);
+    final int app;
+    final launched = await desktop.launch(bundle);
+    if (launched == null) {
+      final process = await Process.start(_appProgram, const [], workingDirectory: bundle);
+      app = _app = process.pid;
+      for (final stream in [process.stdout, process.stderr]) {
+        stream.transform(const Utf8Decoder(allowMalformed: true)).transform(const LineSplitter()).listen(_said.add);
+      }
+      unawaited(process.exitCode.then((code) => _app == app ? _appExit = code : null));
+    } else {
+      // Not this test's child: its end is watched for instead.
+      app = _app = launched;
+      unawaited(() async {
+        while (_app == app && _appExit == null) {
+          if (!await _alive(app) && _app == app) _appExit = -1;
+          await Future<void>.delayed(const Duration(milliseconds: 500));
+        }
+      }());
     }
-    unawaited(app.exitCode.then((code) => identical(_app, app) ? _appExit = code : null));
     await _waitFor(60, 'the app made no window titled Murmur',
-        () => _appExit != null ? throw _Failed('the app stopped by itself') : desktop.window(app.pid, 'Murmur') != null);
+        () => _appExit != null ? throw _Failed('the app stopped by itself') : desktop.window(app, 'Murmur') != null);
     await _waitFor(60, "the node didn't start as the app's child",
-        () async => _appExit != null ? throw _Failed('the app stopped by itself') : await _nodeOf(app.pid) != null);
-    return (await _nodeOf(app.pid))!.pid;
+        () async => _appExit != null ? throw _Failed('the app stopped by itself') : await _nodeOf(app) != null);
+    return (await _nodeOf(app))!.pid;
   }
 
   Future<void> _close(int node) async {
     final app = _app!;
-    desktop.closeWindow(app.pid, 'Murmur');
+    desktop.closeWindow(app, 'Murmur');
     try {
       await _waitFor(20, "the app didn't exit after its window was closed", () => _appExit != null);
     } on _Failed {
-      if (Platform.isMacOS) await _whyStillRunning(app.pid);
+      if (Platform.isMacOS) await _whyStillRunning(app);
       rethrow;
     }
     await _waitFor(10, 'the node kept running after the app closed', () async => !await _alive(node));
@@ -229,8 +274,8 @@ class _SmokeTest {
   Future<void> startAndStop() async {
     print('== 1. start, and stop with the window');
     final node = await _start();
-    print('window: Murmur (${desktop.window(_app!.pid, 'Murmur')})');
-    print('node: pid $node, child of the app (${_app!.pid})');
+    print('window: Murmur (${desktop.window(_app!, 'Murmur')})');
+    print('node: pid $node, child of the app (${_app!})');
     await _leftAlone(node);
     await _close(node);
     print('closing the window stopped the app and its node');
@@ -254,7 +299,7 @@ class _SmokeTest {
     }
     final until = DateTime.now().add(const Duration(seconds: 10));
     while (DateTime.now().isBefore(until)) {
-      if ((await desktop.connectedTo(ports)).contains(_app!.pid)) {
+      if ((await desktop.connectedTo(ports)).contains(_app!)) {
         throw _Failed('the app connected to its own node (ports $ports) instead of leaving it alone');
       }
       await Future<void>.delayed(const Duration(milliseconds: 500));
@@ -265,8 +310,7 @@ class _SmokeTest {
   Future<void> leftoverNode() async {
     print('== 2. a node left by a killed app is replaced');
     final left = await _start();
-    final killed = _app!;
-    killed.kill(ProcessSignal.sigkill);
+    Process.killPid(_app!, ProcessSignal.sigkill);
     await _waitFor(10, 'the killed app is still there', () => _appExit != null);
     if (!await _alive(left)) throw _Failed("the node died with the killed app, so there's nothing to clean up");
     await _start();
@@ -276,7 +320,7 @@ class _SmokeTest {
     late Proc node;
     await _waitFor(15, "there isn't exactly one node running, this app's", () async {
       final nodes = await desktop.nodes(_nodeProgram);
-      if (nodes.length != 1 || nodes.single.parent != _app!.pid) return false;
+      if (nodes.length != 1 || nodes.single.parent != _app!) return false;
       node = nodes.single;
       return true;
     });
@@ -313,8 +357,8 @@ class _SmokeTest {
       if (app == null)
         'the app was not started'
       else
-        'app ${app.pid}: ${_appExit == null ? 'running' : 'exited with code $_appExit'}; '
-            'its Murmur window: ${desktop.window(app.pid, 'Murmur') ?? 'none'}; '
+        'app $app: ${_appExit == null ? 'running' : 'exited with code $_appExit'}; '
+            'its Murmur window: ${desktop.window(app, 'Murmur') ?? 'none'}; '
             'every bundled node running: ${(await desktop.nodes(_nodeProgram)).join('; ')}',
       if (_said.isNotEmpty) "the app's output:",
       for (final line in _said.skip((_said.length - 25).clamp(0, _said.length))) '    $line',
@@ -323,7 +367,7 @@ class _SmokeTest {
   }
 
   Future<void> stopEverything() async {
-    _app?.kill(ProcessSignal.sigkill);
+    if (_app case final app?) Process.killPid(app, ProcessSignal.sigkill);
     for (final node in await desktop.nodes(_nodeProgram)) {
       Process.killPid(node.pid, ProcessSignal.sigkill);
     }
@@ -336,6 +380,11 @@ abstract class Desktop {
   /// The app's and the node's program files.
   String get app;
   String get node;
+
+  /// Starts the app the system's way and returns its process id, or null
+  /// when the test starts the program in `bundle` itself (all but a
+  /// package, which only Windows may start, for it to have its identity).
+  Future<int?> launch(String bundle) async => null;
 
   /// Why the test must not run here (it would change a user's own app), or
   /// null.
@@ -556,16 +605,24 @@ class _Windows extends Desktop {
       '${(await Process.run('powershell', ['-NoProfile', '-Command', script])).stdout}'.trim();
 
   @override
-  Future<List<Proc>> nodes(String node) async {
-    final out = await _powershell("Get-CimInstance Win32_Process -Filter \"Name='${this.node}'\" | "
+  Future<List<Proc>> nodes(String node) => _processes(node);
+
+  /// The running processes of `program` (a full path).
+  Future<List<Proc>> _processes(String program) async {
+    final name = program.split('\\').last;
+    final out = await _powershell("Get-CimInstance Win32_Process -Filter \"Name='$name'\" | "
         r'ForEach-Object { "$($_.ProcessId)|$($_.ParentProcessId)|$($_.ExecutablePath)" }');
     return [
       for (final line in const LineSplitter().convert(out))
-        if (line.split('|') case [final pid, final parent, final program]
-            when program.toLowerCase() == node.toLowerCase())
-          Proc(int.parse(pid), int.parse(parent), program),
+        if (line.split('|') case [final pid, final parent, final path]
+            when path.toLowerCase() == program.toLowerCase())
+          Proc(int.parse(pid), int.parse(parent), path),
     ];
   }
+
+  /// The command line `pid` was started with.
+  Future<String> _commandLine(int pid) =>
+      _powershell("(Get-CimInstance Win32_Process -Filter \"ProcessId=$pid\").CommandLine");
 
   Set<int> _numbers(String out) => {
         for (final line in const LineSplitter().convert(out))
@@ -742,7 +799,23 @@ class _Windows extends Desktop {
           ])
             '$name ${File('$_system32\\$name').existsSync() ? 'yes' : 'NO'}',
         ].join(', ')}',
+        ..._crashes(),
       ];
+
+  /// What Windows recorded of the app or its node crashing in the last
+  /// quarter of an hour (Windows Error Reporting, in the Application log):
+  /// the faulting module and exception code, which a packaged app, whose
+  /// output nobody reads, says nowhere else.
+  List<String> _crashes() {
+    final r = Process.runSync('powershell', [
+      '-NoProfile', '-Command', //
+      r"Get-WinEvent -FilterHashtable @{LogName='Application'; ProviderName='Application Error','Windows Error Reporting','.NET Runtime'; StartTime=(Get-Date).AddMinutes(-15)} -ErrorAction SilentlyContinue | "
+          r"Where-Object { $_.Message -match 'murmur' } | Select-Object -First 4 | "
+          r"ForEach-Object { '--- ' + $_.TimeCreated.ToString('HH:mm:ss') + ' ' + $_.ProviderName + ' ' + $_.Id; $_.Message }",
+    ]);
+    final lines = const LineSplitter().convert('${r.stdout}').where((l) => l.trim().isNotEmpty).take(80).toList();
+    return lines.isEmpty ? ['no crash of the app or its node recorded by Windows'] : ['crashes Windows recorded:', ...lines.map((l) => '    $l')];
+  }
 }
 
 class _Mac extends Desktop {
@@ -891,5 +964,128 @@ class _Mac extends Desktop {
   List<String> system() {
     final version = Process.runSync('sw_vers', ['-productVersion']);
     return ['macOS ${'${version.stdout}'.trim()}'];
+  }
+}
+
+/// The Microsoft Store's package (windows/msix/), installed: started as the
+/// Start menu starts it, through its identity, from its install folder.
+/// What it writes under %APPDATA% goes to a folder of the package's own
+/// (LocalCache\Roaming), removed with it, and it reads the real %APPDATA%
+/// merged with that. So beside the first two checks it's tried living
+/// beside the installer's copy, and being started by a notification's click.
+class _WindowsPackage extends _Windows {
+  _WindowsPackage(this.family);
+
+  /// The package's family name (Get-AppxPackage's PackageFamilyName).
+  final String family;
+
+  String get _private => '${Platform.environment['LOCALAPPDATA']}\\Packages\\$family\\LocalCache\\Roaming';
+  File get _plantedPid => File('${_data.path}\\node\\app-node.pid');
+
+  Future<Set<int>> _apps(String bundle) async => {for (final p in await _processes('$bundle\\$app')) p.pid};
+
+  @override
+  Future<int?> launch(String bundle) async {
+    final before = await _apps(bundle);
+    // ShellExecute of the app's entry in the Start menu's folder: Windows
+    // starts it in its package, as a click there does.
+    await _powershell("Start-Process 'shell:AppsFolder\\$family!Murmur'");
+    final deadline = DateTime.now().add(const Duration(seconds: 60));
+    while (DateTime.now().isBefore(deadline)) {
+      final started = (await _apps(bundle)).difference(before);
+      if (started.isNotEmpty) return started.first;
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+    }
+    throw _Failed('Windows started no $app from the package $family');
+  }
+
+  @override
+  void switchOwnNodeOn() => File('$_private\\Murmur Association\\Murmur\\shared_preferences.json')
+    ..createSync(recursive: true)
+    ..writeAsStringSync('{"flutter.run_local_node":true}');
+
+  /// Starts a node as the installer's copy runs its own: from a copy of the
+  /// program outside the package, recorded in the real %APPDATA%'s pid file.
+  /// The package reads that folder, so without a node folder of its own
+  /// (localNodeDataDir) its start would take this node for one a crash left,
+  /// and stop it.
+  Future<Process> plantInstallersNode(String bundle) async {
+    final dir = Directory.systemTemp.createTempSync('murmur-installers-node-');
+    final program = File('$bundle\\$node').copySync('${dir.path}\\$node').path;
+    final started = await Process.start(program, [
+      '--daemon', '--spec', 'demo', '--data-dir', '${dir.path}\\data', //
+      '--port', '127.0.0.1:0', '--rpc-port', '0',
+    ]);
+    started.stdout.drain<void>();
+    started.stderr.drain<void>();
+    _plantedPid
+      ..createSync(recursive: true)
+      ..writeAsStringSync('${started.pid}');
+    print("the installer's copy's node: pid ${started.pid}, in ${_plantedPid.path}");
+    return started;
+  }
+
+  /// After the first two checks: the installer's copy's node and its pid
+  /// file were left alone, and what the package wrote went to its own folder.
+  Future<void> checkApart(Process planted, Future<bool> Function(int pid) alive) async {
+    print("== 4. beside the installer's copy");
+    if (!await alive(planted.pid)) throw _Failed("the package stopped the installer's copy's node (its pid file)");
+    if (!_plantedPid.existsSync() || _plantedPid.readAsStringSync().trim() != '${planted.pid}') {
+      throw _Failed("the package changed the installer's copy's pid file ${_plantedPid.path}");
+    }
+    // New folders under %APPDATA% go to the package's own copy, but writes
+    // beneath a folder that exists in the real one go through to it
+    // (Windows 10 1903 and later): the installer's copy made murmur-client,
+    // so node-store may be in either. What matters is that it isn't node.
+    // The settings folder didn't exist in the real %APPDATA% here, so the
+    // package's went to its own copy.
+    if (FileSystemEntity.typeSync(_settings.path) != FileSystemEntityType.notFound) {
+      throw _Failed('the package made ${_settings.path} in the real %APPDATA%, not in its own folder');
+    }
+    if (!File('$_private\\Murmur Association\\Murmur\\shared_preferences.json').existsSync()) {
+      throw _Failed('the settings are missing from $_private: the package kept them elsewhere');
+    }
+    final stores = [for (final base in [_private, _data.parent.path]) '$base\\murmur-client\\node-store'];
+    final store = stores.where((path) => Directory(path).existsSync()).firstOrNull;
+    if (store == null) throw _Failed("the package's node kept no data in node-store (${stores.join(' or ')})");
+    final installers = Directory('${_data.path}\\node').listSync().map((e) => e.path.split('\\').last).toList();
+    if (installers.length != 1 || installers.single != 'app-node.pid') {
+      throw _Failed("the package wrote in the installer's copy's node folder: $installers");
+    }
+    print("its node ran in $store, the installer's was left running in its own folder, untouched");
+  }
+
+  /// A notification's click while the app is closed: Windows starts the
+  /// app through the COM class the package declares (its activator), in the
+  /// package, with the manifest's argument. Asked for here as Windows asks:
+  /// by creating an object of that class.
+  Future<void> toastActivation(String bundle) async {
+    print("== 5. a notification's click starts the app");
+    final manifest = File('$bundle\\AppxManifest.xml').readAsStringSync();
+    final clsid = RegExp(r'ToastActivatorCLSID="([0-9a-fA-F-]{36})"').firstMatch(manifest)?.group(1);
+    if (clsid == null) throw _Failed('the installed manifest declares no notification activator');
+    final before = await _apps(bundle);
+    final asking = await Process.start('powershell', [
+      '-NoProfile', '-Command', "[Activator]::CreateInstance([Type]::GetTypeFromCLSID([Guid]'$clsid'))",
+    ]);
+    asking.stdout.drain<void>();
+    asking.stderr.drain<void>();
+    try {
+      final deadline = DateTime.now().add(const Duration(seconds: 60));
+      while (true) {
+        final started = (await _apps(bundle)).difference(before);
+        if (started.isNotEmpty) {
+          final line = await _commandLine(started.first);
+          if (!line.contains('-ToastActivated')) throw _Failed('the app was started as "$line", not by the activator');
+          print('activator $clsid started the app ${started.first}: $line');
+          Process.killPid(started.first, ProcessSignal.sigkill);
+          return;
+        }
+        if (DateTime.now().isAfter(deadline)) throw _Failed('asking for activator $clsid started no app');
+        await Future<void>.delayed(const Duration(milliseconds: 500));
+      }
+    } finally {
+      asking.kill(ProcessSignal.sigkill);
+    }
   }
 }
