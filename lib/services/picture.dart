@@ -23,24 +23,46 @@ const _decoded = profileSide * 4;
 /// The profile picture made from an image file's bytes (PNG, JPEG, GIF,
 /// WebP, BMP: what the engine decodes), or null if they can't be made one.
 /// Transparent parts come out white.
+///
+/// Safari sometimes refuses to give a decoded image's pixels back
+/// (InvalidStateError, on any PNG, now and then: 2026-11-07), so a failed
+/// read is tried again from the file, up to three times in all.
 Future<ProfilePicture?> pictureFromImage(Uint8List bytes) async {
+  for (var attempt = 1;; attempt++) {
+    try {
+      final (rgba, width, height) = await _decode(bytes);
+      return rgba == null ? null : pictureFromRgb(middleSquare(rgba, width, height));
+      // Whatever the engine throws (not only Exceptions): no picture, which
+      // the dialog says, rather than a dialog left waiting.
+    } catch (_) {
+      if (attempt == 3) return null;
+      await Future<void>.delayed(Duration(milliseconds: 200 * attempt));
+    }
+  }
+}
+
+/// The file's pixels (RGBA, alpha not premultiplied), decoded straight to
+/// about the size needed, not the photo's own; null pixels if the engine
+/// gives none. The codec and the image are let go only once the pixels are
+/// read, never left to the garbage collector meanwhile.
+Future<(Uint8List?, int, int)> _decode(Uint8List bytes) async {
+  final buffer = await ui.ImmutableBuffer.fromUint8List(bytes);
+  final codec = await ui.instantiateImageCodecWithSize(buffer, getTargetSize: (w, h) {
+    final scale = _decoded / (w < h ? w : h);
+    return scale >= 1
+        ? ui.TargetImageSize(width: w, height: h)
+        : ui.TargetImageSize(width: (w * scale).ceil(), height: (h * scale).ceil());
+  });
   try {
-    final buffer = await ui.ImmutableBuffer.fromUint8List(bytes);
-    // Decoded straight to about the size needed, not the photo's own.
-    final codec = await ui.instantiateImageCodecWithSize(buffer, getTargetSize: (w, h) {
-      final scale = _decoded / (w < h ? w : h);
-      return scale >= 1
-          ? ui.TargetImageSize(width: w, height: h)
-          : ui.TargetImageSize(width: (w * scale).ceil(), height: (h * scale).ceil());
-    });
     final image = (await codec.getNextFrame()).image;
-    final pixels = await image.toByteData(format: ui.ImageByteFormat.rawStraightRgba);
-    if (pixels == null) return null;
-    return pictureFromRgb(middleSquare(pixels.buffer.asUint8List(), image.width, image.height));
-    // Whatever the engine throws (not only Exceptions): no picture, which
-    // the dialog says, rather than a dialog left waiting.
-  } catch (_) {
-    return null;
+    try {
+      final pixels = await image.toByteData(format: ui.ImageByteFormat.rawStraightRgba);
+      return (pixels?.buffer.asUint8List(), image.width, image.height);
+    } finally {
+      image.dispose();
+    }
+  } finally {
+    codec.dispose();
   }
 }
 

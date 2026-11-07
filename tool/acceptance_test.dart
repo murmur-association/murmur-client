@@ -281,15 +281,9 @@ void main() {
     };
     final flutter = await Process.start(Platform.isWindows ? 'flutter.bat' : 'flutter', args,
         environment: environment, includeParentEnvironment: false, runInShell: Platform.isWindows);
-    final said = <String>[];
+    final output = DeviceOutput();
     eachLine(flutter, (line) {
-      said.add(line);
-      print(line);
-      // A failure's annotation the app printed (acceptance_test.dart) comes
-      // after a prefix on some devices (Android's "I/flutter (…): "), and
-      // GitHub reads a workflow command only at the start of a line.
-      final command = line.indexOf('::error ');
-      if (command > 0) print(line.substring(command));
+      output.add(line);
       if (chooser == 'host' && (line.contains(chooserPickRequest) || line.contains(chooserCancelRequest))) {
         unawaited(answerChooser(line));
       }
@@ -308,9 +302,8 @@ void main() {
         });
       }
     });
-    expect(await flutter.exitCode, 0, reason: 'the acceptance tests on $_device');
-    // `flutter drive` can end with 0 after tests that failed.
-    expect(said.where((line) => line.contains('Some tests failed') || line.contains('[E]')), isEmpty);
+    expect(output.failed(await flutter.exitCode, 'the acceptance tests on $_device'), isFalse,
+        reason: 'the acceptance tests on $_device');
     if (android != null) expect(backgroundJobRan, isTrue, reason: "the app's background job, run as Android runs it");
     // A cancel and a pick from each source the device offers (Android has
     // two), each done in the system's own chooser.
