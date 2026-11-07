@@ -257,10 +257,10 @@ jobs:
   # here, which needs the runner's logged-in session). Safari's driver can't
   # grant notifications nor fill a file input, so the runner skips the
   # notification test and hands a picture over in the chooser's place.
-  # Allowed to fail while it's new, since a release waits on this workflow:
-  # it first passed on 2026-11-07, one run after it failed once to read the
-  # sample picture (the "pictures" check now notes each decode step). Take
-  # this line out once it has passed a while.
+  # Allowed to fail, since a release waits on this workflow: Safari as
+  # safaridriver drives it here gives no canvas's pixels back
+  # (InvalidStateError, noted by the "pictures" check), so the picture step
+  # fails most runs (AGENTS.md, Known gaps 0).
   acceptance-safari:
     name: 'acceptance: [safari]'
     runs-on: macos-latest
