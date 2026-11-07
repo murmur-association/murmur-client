@@ -6,6 +6,7 @@ import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:cryptography/cryptography.dart';
+import 'package:cryptography/dart.dart' show DartEd25519;
 
 import '../protocol/bytes.dart';
 import '../protocol/models.dart';
@@ -25,7 +26,13 @@ class MurmurWallet {
   MurmurWallet._(this.seed, this.publicKey, this._keyPair)
       : address = sha256Bytes(publicKey);
 
-  static final _ed25519 = Ed25519();
+  /// The signer on every platform: the package's own Dart Ed25519, never the
+  /// browser's. `Ed25519()` signs with the browser's Web Crypto where there
+  /// is one, and a transaction's signature is part of its one encoding
+  /// (rule 6): it must be RFC 8032's on every flavour, as the node's vectors
+  /// expect. In Safari the browser's signatures were never mined
+  /// (2026-11-05, the acceptance tests' first Safari runs).
+  static final Ed25519 signer = DartEd25519();
 
   final Uint8List seed;
   final Uint8List publicKey;
@@ -41,7 +48,7 @@ class MurmurWallet {
     if (seed.length != 32) {
       throw const FormatException('a wallet seed is 32 bytes (64 hex chars)');
     }
-    final kp = await _ed25519.newKeyPairFromSeed(seed);
+    final kp = await signer.newKeyPairFromSeed(seed);
     final pk = await kp.extractPublicKey();
     return MurmurWallet._(Uint8List.fromList(seed), Uint8List.fromList(pk.bytes), kp);
   }
@@ -83,7 +90,7 @@ class MurmurWallet {
       answers: answers,
       mentions: mentions,
     );
-    final sig = await _ed25519.sign([...networkTag, ...body], keyPair: _keyPair);
+    final sig = await signer.sign([...networkTag, ...body], keyPair: _keyPair);
     return Transaction(
       kind: kind,
       pubkey: publicKey,

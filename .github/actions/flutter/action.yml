@@ -1,0 +1,70 @@
+# What every job of the workflows sets up after its checkout: the pinned
+# Flutter SDK and the project's packages, and what some jobs need besides:
+# Linux packages, Visual Studio's ATL on Windows. One place for each, so the
+# regression, the release and the scheduled release can't drift apart.
+#
+#   - uses: actions/checkout@v4          # first: this action is in the checkout
+#   - uses: ./.github/actions/flutter
+#     with:
+#       linux: session libnss3           # optional
+#       atl: true                        # optional
+name: Flutter and the project's packages
+description: The pinned Flutter SDK, flutter pub get, and the system packages a job asks for.
+
+inputs:
+  linux:
+    description: >-
+      Linux packages to install, by name, where two words stand for groups:
+      `build` is what building the Linux app needs, and `session` that plus
+      what runs it without a desktop (a display, a window manager, a session
+      bus and a keyring, as tool/linux_session.sh starts them; xdotool works
+      GTK's file dialog for the acceptance tests). Empty installs nothing.
+    default: ''
+  atl:
+    description: Visual Studio's ATL, which the secure-storage plugin's Windows build needs (atlstr.h).
+    default: 'false'
+  pub-get:
+    description: Whether to run `flutter pub get`.
+    default: 'true'
+
+runs:
+  using: composite
+  steps:
+  - if: inputs.linux != ''
+    shell: bash
+    env:
+      PACKAGES: ${{ inputs.linux }}
+    run: |
+      build="clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev g++ libsecret-1-dev libjsoncpp-dev"
+      session="$build xvfb openbox wmctrl xdotool dbus dbus-x11 gnome-keyring libgl1-mesa-dri libegl1 libgles2 procps"
+      packages=""
+      for word in $PACKAGES; do
+        case "$word" in
+          build) packages="$packages $build";;
+          session) packages="$packages $session";;
+          *) packages="$packages $word";;
+        esac
+      done
+      sudo apt-get update -qq
+      sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends $packages
+  - if: inputs.atl == 'true'
+    shell: pwsh
+    run: |
+      $installer = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer"
+      $vs = & "$installer\vswhere.exe" -latest -products * -property installationPath
+      $atl = & "$installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.ATL -property installationPath
+      if (-not $atl) {
+        $p = Start-Process -Wait -PassThru -FilePath "$installer\setup.exe" -ArgumentList "modify --installPath `"$vs`" --add Microsoft.VisualStudio.Component.VC.ATL --quiet --norestart"
+        Write-Output "added ATL to ${vs}: exit code $($p.ExitCode)"
+        if ($p.ExitCode -ne 0 -and $p.ExitCode -ne 3010) { exit 1 }
+      }
+      exit 0
+  # The Flutter SDK every job builds with. Raise it deliberately, together
+  # with the version used locally.
+  - uses: subosito/flutter-action@v2
+    with:
+      flutter-version: '3.47.5'
+      cache: true
+  - if: inputs.pub-get == 'true'
+    shell: bash
+    run: flutter pub get

@@ -10,6 +10,7 @@ Newest first. Each release is a `vX.Y.Z` tag matching `version` in `pubspec.yaml
 - **New: a Microsoft Store package.** Each release also builds an MSIX package for the Store, which signs it and keeps it updated, with no unknown-publisher warning. The Store's policies forbid mining on the device, so its copy runs the app's own node without mining; the installer, winget and the zip keep it. Not in the Store yet.
 - **New: Flatpak packaging** for Flathub (`linux/flatpak/`). Its first run takes along the settings and own messages of the app run from the archive; the wallet stays in the desktop's keyring.
 - **Fixed: a forgotten passphrase no longer blocks making or importing a wallet** when invitation cards are on the device. A new wallet shares the cards' passphrase, so restoring from the seed asked for the very passphrase that was forgotten. The app now offers to let the cards' key go: the wallet gets a new passphrase, and cards not yet claimed stay listed but can no longer be shown, printed or cancelled from that device (their tokens stay on the cards).
+- **Fixed: nothing sent from Safari was ever mined** (and so from any browser on an iPhone, which all run Safari's engine). The page signed with the browser's own Ed25519, and Safari's gives other signatures than the standard's; what it signed stayed pending. Every platform now signs with the app's own, standard Ed25519.
 
 ## v0.10.6: checkpoint refresh (2026-11-07)
 

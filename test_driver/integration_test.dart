@@ -60,11 +60,30 @@ Future<void> main() async {
   final response = Response.fromJson(await driver.requestData(null, timeout: const Duration(minutes: 20)));
   running = false;
   await driver.close();
+  // What the tests noted about this browser (its own Ed25519, say), also as
+  // a GitHub notice: the run's page lists it, and its API serves it.
+  if (response.data?['notes'] case final List notes) {
+    for (final note in notes) {
+      print('Noted: $note');
+      print('::notice title=browser::${'$note'.replaceAll('%', '%25').replaceAll('\n', '%0A')}');
+    }
+  }
   if (response.allTestsPassed) {
     print('All tests passed.');
     exit(0);
   }
   print('Failure Details:\n${response.formattedFailureDetails}');
+  // The failures' own messages, which a release build's details leave out
+  // (integration_test/acceptance_test.dart hands them over).
+  if (response.data?['failures'] case final Map failures) {
+    failures.forEach((test, why) {
+      print('Why "$test" failed:\n$why\n');
+      // Also as a GitHub annotation (a workflow command in the job's output),
+      // which the run's page lists, and its API serves without signing in.
+      String escaped(String s) => s.replaceAll('%', '%25').replaceAll('\r', '%0D').replaceAll('\n', '%0A');
+      print('::error title=${escaped('$test').replaceAll(':', '%3A').replaceAll(',', '%2C')}::${escaped('$why')}');
+    });
+  }
   exit(1);
 }
 

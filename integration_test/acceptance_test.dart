@@ -10,6 +10,7 @@
 // Rules of the code (which reply answers what, the order of threads, the
 // vault) are unit-tested in test/; here it's the app as a whole.
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
@@ -28,14 +29,44 @@ import 'package:murmur_client/ui/threads_tab.dart';
 
 import 'support/app_driver.dart';
 import 'support/header_nonce_checks.dart';
+import 'support/picture_checks.dart';
+import 'support/signature_checks.dart';
 import 'support/system_notifications.dart';
 
 void main() {
-  IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  // Why a test failed, for the driver to print. A browser runs a release
+  // build, where a failure's details print as nothing, so the failure's
+  // own message ("timed out waiting for …", with what's on screen) goes to
+  // the driver beside them (test_driver/integration_test.dart).
+  final report = reportTestException;
+  reportTestException = (details, description) {
+    final why = (binding.reportData ??= {}).putIfAbsent('failures', () => <String, String>{}) as Map;
+    why[description] = '${details.exception}';
+    // Natively, a GitHub annotation too, from the output `flutter test`
+    // passes on to the runner's log (a browser's goes through the driver).
+    if (!kIsWeb) {
+      String escaped(String s) => s.replaceAll('%', '%25').replaceAll('\r', '%0D').replaceAll('\n', '%0A');
+      debugPrint('::error title=${escaped(description).replaceAll(':', '%3A').replaceAll(',', '%2C')}'
+          '::${escaped('${details.exception}')}');
+    }
+    report(details, description);
+  };
+  // What a check notes about the flavour at hand, for the driver to print.
+  void Function(String) noted(String topic) => (note) {
+        debugPrint('$topic: $note');
+        ((binding.reportData ??= {}).putIfAbsent('notes', () => <String>[]) as List).add('$topic: $note');
+      };
 
   // What numbers do differs between a browser and the rest: the header
   // vectors that each once got wrong, on the flavour at hand.
   group('header nonces', headerNonceTests);
+  // And signatures: the wallet's must be RFC 8032's on every flavour. What
+  // the platform's own signer does is noted for the driver to print.
+  group('signatures', () => signatureTests(noted('signatures')));
+  // And a picture file, read as the public name dialog reads one, noting
+  // each step that fails.
+  group('pictures', () => pictureTests(noted('pictures')));
 
   // Told apart from any other run's on the same chain.
   final stamp = DateTime.now().millisecondsSinceEpoch;
@@ -74,11 +105,8 @@ void main() {
     await app.type(l.message, '$threadText\n@Fri');
     await app.tap(find.widgetWithText(ActionChip, '@Friend'), what: 'the suggested friend');
     expect(app.fieldText(l.message), '$threadText\n@Friend ');
-    await app.press<FilledButton>(l.signAndSend);
-    await app.waitFor(find.text(l.confirmSendTitle), what: 'the summary before signing');
-    expect(find.text(l.mentionsLabel), findsWidgets, reason: 'the summary says whom it mentions');
-    await app.press<FilledButton>(l.signAndSend);
-    await app.unlock();
+    await app.signAndSend(
+        onSummary: () => expect(find.text(l.mentionsLabel), findsWidgets, reason: 'the summary says whom it mentions'));
     await app.waitFor(find.byType(ThreadPage), what: "the new thread's page");
     expect(find.textContaining(threadText), findsWidgets);
     final sent = app.client.messagesBy(me).firstWhere((v) => v.tx.kind == TxKind.orphan).tx;
@@ -197,9 +225,17 @@ void main() {
     await app.backHome();
     await app.openTab(l.tabWallet);
     await app.waitUntil(() => app.showsPicture(me), what: "the wallet's picture in place of its mark");
+
+    // The local copy, allowed on this device: the chain and the thread's
+    // text are in the device's own storage, read back as the restart will.
+    await app.waitUntil(() async {
+      final stored = await app.storedChain();
+      return stored != null && stored.headers.isNotEmpty && stored.contents.containsKey(toHex(sent.messageHash!));
+    }, what: "the chain and the thread's text in the local copy", every: const Duration(seconds: 1));
   }, timeout: perTest);
 
-  testWidgets('after a restart: the wallet, the thread with its reply, the card and the picture are all there',
+  testWidgets(
+      'after a restart: the wallet, the thread with its reply, the card, the picture and the local copy are all there',
       (tester) async {
     // What the device held when the first test ended, and nothing more.
     final app = AppDriver(tester);
@@ -214,10 +250,23 @@ void main() {
     await app.waitFor(find.text(app.wallets.wallet!.addressHex), what: "the wallet's address");
     expect(find.text(l.importSeed), findsNothing);
 
+    // The local copy outlived the app: the thread's text is still in the
+    // device's storage.
+    // (The wallet's own messages are known once its history is read, which
+    // a slow device does after the Threads tab has the thread.)
+    final me = app.wallets.wallet!.addressHex;
+    late Transaction thread;
+    await app.waitUntil(() {
+      thread = app.client.messagesBy(me).firstWhere((v) => v.tx.kind == TxKind.orphan).tx;
+      return true;
+    }, what: "the wallet's thread among its own messages");
+    final stored = await app.storedChain();
+    expect(stored?.contents.containsKey(toHex(thread.messageHash!)), isTrue,
+        reason: "the thread's text in the local copy, after the restart");
+
     // The profile, read again from the chain: the picture in place of the
     // mark, and kept when the name is edited again, so a new name alone
     // wouldn't drop it.
-    final me = app.wallets.wallet!.addressHex;
     await app.waitUntil(() => app.showsPicture(me), what: "the wallet's picture, read again from the chain");
     await app.press<FilledButton>(l.publicNameAndPictureSet);
     await app.waitFor(find.text(l.pictureRemove), what: 'the published picture, kept in the dialog');
@@ -288,8 +337,8 @@ void main() {
     // And off again.
     await app.switchOnNotifications(l.notifyReplies);
     expect(app.prefs.notifyTopics, isEmpty);
-    // Not on a machine with no desktop to show them on (a CI runner's
-    // service session).
+    // Not on a machine that can't show them (ACCEPTANCE_NO_NOTIFICATIONS: no
+    // desktop, or a browser whose driver can't grant them).
   }, skip: acceptanceNoNotifications, timeout: perTest);
 
   testWidgets("a desktop's own node: it runs beside the app, and mines on the graphics card or says why not",

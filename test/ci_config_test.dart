@@ -71,4 +71,59 @@ void main() {
     }
     expect(bad, isEmpty);
   });
+
+  // The local actions (.github/actions/<name>/action.yml), which the jobs
+  // share their setup through.
+  final actions = {
+    for (final dir in Directory('.github/actions').listSync().whereType<Directory>())
+      if (File('${dir.path}/action.yml').existsSync())
+        './.github/actions/${dir.uri.pathSegments.lastWhere((s) => s.isNotEmpty)}':
+            loadYaml(File('${dir.path}/action.yml').readAsStringSync()) as YamlMap,
+  };
+
+  test('a local action used by a job is there, after the checkout, and given only what it takes', () {
+    final bad = <String>[];
+    for (final (file, job, value) in jobs()) {
+      var checkedOut = false;
+      for (final (i, step) in ((value['steps'] as YamlList?) ?? YamlList()).indexed) {
+        final uses = (step as YamlMap)['uses'];
+        if (uses is! String) continue;
+        if (uses.startsWith('actions/checkout@')) checkedOut = true;
+        if (!uses.startsWith('./.github/actions/')) continue;
+        final action = actions[uses];
+        if (action == null) {
+          bad.add('$file $job step ${i + 1}: $uses is missing');
+          continue;
+        }
+        // The action is read from the checkout, so it must come first.
+        if (!checkedOut) bad.add('$file $job step ${i + 1}: $uses before the checkout');
+        final inputs = action['inputs'] as YamlMap? ?? YamlMap();
+        for (final key in ((step['with'] as YamlMap?) ?? YamlMap()).keys) {
+          if (!inputs.containsKey(key)) bad.add('$file $job step ${i + 1}: $uses takes no input $key');
+        }
+      }
+    }
+    expect(bad, isEmpty);
+  });
+
+  test('every step of a local action runs a string, in a shell, or uses an action', () {
+    final bad = [
+      for (final MapEntry(key: name, value: action) in actions.entries)
+        for (final (i, step) in ((action['runs'] as YamlMap)['steps'] as YamlList).indexed)
+          if (step is! YamlMap ||
+              (step['uses'] is! String && (step['run'] is! String || step['shell'] is! String)))
+            '$name step ${i + 1}: $step',
+    ];
+    expect(bad, isEmpty);
+  });
+
+  test('only the shared action sets up Flutter, so every job builds with the same version', () {
+    final bad = [
+      for (final (file, job, value) in jobs())
+        for (final step in ((value['steps'] as YamlList?) ?? YamlList()))
+          if ((step as YamlMap)['uses'] case final String uses when uses.startsWith('subosito/flutter-action'))
+            '$file $job',
+    ];
+    expect(bad, isEmpty, reason: 'use ./.github/actions/flutter instead');
+  });
 }

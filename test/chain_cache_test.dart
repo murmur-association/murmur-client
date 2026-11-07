@@ -53,6 +53,8 @@ void main() {
     expect(base({'XDG_DATA_HOME': '/x', 'HOME': '/h'}), '/x');
     expect(base({'HOME': '/h'}), '/h/.local/share');
     expect(base({}), '/tmp');
+    // A folder given for the run (the acceptance tests) wins on a desktop.
+    expect(base({'MURMUR_DATA_HOME': '/run', 'APPDATA': r'C:\a', 'HOME': '/h'}), '/run');
     // Phones: never the environment (Android sets HOME to "/"), and never
     // the temp folder when the app's cache folder is known.
     expect(base({'HOME': '/'}, phone: true, appCache: '/data/user/0/app/cache'), '/data/user/0/app/cache');

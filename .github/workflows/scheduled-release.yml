@@ -34,7 +34,6 @@ concurrency:
   group: scheduled-release
 
 env:
-  FLUTTER_VERSION: "3.47.5"
   MURMUR_REQUIRE_NODE: "1"
 
 jobs:
@@ -69,11 +68,7 @@ jobs:
       tag: ${{ steps.release.outputs.tag }}
     steps:
     - uses: actions/checkout@v4
-    - uses: subosito/flutter-action@v2
-      with:
-        flutter-version: ${{ env.FLUTTER_VERSION }}
-        cache: true
-    - run: flutter pub get
+    - uses: ./.github/actions/flutter
     - run: flutter test tool/refresh_checkpoint.dart
     - id: changed
       run: |
