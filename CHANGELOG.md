@@ -2,8 +2,9 @@
 
 Newest first. Each release is a `vX.Y.Z` tag matching `version` in `pubspec.yaml`; see [README](README.md#releases-and-deployment). Entries marked **Breaking** need action from users.
 
-## Unreleased
+## v0.10.7: scheduled release, with what was waiting (2026-11-08)
 
+- **Changed: the testnet checkpoint** is now block 20,000, refreshed from the live network by the scheduled release.
 - **New: French and Korean.** The app speaks both, follows a French or Korean device by itself, and the Threads language filter recognises threads written in them.
 - **New: the app says when it's out of date.** A node on a newer protocol now gets "update the app" with a **Get the new version** button (the newest release's page, opened on the tap), not the bare protocol numbers; the app's own node says the same when its peers have moved on; and the Chain tab says a newer version is probably out once the app's release is over a month old. Nothing is asked of anyone to tell: it all comes from the chain and the node's own output.
 - **New: a Windows installer.** Each release adds `murmur-client-vX.Y.Z-windows-x64-setup.exe`: per user, no administrator rights, a Start menu entry, and a newer one updates in place, keeping settings and wallet. The zip stays. winget's manifests come with it, for publishing to winget.
