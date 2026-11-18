@@ -213,10 +213,18 @@ jobs:
   # of a core, left the suite's waits without a block (so ACCEPTANCE_SLOW,
   # six times the waits), and iOS once hung for hours. If Apple silicon
   # turns jobs away again, go back to both of those.
+  #
+  # TEMPORARY (2026-11-18): Apple silicon turned every Apple job away twice
+  # on 2026-11-18 ("not acquired by Runner of type hosted"), so the four
+  # Apple jobs (iOS, macOS, Safari, smoke-macos) run on macos-15-intel
+  # again, the acceptance suites in slow mode. Go back to macos-latest, and
+  # drop ACCEPTANCE_SLOW, once Apple silicon takes jobs again.
   acceptance-ios:
     name: 'acceptance: [ios]'
-    runs-on: macos-latest
+    runs-on: macos-15-intel
     timeout-minutes: 60
+    env:
+      ACCEPTANCE_SLOW: "1"
     steps:
     - uses: actions/checkout@v4
       with:
@@ -241,8 +249,10 @@ jobs:
   # hasn't: the suite hands a file over in its place.
   acceptance-macos:
     name: 'acceptance: [macos]'
-    runs-on: macos-latest
+    runs-on: macos-15-intel
     timeout-minutes: 60
+    env:
+      ACCEPTANCE_SLOW: "1"
     steps:
     - uses: actions/checkout@v4
       with:
@@ -263,7 +273,7 @@ jobs:
   # fails most runs (AGENTS.md, Known gaps 0).
   acceptance-safari:
     name: 'acceptance: [safari]'
-    runs-on: macos-latest
+    runs-on: macos-15-intel
     timeout-minutes: 60
     continue-on-error: true
     env:
@@ -351,7 +361,7 @@ jobs:
   # its button from outside needs Accessibility; check 3 is reported as not
   # tried, the key store's password dialog having nobody to answer it.
   smoke-macos:
-    runs-on: macos-latest
+    runs-on: macos-15-intel
     timeout-minutes: 45
     steps:
     - uses: actions/checkout@v4
