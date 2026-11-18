@@ -106,11 +106,16 @@ class TestNode {
       '--rpc-port', '0',
       '--no-dns-seed',
       if (webSocketPort != null) ...['--ws-port', '127.0.0.1:$webSocketPort'],
-      // At 1% of a core: the demo target starts easy, and a node mining
-      // flat out races ahead of its clock (its timestamps follow the median
-      // time past) until it waits out the future-timestamp limit, up to a
-      // minute (Section 8.2). Slowly, it stays within seconds of the clock.
-      if (mineTo != null) ...['--mine-to', toHex(mineTo), '--mine-cpu', '1'],
+      // At 20% of a core. Not flat out, to leave the machine to the app
+      // and its device (a simulator, an emulator). Not 1% either: the node
+      // up to v0.16.0 rests after each template's 500,000 nonces, 99 times
+      // as long as it hashed at 1%, so on a busy runner (iOS's, beside its
+      // simulator) it kept one template for minutes, and the chain went
+      // about 4 minutes without a block while a test waited for its thread.
+      // At 20% the rest is 4 times the work. Running ahead of the clock
+      // isn't a concern any more: since v0.10.5 the miner waits for its
+      // clock instead of stamping a block ahead of it (Section 8.3).
+      if (mineTo != null) ...['--mine-to', toHex(mineTo), '--mine-cpu', '20'],
       ...extra,
     ]);
     final started = await poll(() {
