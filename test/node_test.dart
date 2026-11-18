@@ -346,7 +346,31 @@ void main() {
       expect(activity.messages, {older.id: replied});
       expect(activity.people, {me: replied});
     }, timeout: const Timeout(Duration(minutes: 3)));
-  
+
+    test('empty blocks are made from their headers, never asked for; the rest still are', () async {
+      // The demo chain's blocks are empty: a long silence, with one thread
+      // mined on top of it.
+      final node = await short(mining: true);
+      final writer = await node.connect(MurmurClient());
+      final me = miner.addressHex;
+      await until(writer, () => writer.availableTo(me) != null);
+      final orphan = await writer.submit(
+          wallet: miner, kind: TxKind.orphan, fee: 2 * minFee, message: MurmurClient.encodeText('after the silence'));
+      await until(writer, what: 'thread mined', () => writer.lookupTx(orphan.id)?.confirmed ?? false);
+
+      // A new reader goes back over the whole chain, as a list reading back does.
+      final reader = await node.connect(MurmurClient());
+      await until(reader, what: 'the whole chain', () {
+        reader.requestOlder();
+        return !reader.canLoadOlder;
+      });
+      expect(reader.fetchedBlocks, reader.height, reason: 'every block is held, the empty ones made here');
+      expect(reader.lookupTx(orphan.id)?.confirmed, isTrue, reason: 'the block with the thread is fetched');
+      expect(reader.threads(upTo: reader.height).any((t) => t.root.tx.id == orphan.id), isTrue);
+      print('${reader.fetchedBlocks} blocks held, ${reader.blocksAsked} asked of the node');
+      expect(reader.blocksAsked, inInclusiveRange(1, 10), reason: 'only the blocks with transactions are asked for');
+    }, timeout: const Timeout(Duration(minutes: 3)));
+
     test('invitations: funded cards are claimed by a new wallet, or taken back', () async {
       final client = await (await short(mining: true)).connect(MurmurClient());
       final inviter = miner;

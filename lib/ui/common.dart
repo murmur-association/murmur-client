@@ -257,24 +257,33 @@ class Emphasized extends StatefulWidget {
 }
 
 class _EmphasizedState extends State<Emphasized> {
+  /// One per link, by index, kept across builds: a list row rebuilds many
+  /// times a second while the chain loads, and a recognizer disposed between
+  /// a press and its release drops the click (a name in a list couldn't be
+  /// clicked during a sync). Only what each opens is updated.
   final _recognizers = <TapGestureRecognizer>[];
 
-  void _clear() {
-    for (final r in _recognizers) {
-      r.dispose();
+  TapGestureRecognizer _recognizer(int index, String address) {
+    while (_recognizers.length <= index) {
+      _recognizers.add(TapGestureRecognizer());
     }
-    _recognizers.clear();
+    return _recognizers[index]..onTap = () => openAddress(context, address);
   }
 
   @override
   void dispose() {
-    _clear();
+    for (final r in _recognizers) {
+      r.dispose();
+    }
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    _clear();
+    // Links no longer in the text let their recognizers go.
+    while (_recognizers.length > widget.links.length) {
+      _recognizers.removeLast().dispose();
+    }
     final theme = Theme.of(context);
     final strong = TextStyle(fontWeight: widget.weight, color: theme.colorScheme.primary);
     final parts = widget.text.split('**');
@@ -290,9 +299,7 @@ class _EmphasizedState extends State<Emphasized> {
       final index = piece.codeUnitAt(0) - Emphasized._linkBase;
       if (index >= 0 && index < widget.links.length) {
         piece = piece.substring(1);
-        final address = widget.links[index];
-        final tap = TapGestureRecognizer()..onTap = () => openAddress(context, address);
-        _recognizers.add(tap);
+        final tap = _recognizer(index, widget.links[index]);
         spans.add(TextSpan(text: piece, style: strong, recognizer: tap, mouseCursor: SystemMouseCursors.click));
       } else {
         spans.add(TextSpan(text: piece, style: strong));

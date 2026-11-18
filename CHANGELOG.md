@@ -2,6 +2,11 @@
 
 Newest first. Each release is a `vX.Y.Z` tag matching `version` in `pubspec.yaml`; see [README](README.md#releases-and-deployment). Entries marked **Breaking** need action from users.
 
+## Unreleased
+
+- **Fixed: on a desktop, a name in a list can be clicked while the chain loads.** The rows redrew many times a second during a sync, and each redraw dropped a click in progress on the name, so only the picture beside it opened the person's page.
+- **Faster: older threads show sooner after a long quiet stretch on the chain.** A block's header already says when the block holds no transactions (its filter is the empty one), so the app no longer downloads empty blocks: it makes them from their headers and checks them against those headers exactly as it checks a downloaded block. Reading back over hours of empty blocks now takes a step or two instead of a request per 128 blocks.
+
 ## v0.10.17: checkpoint refresh (2026-11-18)
 
 No protocol or network change.

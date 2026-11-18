@@ -3,6 +3,7 @@
 
 import 'dart:typed_data';
 
+import 'package:flutter/gestures.dart' show PointerDeviceKind;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:murmur_client/crypto/wallet.dart' show WalletId;
@@ -119,6 +120,32 @@ void main() {
     final reply = replyTo(thread, 12, text: 'A reply');
     await _pump(tester, _History([thread, reply]), Preferences()..unreadFrom = 0);
     await tester.tapOnText(find.textRange.ofSubstring(shortHex(toHex(bob))).first);
+    await tester.pumpAndSettle();
+    expect(find.byType(AddressPage), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('on a desktop, a click on the name lands while the chain keeps loading',
+      variant: TargetPlatformVariant.desktop(), (tester) async {
+    final thread = txAt(TxKind.orphan, 10, from: alice, text: 'My thread');
+    final reply = replyTo(thread, 12, text: 'A reply');
+    final chain = _History([thread, reply]);
+    await _pump(tester, chain, Preferences()..unreadFrom = 0);
+    // Where the name is drawn: the middle of its first character.
+    final name = find.textRange.ofSubstring(shortHex(toHex(bob))).evaluate().first;
+    final box = name.renderObject.getBoxesForSelection(TextSelection(
+            baseOffset: name.textRange.start, extentOffset: name.textRange.start + 1))
+        .first
+        .toRect();
+    final at = name.renderObject.localToGlobal(box.center);
+    // Pressed, then the rows rebuild (a block arrives, as during a sync),
+    // then released: the click still opens the page.
+    final click = await tester.startGesture(at, kind: PointerDeviceKind.mouse);
+    chain.add([]);
+    await tester.pump();
+    chain.add([]);
+    await tester.pump();
+    await click.up();
     await tester.pumpAndSettle();
     expect(find.byType(AddressPage), findsOneWidget);
     await tester.pumpWidget(const SizedBox());

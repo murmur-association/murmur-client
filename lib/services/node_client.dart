@@ -713,6 +713,11 @@ class MurmurClient extends ChangeNotifier {
   /// Blocks fetched so far, of `height`.
   int get fetchedBlocks => _fetched;
 
+  /// Blocks asked of the node so far: fewer than [fetchedBlocks] when empty
+  /// ones were made from their headers ([_emptyByHeader]).
+  int get blocksAsked => _blocksAsked;
+  int _blocksAsked = 0;
+
   /// Whether older blocks are still missing below the newest stretch, so
   /// lists read newest first can grow.
   bool get canLoadOlder => _top > 1;
@@ -2499,8 +2504,10 @@ class MurmurClient extends ChangeNotifier {
   Future<List<BlockHeader>> _getHeaders(List<Uint8List> locator) =>
       _request(_headersWaiter = Completer(), GetHeaders(locator));
 
-  Future<List<BlockRecord>> _getBlocks(List<Uint8List> hashes) =>
-      _request(_blocksWaiter = Completer(), GetBlocks(hashes));
+  Future<List<BlockRecord>> _getBlocks(List<Uint8List> hashes) {
+    _blocksAsked += hashes.length;
+    return _request(_blocksWaiter = Completer(), GetBlocks(hashes));
+  }
 
   Future<List<MessageContent>> _getContent(List<Uint8List> hashes) =>
       _request(_contentWaiter = Completer(), GetContent(hashes));
@@ -2622,11 +2629,37 @@ class MurmurClient extends ChangeNotifier {
   }
 
   /// The next batch below the newest stretch, newest first (not below the
-  /// known headers).
-  List<int> _olderBatch() => [
-        for (var h = _top - 1; h >= _low && h > _top - 1 - maxBatchBlocks; h--)
-          if (_blocks[h - 1] == null) h,
-      ];
+  /// known headers): up to [maxBatchBlocks] blocks to ask the node for, and
+  /// the empty ones among them ([_emptyByHeader]), which cost no request, up
+  /// to [maxSkimBlocks] heights in all. So a long silence on the chain is
+  /// crossed in a step or two instead of a request per 128 empty blocks.
+  List<int> _olderBatch() {
+    final out = <int>[];
+    var asked = 0;
+    for (var h = _top - 1; h >= _low && h > _top - 1 - maxSkimBlocks && asked < maxBatchBlocks; h--) {
+      if (_blocks[h - 1] != null) continue;
+      out.add(h);
+      if (!_emptyByHeader(h)) asked++;
+    }
+    return out;
+  }
+
+  /// How far down one batch of [_olderBatch] may look past empty blocks.
+  static const maxSkimBlocks = 8192;
+
+  /// The hash of the filter of a block without transactions, `00 00 00 00`
+  /// (PROTOCOL.md Section 3.6).
+  static final _emptyFilterHash = sha256Bytes(Uint8List(4));
+
+  /// Whether the header at `h` commits to a block without transactions: its
+  /// filter is the empty one, and its merkle root that of no transactions.
+  /// Every transaction puts its sender in the filter, so such a block has
+  /// none. [_fetchBlocks] makes it here and checks it against the header as
+  /// it checks a block the node sends.
+  bool _emptyByHeader(int h) {
+    final filter = _headers.filterHashAt(h - 1);
+    return filter != null && bytesEqual(filter, _emptyFilterHash);
+  }
 
   /// Our tip back to genesis, dense near the tip then exponentially sparser,
   /// like `ChainState::locator`: the node answers from the first entry on
@@ -2936,10 +2969,24 @@ class MurmurClient extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Fetches the blocks at `heights` (≤ 128). A reply may stop early at the
-  /// node's 8 MiB cap; the rest is asked for again.
+  /// Fetches the blocks at `heights` (≤ 128 of them not empty). A reply may
+  /// stop early at the node's 8 MiB cap; the rest is asked for again.
+  ///
+  /// A block its header shows empty ([_emptyByHeader]) isn't asked for: it's
+  /// made here and goes through the same checks against its header (merkle
+  /// root and filter) as one the node sends, so a header that claims an
+  /// empty filter over transactions is refused all the same. It isn't saved
+  /// to the local copy, since making it again costs nothing.
   Future<void> _fetchBlocks(List<int> heights, int gen) async {
-    var rest = heights;
+    for (final h in heights) {
+      if (_blocks[h - 1] == null && _emptyByHeader(h)) {
+        _storeBlock(Block(_hdr(h), <Transaction>[]), const [], save: false);
+      }
+    }
+    var rest = [
+      for (final h in heights)
+        if (_blocks[h - 1] == null) h,
+    ];
     while (rest.isNotEmpty) {
       final records = await _getBlocks([for (final h in rest) hashAt(h)]);
       if (gen != _generation) throw _Aborted();
