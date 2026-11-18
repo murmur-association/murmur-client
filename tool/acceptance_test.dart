@@ -236,15 +236,20 @@ void main() {
     }}');
     if (chooser.isNotEmpty) settings.add('--dart-define=ACCEPTANCE_SYSTEM_CHOOSER=$chooser');
     await android?.placePicture(picture);
-    // What the runner did with each request, for a failure's report.
-    final chooserDone = <String>[];
-    Future<void> answerChooser(String line) async {
+    // What the runner did with each request, in the order the app asked:
+    // kept as each answer's future, not appended as each finishes, since an
+    // answer can finish after the app has already asked for the next (on
+    // Android a cancel's last check ran past the pick that followed it, and
+    // a run whose app passed failed on the order of the list).
+    final chooserDone = <Future<String>>[];
+    Future<String> answerChooser(String line) async {
       final cancel = line.contains(chooserCancelRequest);
       final done = android != null
           ? await (cancel ? android.cancelChooser() : android.pickPicture())
           : await (cancel ? desktopChooser!.cancel() : desktopChooser!.pick(picture));
-      chooserDone.add('${cancel ? 'cancel' : 'pick'}: $done');
-      print('the picture chooser: ${chooserDone.last}');
+      final result = '${cancel ? 'cancel' : 'pick'}: $done';
+      print('the picture chooser: $result');
+      return result;
     }
     final args = !browser
         ? ['test', _suite, '-d', _device, ...settings]
@@ -285,7 +290,7 @@ void main() {
     output.capture(() => eachLine(flutter, (line) {
           output.add(line);
           if (chooser == 'host' && (line.contains(chooserPickRequest) || line.contains(chooserCancelRequest))) {
-            unawaited(answerChooser(line));
+            chooserDone.add(answerChooser(line));
           }
           if (android == null) return;
           final click = line.indexOf(androidClickRequest);
@@ -309,7 +314,7 @@ void main() {
     // two), each done in the system's own chooser.
     if (chooser == 'host') {
       expect(
-          chooserDone,
+          await Future.wait(chooserDone),
           [
             for (final _ in android != null ? [1, 2] : [1]) 'cancel: true',
             for (final _ in android != null ? [1, 2] : [1]) 'pick: true',
