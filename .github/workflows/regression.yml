@@ -211,11 +211,17 @@ jobs:
   # row ("capacity constraints"), and the jobs ran on Intel Macs
   # (macos-15-intel) for a day: slow enough that the test node, mining at 1%
   # of a core, left the suite's waits without a block (so ACCEPTANCE_SLOW,
-  # six times the waits), and iOS once hung for hours. If Apple silicon
-  # turns jobs away again, go back to both of those.
+  # six times the waits), and iOS once hung for hours. On 2026-11-18 Intel
+  # turned every Apple job away too, so that is no sure way out.
+  #
+  # The Apple jobs name an image (macos-15, Apple silicon), not
+  # macos-latest: that now points at the newest image (macos-26), whose
+  # runners other projects found the slowest to start, and GitHub assigns
+  # Macs by image, so a named one is often free when another isn't. Raise
+  # it by hand when an image is retired.
   acceptance-ios:
     name: 'acceptance: [ios]'
-    runs-on: macos-latest
+    runs-on: macos-15
     timeout-minutes: 60
     steps:
     - uses: actions/checkout@v4
@@ -241,7 +247,7 @@ jobs:
   # hasn't: the suite hands a file over in its place.
   acceptance-macos:
     name: 'acceptance: [macos]'
-    runs-on: macos-latest
+    runs-on: macos-15
     timeout-minutes: 60
     steps:
     - uses: actions/checkout@v4
@@ -263,7 +269,7 @@ jobs:
   # fails most runs (AGENTS.md, Known gaps 0).
   acceptance-safari:
     name: 'acceptance: [safari]'
-    runs-on: macos-latest
+    runs-on: macos-15
     timeout-minutes: 60
     continue-on-error: true
     env:
@@ -351,7 +357,7 @@ jobs:
   # its button from outside needs Accessibility; check 3 is reported as not
   # tried, the key store's password dialog having nobody to answer it.
   smoke-macos:
-    runs-on: macos-latest
+    runs-on: macos-15
     timeout-minutes: 45
     steps:
     - uses: actions/checkout@v4
