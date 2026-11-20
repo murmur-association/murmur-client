@@ -90,7 +90,7 @@ class FakeChain extends MurmurClient {
   }
 
   @override
-  Future<void> connect(String host, int port) async {}
+  Future<void> connectTo(List<NodeAddress> nodes) async {}
 
   @override
   TxView? lookupTx(String txid) => _all[txid];

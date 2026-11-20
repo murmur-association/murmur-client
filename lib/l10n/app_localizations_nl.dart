@@ -293,11 +293,6 @@ class AppLocalizationsNl extends AppLocalizations {
   String get connectToNode => 'Verbinden met een node';
 
   @override
-  String nodeAt(String address) {
-    return 'Node $address';
-  }
-
-  @override
   String get language => 'Taal';
 
   @override
@@ -310,27 +305,7 @@ class AppLocalizationsNl extends AppLocalizations {
   String get darkMode => 'Donkere modus';
 
   @override
-  String get node => 'Node';
-
-  @override
-  String get connectHelpBridge =>
-      'In de browser verbindt de client via WebSocket: met het WebSocket-adres van een node (zoals node.murmur.info, poort 443, via TLS) of met een lokale bridge (dart run tool/ws_bridge.dart, poort 7880).';
-
-  @override
-  String get connectHelpNative =>
-      'Het peer-to-peer-adres van een murmur-node (zijn --port, standaard 7878). De beheerpoort (7879) werkt niet. Poort 443 bereikt een node achter een beveiligde WebSocket, zoals node.murmur.info.';
-
-  @override
-  String get host => 'Host';
-
-  @override
-  String get port => 'Poort';
-
-  @override
   String get required => 'Verplicht';
-
-  @override
-  String get enterPort => 'Geef een poortnummer op';
 
   @override
   String get disconnect => 'Verbreken';
@@ -2125,4 +2100,57 @@ class AppLocalizationsNl extends AppLocalizations {
   @override
   String get keyringUnavailable =>
       'De sleutelbos van het systeem is vergrendeld en kan niet om zijn wachtwoord vragen, dus de wallet kan niet op dit apparaat worden opgeslagen. Ontgrendel de sleutelbos (inloggen op het bureaublad doet dat meestal) en start Murmur opnieuw.';
+
+  @override
+  String get nodes => 'Nodes';
+
+  @override
+  String get nodesPointPool =>
+      '**Tot drie** van deze nodes worden tegelijk gebruikt, van boven in de lijst.';
+
+  @override
+  String get nodesPointNext =>
+      'Als er een uitvalt, of de tekst van een bericht niet heeft, wordt **de volgende** gevraagd.';
+
+  @override
+  String get nodesPointEntryNative =>
+      'Een item is het peer-to-peer-adres van een node, **host:poort** (standaard 7878), of **wss://host** voor een node achter een beveiligde WebSocket.';
+
+  @override
+  String get nodesPointEntryBridge =>
+      'In een browser is een item **wss://host**, een node achter een beveiligde WebSocket, of een lokale brug zoals **127.0.0.1:7880**.';
+
+  @override
+  String get addNode => 'Node toevoegen';
+
+  @override
+  String get nodeEntryHint => 'host:poort of wss://host';
+
+  @override
+  String get nodeEntryInvalid =>
+      'Geen node-adres: gebruik host:poort of wss://host';
+
+  @override
+  String get nodeEntryKnown => 'Staat al in de lijst';
+
+  @override
+  String get defaultNodes => 'Standaardnodes gebruiken';
+
+  @override
+  String get moveNodeUp => 'Omhoog';
+
+  @override
+  String get removeNode => 'Verwijderen';
+
+  @override
+  String connectedNodes(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Verbonden met $count nodes',
+      one: 'Verbonden met 1 node',
+      zero: 'Niet verbonden',
+    );
+    return '$_temp0';
+  }
 }

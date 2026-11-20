@@ -18,39 +18,92 @@ import 'local_node.dart' show defaultLocalNodeCpu;
 import 'news.dart' show NotifyTopic;
 import 'key_vault.dart';
 import 'keyring.dart';
+import 'node_address.dart';
 import 'transport.dart';
 
+/// The nodes the client uses, in order (`MurmurClient.connectTo` keeps up
+/// to three connected, from the top), and the nodes it reached before.
 class NodeSettings {
-  /// The node a fresh install connects to. A local node by default; a
-  /// release for a public network sets its own at build time:
-  /// `--dart-define=MURMUR_NODE_HOST=<host> --dart-define=MURMUR_NODE_PORT=<port>`.
-  static const defaultHost = String.fromEnvironment('MURMUR_NODE_HOST', defaultValue: '127.0.0.1');
+  /// The nodes a fresh install uses, set at build time for a public network:
+  /// `--dart-define=MURMUR_NODES=<host:port>,<host:port>,...`. Builds that
+  /// set only `MURMUR_NODE_HOST` and `MURMUR_NODE_PORT` get that one node;
+  /// with neither, a node on this machine (on the web, the local bridge).
+  static const _definedNodes = String.fromEnvironment('MURMUR_NODES');
+  static const _definedHost = String.fromEnvironment('MURMUR_NODE_HOST', defaultValue: '127.0.0.1');
+  static const _definedPort = int.fromEnvironment('MURMUR_NODE_PORT', defaultValue: viaBridge ? 7880 : 7878);
 
-  /// The node's P2P port natively; on the web, the WebSocket bridge's port
-  /// (or a node's own `--ws-port`, or 443 behind a TLS proxy).
-  static const defaultPort = int.fromEnvironment('MURMUR_NODE_PORT', defaultValue: viaBridge ? 7880 : 7878);
+  static final List<NodeAddress> defaults = defaultsFrom(_definedNodes, _definedHost, _definedPort);
 
-  /// The node to use: `?node=host:port` in the page address (web), else the
-  /// one saved, else the default.
-  static Future<(String, int)> load() async {
-    final fromPage = Uri.base.queryParameters['node'];
-    if (fromPage != null) {
-      final colon = fromPage.lastIndexOf(':');
-      final port = colon < 0 ? null : int.tryParse(fromPage.substring(colon + 1));
-      if (port != null && port > 0 && port < 65536) return (fromPage.substring(0, colon), port);
+  @visibleForTesting
+  static List<NodeAddress> defaultsFrom(String nodes, String host, int port) {
+    final list = NodeAddress.parseList(nodes);
+    return list.isNotEmpty ? list : [NodeAddress(host, port)];
+  }
+
+  /// At most this many reached nodes are remembered.
+  static const maxRemembered = 8;
+
+  /// The nodes to use: `?node=<entry>` in the page address (web) alone, else
+  /// the saved list (or the defaults), then the nodes reached before, which
+  /// help when the list's names can't be looked up.
+  static Future<List<NodeAddress>> load() async {
+    final fromPage = NodeAddress.parse(Uri.base.queryParameters['node'] ?? '');
+    if (fromPage != null) return [fromPage];
+    final prefs = await SharedPreferences.getInstance();
+    final list = listFrom(prefs);
+    final remembered = [
+      for (final s in prefs.getStringList(_rememberedKey) ?? const <String>[])
+        if (NodeAddress.parse(s) case final a? when !list.contains(a)) a,
+    ];
+    return [...list, ...remembered];
+  }
+
+  /// The user's list: saved, or a node an earlier version saved first, then
+  /// the defaults; or just the defaults.
+  @visibleForTesting
+  static List<NodeAddress> listFrom(SharedPreferences prefs) {
+    final saved = NodeAddress.parseList((prefs.getStringList(_listKey) ?? const []).join('\n'));
+    if (saved.isNotEmpty) return saved;
+    final host = prefs.getString('node_host'), port = prefs.getInt('node_port');
+    final old = host == null || port == null ? null : NodeAddress.parse(NodeAddress(host, port).toString());
+    return [if (old != null) old, ...defaults.where((d) => d != old)];
+  }
+
+  /// The user's list, as saved (without the remembered nodes).
+  static Future<List<NodeAddress>> loadList() async => listFrom(await SharedPreferences.getInstance());
+
+  /// Saves the user's list. Saving the defaults saves nothing, so a later
+  /// release's defaults reach this install.
+  static Future<void> save(List<NodeAddress> nodes) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('node_host');
+    await prefs.remove('node_port');
+    if (listEquals(nodes, defaults)) {
+      await prefs.remove(_listKey);
+    } else {
+      await prefs.setStringList(_listKey, [for (final n in nodes) '$n']);
     }
-    final prefs = await SharedPreferences.getInstance();
-    return (
-      prefs.getString('node_host') ?? defaultHost,
-      prefs.getInt('node_port') ?? defaultPort,
-    );
   }
 
-  static Future<void> save(String host, int port) async {
+  /// Remembers nodes the client reached (`MurmurClient.peers`), newest
+  /// first, by address and port: natively the address it dialled, which
+  /// still works when a name can't be looked up. Nothing in a browser,
+  /// which never sees an address, nor for port 443, whose TLS needs a name.
+  static Future<void> remember(Iterable<String> peers) async {
+    if (viaBridge) return;
+    final reached = [
+      for (final p in peers)
+        if (NodeAddress.parse(p) case final a? when a.port != 443) '$a',
+    ];
+    if (reached.isEmpty) return;
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('node_host', host);
-    await prefs.setInt('node_port', port);
+    final before = prefs.getStringList(_rememberedKey) ?? const <String>[];
+    final now = {...reached, ...before}.take(maxRemembered).toList();
+    if (!listEquals(now, before)) await prefs.setStringList(_rememberedKey, now);
   }
+
+  static const _listKey = 'node_list';
+  static const _rememberedKey = 'node_reached';
 }
 
 /// Whether the downloaded chain may be kept on this device (ChainCache).

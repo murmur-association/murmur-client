@@ -124,7 +124,7 @@ jobs:
         key: fallback-fonts
     - run: >-
         flutter build web --release --no-web-resources-cdn --base-href /
-        --dart-define=MURMUR_NODE_HOST=node.murmur.info --dart-define=MURMUR_NODE_PORT=443
+        --dart-define=MURMUR_NODES=node-eu.murmur.info:443,node-us.murmur.info:443,node-sg.murmur.info:443,node.murmur.info:443
     - run: dart run tool/fetch_fallback_fonts.dart --cache .font-cache
     - run: test -f build/web/_headers
     - uses: actions/upload-artifact@v4
@@ -156,7 +156,7 @@ jobs:
         atl: true
     - run: >-
         flutter build windows --release
-        --dart-define=MURMUR_NODE_HOST=testnet-seed.murmur.info --dart-define=MURMUR_NODE_PORT=7878
+        --dart-define=MURMUR_NODES=testnet-seed.murmur.info:7878,node.murmur.info:443
     - run: dart run tool/bundle_node.dart
     - run: dart run tool/package_desktop.dart --tag $env:TAG
     # The installer, from the same staged folder as the zip: per user, with a
@@ -194,7 +194,7 @@ jobs:
     # unsigned package only from the Store.
     - run: >-
         flutter build windows --release --dart-define=MURMUR_STORE=true
-        --dart-define=MURMUR_NODE_HOST=testnet-seed.murmur.info --dart-define=MURMUR_NODE_PORT=7878
+        --dart-define=MURMUR_NODES=testnet-seed.murmur.info:7878,node.murmur.info:443
     - run: dart run tool/bundle_node.dart
     - run: dart run tool/package_desktop.dart --tag $env:TAG --store
     - env:
@@ -228,7 +228,7 @@ jobs:
         linux: build
     - run: >-
         flutter build linux --release
-        --dart-define=MURMUR_NODE_HOST=testnet-seed.murmur.info --dart-define=MURMUR_NODE_PORT=7878
+        --dart-define=MURMUR_NODES=testnet-seed.murmur.info:7878,node.murmur.info:443
     - run: dart run tool/bundle_node.dart
     - run: dart run tool/package_desktop.dart --tag "$TAG"
     - uses: actions/upload-artifact@v4

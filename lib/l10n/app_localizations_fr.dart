@@ -292,11 +292,6 @@ class AppLocalizationsFr extends AppLocalizations {
   String get connectToNode => 'Se connecter à un nœud';
 
   @override
-  String nodeAt(String address) {
-    return 'Nœud $address';
-  }
-
-  @override
   String get language => 'Langue';
 
   @override
@@ -309,27 +304,7 @@ class AppLocalizationsFr extends AppLocalizations {
   String get darkMode => 'Mode sombre';
 
   @override
-  String get node => 'Nœud';
-
-  @override
-  String get connectHelpBridge =>
-      'Dans le navigateur, le client se connecte par WebSocket : à l\'adresse WebSocket d\'un nœud (comme node.murmur.info, port 443, via TLS), ou à un pont local (dart run tool/ws_bridge.dart, port 7880).';
-
-  @override
-  String get connectHelpNative =>
-      'L\'adresse pair-à-pair d\'un murmur-node (son --port, 7878 par défaut). Le port de contrôle (7879) ne fonctionnera pas. Le port 443 atteint un nœud derrière un WebSocket sécurisé, comme node.murmur.info.';
-
-  @override
-  String get host => 'Hôte';
-
-  @override
-  String get port => 'Port';
-
-  @override
   String get required => 'Obligatoire';
-
-  @override
-  String get enterPort => 'Saisissez un numéro de port';
 
   @override
   String get disconnect => 'Se déconnecter';
@@ -2134,4 +2109,57 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get keyringUnavailable =>
       'Le trousseau du système est verrouillé et ne peut pas demander son mot de passe : le portefeuille ne peut donc pas être enregistré sur cet appareil. Déverrouillez le trousseau (se connecter au bureau le fait en général) et relancez Murmur.';
+
+  @override
+  String get nodes => 'Nœuds';
+
+  @override
+  String get nodesPointPool =>
+      'On utilise **jusqu’à trois** de ces nœuds à la fois, depuis le haut de la liste.';
+
+  @override
+  String get nodesPointNext =>
+      'Quand l’un échoue, ou n’a pas le texte d’un message, on demande **au suivant**.';
+
+  @override
+  String get nodesPointEntryNative =>
+      'Une entrée est l’adresse pair-à-pair d’un nœud, **hôte:port** (7878 par défaut), ou **wss://hôte** pour un nœud derrière un WebSocket sécurisé.';
+
+  @override
+  String get nodesPointEntryBridge =>
+      'Dans un navigateur, une entrée est **wss://hôte**, un nœud derrière un WebSocket sécurisé, ou un pont local comme **127.0.0.1:7880**.';
+
+  @override
+  String get addNode => 'Ajouter un nœud';
+
+  @override
+  String get nodeEntryHint => 'hôte:port ou wss://hôte';
+
+  @override
+  String get nodeEntryInvalid =>
+      'Ce n’est pas l’adresse d’un nœud : utilisez hôte:port ou wss://hôte';
+
+  @override
+  String get nodeEntryKnown => 'Déjà dans la liste';
+
+  @override
+  String get defaultNodes => 'Utiliser les nœuds par défaut';
+
+  @override
+  String get moveNodeUp => 'Monter';
+
+  @override
+  String get removeNode => 'Retirer';
+
+  @override
+  String connectedNodes(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Connecté à $count nœuds',
+      one: 'Connecté à $count nœud',
+      zero: 'Non connecté',
+    );
+    return '$_temp0';
+  }
 }

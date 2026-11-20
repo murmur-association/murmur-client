@@ -291,11 +291,6 @@ class AppLocalizationsPt extends AppLocalizations {
   String get connectToNode => 'Conectar a um nó';
 
   @override
-  String nodeAt(String address) {
-    return 'Nó $address';
-  }
-
-  @override
   String get language => 'Idioma';
 
   @override
@@ -308,27 +303,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get darkMode => 'Modo escuro';
 
   @override
-  String get node => 'Nó';
-
-  @override
-  String get connectHelpBridge =>
-      'No navegador, o cliente liga-se por WebSocket: ao endereço WebSocket de um nó (como node.murmur.info, porta 443, com TLS) ou a uma ponte local (dart run tool/ws_bridge.dart, porta 7880).';
-
-  @override
-  String get connectHelpNative =>
-      'O endereço peer-to-peer de um murmur-node (a sua --port, 7878 por omissão). A porta de controlo (7879) não funciona. A porta 443 chega a um nó atrás de um WebSocket seguro, como node.murmur.info.';
-
-  @override
-  String get host => 'Host';
-
-  @override
-  String get port => 'Porta';
-
-  @override
   String get required => 'Obrigatório';
-
-  @override
-  String get enterPort => 'Indique um número de porta';
 
   @override
   String get disconnect => 'Desconectar';
@@ -2122,4 +2097,57 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String get keyringUnavailable =>
       'O porta-chaves do sistema está bloqueado e não pode pedir a palavra-passe, por isso a carteira não pode ser guardada neste dispositivo. Desbloqueie o porta-chaves (normalmente acontece ao iniciar sessão no ambiente de trabalho) e abra o Murmur de novo.';
+
+  @override
+  String get nodes => 'Nós';
+
+  @override
+  String get nodesPointPool =>
+      'São usados **até três** destes nós de cada vez, a partir do topo da lista.';
+
+  @override
+  String get nodesPointNext =>
+      'Quando um falha, ou não tem o texto de uma mensagem, pergunta-se **ao seguinte**.';
+
+  @override
+  String get nodesPointEntryNative =>
+      'Uma entrada é o endereço peer-to-peer de um nó, **anfitrião:porta** (7878 por omissão), ou **wss://anfitrião** para um nó atrás de um WebSocket seguro.';
+
+  @override
+  String get nodesPointEntryBridge =>
+      'Num navegador, uma entrada é **wss://anfitrião**, um nó atrás de um WebSocket seguro, ou uma ponte local como **127.0.0.1:7880**.';
+
+  @override
+  String get addNode => 'Adicionar um nó';
+
+  @override
+  String get nodeEntryHint => 'anfitrião:porta ou wss://anfitrião';
+
+  @override
+  String get nodeEntryInvalid =>
+      'Não é o endereço de um nó: use anfitrião:porta ou wss://anfitrião';
+
+  @override
+  String get nodeEntryKnown => 'Já está na lista';
+
+  @override
+  String get defaultNodes => 'Usar os nós predefinidos';
+
+  @override
+  String get moveNodeUp => 'Subir';
+
+  @override
+  String get removeNode => 'Remover';
+
+  @override
+  String connectedNodes(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Ligado a $count nós',
+      one: 'Ligado a 1 nó',
+      zero: 'Sem ligação',
+    );
+    return '$_temp0';
+  }
 }

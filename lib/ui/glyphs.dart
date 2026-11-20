@@ -234,6 +234,18 @@ enum Glyph {
     _Line([50, 18, 50, 82]),
     _Line([18, 50, 82, 50]),
   ]),
+
+  /// Remove: the add glyph's cross, turned.
+  remove([
+    _Line([27, 27, 73, 73]),
+    _Line([73, 27, 27, 73]),
+  ]),
+
+  /// Move up a list: a chevron pointing up, onto a node.
+  moveUp([
+    _Line([18, 62, 50, 30, 82, 62]),
+    _Dot(50, 82),
+  ]),
   import([
     _Line([50, 14, 50, 64]),
     _Line([30, 44, 50, 64, 70, 44]),

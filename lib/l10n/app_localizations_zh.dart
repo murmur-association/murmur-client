@@ -279,11 +279,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get connectToNode => '连接到节点';
 
   @override
-  String nodeAt(String address) {
-    return '节点 $address';
-  }
-
-  @override
   String get language => '语言';
 
   @override
@@ -296,27 +291,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get darkMode => '深色模式';
 
   @override
-  String get node => '节点';
-
-  @override
-  String get connectHelpBridge =>
-      '在浏览器中，客户端通过 WebSocket 连接：连接到节点的 WebSocket 地址（例如 node.murmur.info，端口 443，经 TLS），或连接到本地网桥（dart run tool/ws_bridge.dart，端口 7880）。';
-
-  @override
-  String get connectHelpNative =>
-      'murmur-node 的点对点地址（其 --port，默认 7878）。控制端口（7879）无法使用。端口 443 连接位于安全 WebSocket 之后的节点，例如 node.murmur.info。';
-
-  @override
-  String get host => '主机';
-
-  @override
-  String get port => '端口';
-
-  @override
   String get required => '必填';
-
-  @override
-  String get enterPort => '请输入端口号';
 
   @override
   String get disconnect => '断开连接';
@@ -2020,4 +1995,53 @@ class AppLocalizationsZh extends AppLocalizations {
   @override
   String get keyringUnavailable =>
       '系统密钥环已锁定且无法询问密码，因此无法在此设备上保存钱包。请解锁密钥环（通常登录桌面时会解锁），然后重新启动 Murmur。';
+
+  @override
+  String get nodes => '节点';
+
+  @override
+  String get nodesPointPool => '从列表顶部开始，同时使用其中**最多三个**节点。';
+
+  @override
+  String get nodesPointNext => '当一个节点失败，或没有某条消息的正文时，会询问**下一个**节点。';
+
+  @override
+  String get nodesPointEntryNative =>
+      '条目是节点的点对点地址 **host:port**（默认 7878），或安全 WebSocket 后面的节点 **wss://host**。';
+
+  @override
+  String get nodesPointEntryBridge =>
+      '在浏览器中，条目是安全 WebSocket 后面的节点 **wss://host**，或本地桥接，如 **127.0.0.1:7880**。';
+
+  @override
+  String get addNode => '添加节点';
+
+  @override
+  String get nodeEntryHint => 'host:port 或 wss://host';
+
+  @override
+  String get nodeEntryInvalid => '不是节点地址：请使用 host:port 或 wss://host';
+
+  @override
+  String get nodeEntryKnown => '已在列表中';
+
+  @override
+  String get defaultNodes => '使用默认节点';
+
+  @override
+  String get moveNodeUp => '上移';
+
+  @override
+  String get removeNode => '移除';
+
+  @override
+  String connectedNodes(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '已连接 $count 个节点',
+      zero: '未连接',
+    );
+    return '$_temp0';
+  }
 }

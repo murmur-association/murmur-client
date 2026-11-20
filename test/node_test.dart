@@ -232,6 +232,38 @@ void main() {
     return node;
   }
 
+  /// A client keeping every one of `nodes` connected (PROTOCOL.md Section
+  /// 7.7), live. Disposed when the test ends.
+  Future<MurmurClient> pooled(List<TestNode> nodes) async {
+    final c = MurmurClient();
+    addTearDown(c.dispose);
+    await c.connectTo([for (final n in nodes) NodeAddress('127.0.0.1', n.port)]);
+    await until(c, what: 'every node connected', () => c.state == LinkState.live && c.peers.length == nodes.length);
+    return c;
+  }
+
+  group('the node pool (PROTOCOL.md Section 7.7)', () {
+    test('a node stopped leaves the client live on the other, and joins again once back', () async {
+      final a = await short(mining: true);
+      await a.stop();
+      final b = await a.copy();
+      await a.start(mineTo: miner.address);
+      await b.start(extra: ['--peer', '127.0.0.1:${a.port}']);
+      final c = await pooled([a, b]);
+      await a.stop();
+      await until(c, what: 'one node left', () => c.peers.length == 1);
+      expect(c.state, LinkState.live);
+      expect(c.retryAt, isNull, reason: 'nothing to reconnect: a node is still there');
+      // Requests go on, to the node left.
+      await until(c, what: 'a balance proven by the node left', () => c.account(miner.addressHex) != null);
+      await a.start(mineTo: miner.address);
+      await until(c, what: 'the node back in the pool', timeout: const Duration(seconds: 40), () => c.peers.length == 2);
+      // And the chain it mines reaches the client again.
+      final h = c.height;
+      await until(c, what: 'a new block', () => c.height > h);
+    }, timeout: const Timeout(Duration(minutes: 3)));
+  }, skip: nodeSkip);
+
   group('state and sending', () {
     test('proves state, finds an address through filters, without the chain', () async {
       await checkProvenState((c) async => (await short()).connect(c));
@@ -479,8 +511,11 @@ void main() {
   group('authors keep their messages available (PROTOCOL.md Section 7.3, rules 6 and 7)', () {
     /// A node that mined a thread of the miner's, sent by an author client
     /// keeping its messages in `kept`, and then lost its content: stopped,
-    /// the content's file deleted, started again with `extra`.
-    Future<(TestNode, Transaction, String)> lostThread(MemoryOwnMessages kept, {List<String> extra = const []}) async {
+    /// the content's file deleted, started again with `extra`. With `copy`,
+    /// also a second node (not started) copied from it just before, which
+    /// still has the content.
+    Future<(TestNode, Transaction, String, TestNode?)> lostThread(MemoryOwnMessages kept,
+        {List<String> extra = const [], bool copy = false}) async {
       final node = await short(mining: true);
       final author = await node.connect(MurmurClient());
       await author.useOwnMessages(kept);
@@ -502,9 +537,10 @@ void main() {
       }
       await node.stop();
       expect(file.existsSync(), isTrue, reason: 'the node stored the content');
+      final other = copy ? await node.copy() : null;
       file.deleteSync();
       await node.start(mineTo: miner.address, extra: extra);
-      return (node, thread, text);
+      return (node, thread, text, other);
     }
 
     /// A reader that asks the node for `thread`, and what it got, if anything.
@@ -522,7 +558,7 @@ void main() {
 
     test('a node that lost a message is given it back, and serves it again', () async {
       final kept = MemoryOwnMessages();
-      final (node, thread, text) = await lostThread(kept);
+      final (node, thread, text, _) = await lostThread(kept);
       expect(await read(node, thread, wait: const Duration(seconds: 5)), isNull, reason: 'lost, and nobody serving it');
       // The author's next session: what it kept, given back once synced.
       final author = MurmurClient();
@@ -537,7 +573,7 @@ void main() {
       final kept = MemoryOwnMessages();
       // A node that keeps no old content refuses Restore, and passes on what
       // authors give: only Serving can bring the message back.
-      final (node, thread, text) = await lostThread(kept, extra: ['--prune-content', '--serve-from-authors']);
+      final (node, thread, text, _) = await lostThread(kept, extra: ['--prune-content', '--serve-from-authors']);
       final author = MurmurClient();
       await author.useOwnMessages(kept);
       author.setOwner(miner.addressHex, serve: false);
@@ -567,6 +603,18 @@ void main() {
       final flag = await author.submit(wallet: miner, kind: TxKind.flag, fee: minFee, reference: thread.id);
       await until(author, what: 'the flag mined', () => author.lookupTx(flag.id)?.confirmed ?? false);
       await until(author, what: 'let go', () => kept.kept.isEmpty);
+    }, timeout: const Timeout(Duration(minutes: 3)));
+
+    test('text one node lost is read from another node of the pool', () async {
+      final (node, thread, text, other) = await lostThread(MemoryOwnMessages(), copy: true);
+      // Not peered: the copy keeps what it had, and stays behind the node
+      // that mines, which is asked first, and lacks the text.
+      await other!.start();
+      final reader = await pooled([node, other]);
+      reader.requestTx(thread.id);
+      await until(reader, what: 'the thread', () => reader.lookupTx(thread.id) != null);
+      await until(reader, what: 'its text, from the copy', () => reader.liveContent(reader.lookupTx(thread.id)!) != null);
+      expect(String.fromCharCodes(messageOf(reader.liveContent(reader.lookupTx(thread.id)!)!)), text);
     }, timeout: const Timeout(Duration(minutes: 3)));
   }, skip: nodeSkip);
 

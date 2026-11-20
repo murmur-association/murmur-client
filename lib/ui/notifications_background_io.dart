@@ -110,8 +110,8 @@ Future<int> checkNewsInBackground({Duration limit = const Duration(minutes: 2), 
   final news = NewsNotifications(client: client, prefs: prefs, notifier: to, me: () => me);
   client.addListener(news.follow);
   news.follow();
-  final (host, port) = await NodeSettings.load();
-  unawaited(client.connect(host, port));
+  final nodes = await NodeSettings.load();
+  unawaited(client.connectTo(nodes));
   try {
     // Settled for a few seconds in a row: what follows a step (the lists'
     // entries' blocks and texts) has been asked for too.

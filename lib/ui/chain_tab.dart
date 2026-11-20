@@ -157,7 +157,7 @@ class _ChainSummary extends StatelessWidget {
             if (net != null) stat(l.statNextReward, reward == null ? '…' : l.rewardPlusFees(formatAmount(context, reward))),
             stat(l.statBurnPool, n(client.provenPool)),
             stat(l.statCirculating, n(client.circulating)),
-            stat(l.node, client.host == null ? '—' : '${client.host}:${client.port}'),
+            stat(l.nodes, client.peers.isEmpty ? '—' : client.peers.join(', ')),
           ]),
           if (client.state == LinkState.syncing && client.peerHeight > 0)
             Padding(

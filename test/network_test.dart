@@ -9,6 +9,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:murmur_client/protocol/network.dart';
 import 'package:murmur_client/protocol/wire.dart';
 import 'package:murmur_client/services/node_client.dart';
+import 'package:murmur_client/services/storage.dart' show NodeSettings;
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:murmur_client/services/transport.dart';
 import 'package:murmur_client/services/transport_io.dart';
 import 'package:murmur_client/services/transport_web.dart' show webSocketUrl, isLoopback;
@@ -113,6 +115,162 @@ void main() {
     // A user's disconnect stops the retries.
     client.disconnect();
     expect(client.retryAt, isNull);
+  });
+
+  group('the node pool (PROTOCOL.md Section 7.7)', () {
+    /// Fake nodes on 127.0.0.1 to 127.0.0.n, all on one port; `seed.test`
+    /// stands for all of them.
+    Future<List<FakeNode>> fakes(int n, {int? sameNonce}) async {
+      final first = await FakeNode.bind(InternetAddress.loopbackIPv4, 0, nonce: sameNonce);
+      final all = [
+        first,
+        for (var i = 2; i <= n; i++) await FakeNode.bind(InternetAddress('127.0.0.$i'), first.port, nonce: sameNonce),
+      ];
+      for (final f in all) {
+        addTearDown(f.close);
+        addTearDown(f.kick);
+      }
+      resolveOverride = (_) async => [for (var i = 1; i <= n; i++) InternetAddress('127.0.0.$i')];
+      return all;
+    }
+
+    MurmurClient client() {
+      final c = MurmurClient();
+      addTearDown(c.dispose);
+      return c;
+    }
+
+    test('keeps three of a name\'s nodes connected, no more', () async {
+      final nodes = await fakes(4);
+      final c = client();
+      await c.connectTo([NodeAddress('seed.test', nodes.first.port)]);
+      await _until(() => c.peers.length == MurmurClient.poolSize);
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+      expect(c.peers, hasLength(MurmurClient.poolSize));
+      expect(c.connectedByEntry, {NodeAddress('seed.test', nodes.first.port): MurmurClient.poolSize});
+    });
+
+    test('the same node under two names is connected once (its Hello nonce)', () async {
+      final nodes = await fakes(2, sameNonce: 7);
+      final c = client();
+      await c.connectTo([NodeAddress('127.0.0.1', nodes.first.port), NodeAddress('127.0.0.2', nodes.first.port)]);
+      await _until(() => c.state == LinkState.live);
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+      expect(c.peers, hasLength(1));
+    });
+
+    test('an entry that answers nothing is passed over for the next', () async {
+      final probe = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
+      final dead = probe.port;
+      await probe.close();
+      final good = await FakeNode.bind(InternetAddress.loopbackIPv4, 0);
+      addTearDown(good.close);
+      final c = client();
+      await c.connectTo([NodeAddress('127.0.0.1', dead), NodeAddress('127.0.0.1', good.port)]);
+      await _until(() => c.state == LinkState.live);
+      expect(c.peers, ['127.0.0.1:${good.port}']);
+      expect(c.error, isNull);
+    });
+
+    test('a node lost leaves the others: the client stays live, and fills the pool again', () async {
+      final nodes = await fakes(2);
+      final c = client();
+      await c.connectTo([NodeAddress('seed.test', nodes.first.port)]);
+      await _until(() => c.peers.length == 2 && c.state == LinkState.live);
+      nodes.last.kick();
+      await _until(() => c.peers.length == 1);
+      expect(c.state, LinkState.live);
+      expect(c.error, isNull);
+      expect(c.retryAt, isNull, reason: 'nothing to reconnect: one node is still there');
+      // The pool tries again after 5 s, and the node takes new connections.
+      await _until(() => c.peers.length == 2, timeout: const Duration(seconds: 15));
+    });
+
+    test('losing every node is the link lost, retried as before', () async {
+      final nodes = await fakes(2);
+      final c = client();
+      await c.connectTo([NodeAddress('seed.test', nodes.first.port)]);
+      await _until(() => c.peers.length == 2);
+      for (final n in nodes) {
+        await n.close();
+        n.kick();
+      }
+      await _until(() => c.error != null);
+      expect(c.state, LinkState.disconnected);
+      expect(c.retryAt, isNotNull);
+    });
+  });
+
+  group('the node list', () {
+    test('an entry is host:port, a bracketed IPv6 address, or a WebSocket URL', () {
+      expect(NodeAddress.parse('seed.murmur.info:7878'), const NodeAddress('seed.murmur.info', 7878));
+      expect(NodeAddress.parse(' Node.Murmur.Info:443 '), const NodeAddress('node.murmur.info', 443));
+      expect(NodeAddress.parse('seed.murmur.info'), const NodeAddress('seed.murmur.info', NodeAddress.defaultPort));
+      expect(NodeAddress.parse('wss://node-eu.murmur.info'), const NodeAddress('node-eu.murmur.info', 443));
+      expect(NodeAddress.parse('wss://node-eu.murmur.info/'), const NodeAddress('node-eu.murmur.info', 443));
+      expect(NodeAddress.parse('ws://127.0.0.1:7880'), const NodeAddress('127.0.0.1', 7880));
+      expect(NodeAddress.parse('[::1]:7878'), const NodeAddress('::1', 7878));
+      expect(NodeAddress.parse('::1'), const NodeAddress('::1', NodeAddress.defaultPort));
+      for (final bad in [
+        '',
+        'not a node!',
+        'host:0',
+        'host:70000',
+        'host:port',
+        'wss://node.murmur.info/path',
+        'wss://user@node.murmur.info',
+        'https://node.murmur.info',
+        '.murmur.info',
+        'a..b:1',
+        '[::1',
+      ]) {
+        expect(NodeAddress.parse(bad), isNull, reason: bad);
+      }
+    });
+
+    test('what parse reads back is what toString writes', () {
+      for (final a in [const NodeAddress('seed.murmur.info', 7878), const NodeAddress('::1', 7878)]) {
+        expect(NodeAddress.parse('$a'), a);
+      }
+    });
+
+    test('a typed list keeps its order, without repeats or what does not parse', () {
+      expect(NodeAddress.parseList('a.test:1, b.test:2\nwss://a.test:1,bad entry, a.test:1'),
+          [const NodeAddress('a.test', 1), const NodeAddress('b.test', 2)]);
+    });
+
+    test('the build\'s defaults: its list, else its one node', () {
+      expect(NodeSettings.defaultsFrom('seed.test:7878,node.test:443', '127.0.0.1', 7878),
+          [const NodeAddress('seed.test', 7878), const NodeAddress('node.test', 443)]);
+      expect(NodeSettings.defaultsFrom('', 'seed.test', 7878), [const NodeAddress('seed.test', 7878)]);
+    });
+
+    test('a node an earlier version saved comes first, before the defaults', () async {
+      SharedPreferences.setMockInitialValues({'node_host': 'mine.test', 'node_port': 7000});
+      final list = NodeSettings.listFrom(await SharedPreferences.getInstance());
+      expect(list, [const NodeAddress('mine.test', 7000), ...NodeSettings.defaults]);
+    });
+
+    test('a saved list replaces the defaults; saving the defaults saves nothing', () async {
+      SharedPreferences.setMockInitialValues({});
+      await NodeSettings.save([const NodeAddress('a.test', 1), const NodeAddress('b.test', 2)]);
+      expect(await NodeSettings.loadList(), [const NodeAddress('a.test', 1), const NodeAddress('b.test', 2)]);
+      await NodeSettings.save(NodeSettings.defaults);
+      expect((await SharedPreferences.getInstance()).getStringList('node_list'), isNull);
+      expect(await NodeSettings.loadList(), NodeSettings.defaults);
+    });
+
+    test('nodes reached are remembered after the list: newest first, a few, never by port 443', () async {
+      SharedPreferences.setMockInitialValues({'node_list': ['seed.test:7878']});
+      await NodeSettings.remember(['10.0.0.1:7878', '10.0.0.2:443']);
+      await NodeSettings.remember(['10.0.0.3:7878', 'seed.test:7878']);
+      expect(await NodeSettings.load(),
+          [const NodeAddress('seed.test', 7878), const NodeAddress('10.0.0.3', 7878), const NodeAddress('10.0.0.1', 7878)]);
+      await NodeSettings.remember([for (var i = 10; i < 30; i++) '10.0.1.$i:7878']);
+      final kept = (await SharedPreferences.getInstance()).getStringList('node_reached')!;
+      expect(kept, hasLength(NodeSettings.maxRemembered));
+      expect(kept.first, '10.0.1.10:7878');
+    });
   });
 
   group('checkpoints (PROTOCOL.md Section 7.7)', () {

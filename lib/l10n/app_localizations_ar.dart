@@ -294,11 +294,6 @@ class AppLocalizationsAr extends AppLocalizations {
   String get connectToNode => 'الاتصال بعقدة';
 
   @override
-  String nodeAt(String address) {
-    return 'العقدة $address';
-  }
-
-  @override
   String get language => 'اللغة';
 
   @override
@@ -311,27 +306,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get darkMode => 'الوضع الداكن';
 
   @override
-  String get node => 'العقدة';
-
-  @override
-  String get connectHelpBridge =>
-      'في المتصفح، يتصل العميل عبر WebSocket: بعنوان WebSocket لعقدة (مثل node.murmur.info، المنفذ 443، عبر TLS)، أو بجسر محلي (dart run tool/ws_bridge.dart، المنفذ 7880).';
-
-  @override
-  String get connectHelpNative =>
-      'عنوان النظير إلى النظير لعقدة murmur-node (منفذها ‎--port، وهو 7878 افتراضيًا). منفذ التحكم (7879) لن يعمل. المنفذ 443 يصل إلى عقدة خلف WebSocket آمن، مثل node.murmur.info.';
-
-  @override
-  String get host => 'المضيف';
-
-  @override
-  String get port => 'المنفذ';
-
-  @override
   String get required => 'مطلوب';
-
-  @override
-  String get enterPort => 'أدخل رقم منفذ';
 
   @override
   String get disconnect => 'قطع الاتصال';
@@ -2143,4 +2118,60 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get keyringUnavailable =>
       'حلقة مفاتيح النظام مقفلة ولا يمكنها طلب كلمة مرورها، لذا لا يمكن حفظ المحفظة على هذا الجهاز. افتح حلقة المفاتيح (يحدث ذلك عادةً عند تسجيل الدخول إلى سطح المكتب) ثم شغّل Murmur من جديد.';
+
+  @override
+  String get nodes => 'العُقد';
+
+  @override
+  String get nodesPointPool =>
+      'تُستخدم **حتى ثلاث** من هذه العُقد في آنٍ واحد، من أعلى القائمة.';
+
+  @override
+  String get nodesPointNext =>
+      'حين تتعطّل إحداها، أو لا يكون لديها نصّ رسالة، تُسأل **العقدة التالية**.';
+
+  @override
+  String get nodesPointEntryNative =>
+      'المُدخل هو عنوان النظير إلى النظير لعقدة، **host:port** (‏7878 افتراضيًا)، أو **wss://host** لعقدة خلف WebSocket آمن.';
+
+  @override
+  String get nodesPointEntryBridge =>
+      'في المتصفح، المُدخل هو **wss://host**، أي عقدة خلف WebSocket آمن، أو جسر محلي مثل **127.0.0.1:7880**.';
+
+  @override
+  String get addNode => 'إضافة عقدة';
+
+  @override
+  String get nodeEntryHint => 'host:port أو wss://host';
+
+  @override
+  String get nodeEntryInvalid =>
+      'ليس عنوان عقدة: استخدم host:port أو wss://host';
+
+  @override
+  String get nodeEntryKnown => 'موجودة في القائمة بالفعل';
+
+  @override
+  String get defaultNodes => 'استخدام العُقد الافتراضية';
+
+  @override
+  String get moveNodeUp => 'نقل إلى الأعلى';
+
+  @override
+  String get removeNode => 'إزالة';
+
+  @override
+  String connectedNodes(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'متصل بـ $count عقدة',
+      many: 'متصل بـ $count عقدة',
+      few: 'متصل بـ $count عُقد',
+      two: 'متصل بعقدتين',
+      one: 'متصل بعقدة واحدة',
+      zero: 'غير متصل',
+    );
+    return '$_temp0';
+  }
 }

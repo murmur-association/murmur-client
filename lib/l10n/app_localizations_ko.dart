@@ -285,11 +285,6 @@ class AppLocalizationsKo extends AppLocalizations {
   String get connectToNode => '노드에 연결';
 
   @override
-  String nodeAt(String address) {
-    return '노드 $address';
-  }
-
-  @override
   String get language => '언어';
 
   @override
@@ -302,27 +297,7 @@ class AppLocalizationsKo extends AppLocalizations {
   String get darkMode => '다크 모드';
 
   @override
-  String get node => '노드';
-
-  @override
-  String get connectHelpBridge =>
-      '브라우저에서 클라이언트는 WebSocket으로 연결합니다. 노드의 WebSocket 주소(예: node.murmur.info, 포트 443, TLS 사용)나 로컬 브리지(dart run tool/ws_bridge.dart, 포트 7880)에 연결합니다.';
-
-  @override
-  String get connectHelpNative =>
-      'murmur-node의 P2P 주소입니다(--port, 기본값 7878). 제어 포트(7879)로는 연결되지 않습니다. 포트 443은 node.murmur.info처럼 보안 WebSocket 뒤에 있는 노드에 연결합니다.';
-
-  @override
-  String get host => '호스트';
-
-  @override
-  String get port => '포트';
-
-  @override
   String get required => '필수';
-
-  @override
-  String get enterPort => '포트 번호를 입력하세요';
 
   @override
   String get disconnect => '연결 끊기';
@@ -2051,4 +2026,53 @@ class AppLocalizationsKo extends AppLocalizations {
   @override
   String get keyringUnavailable =>
       '시스템 키링이 잠겨 있고 암호를 물어볼 수 없어 이 기기에 지갑을 저장할 수 없습니다. 키링 잠금을 해제하고(보통 데스크톱에 로그인하면 됩니다) Murmur를 다시 시작하세요.';
+
+  @override
+  String get nodes => '노드';
+
+  @override
+  String get nodesPointPool => '목록 위에서부터 이 노드들 중 **최대 세 개**를 동시에 사용합니다.';
+
+  @override
+  String get nodesPointNext => '하나가 실패하거나 메시지 본문이 없으면 **다음 노드**에 요청합니다.';
+
+  @override
+  String get nodesPointEntryNative =>
+      '항목은 노드의 P2P 주소인 **host:port**(기본값 7878)이거나, 보안 WebSocket 뒤에 있는 노드의 **wss://host**입니다.';
+
+  @override
+  String get nodesPointEntryBridge =>
+      '브라우저에서 항목은 보안 WebSocket 뒤에 있는 노드의 **wss://host**이거나, **127.0.0.1:7880** 같은 로컬 브리지입니다.';
+
+  @override
+  String get addNode => '노드 추가';
+
+  @override
+  String get nodeEntryHint => 'host:port 또는 wss://host';
+
+  @override
+  String get nodeEntryInvalid => '노드 주소가 아닙니다. host:port 또는 wss://host를 사용하십시오';
+
+  @override
+  String get nodeEntryKnown => '이미 목록에 있습니다';
+
+  @override
+  String get defaultNodes => '기본 노드 사용';
+
+  @override
+  String get moveNodeUp => '위로 이동';
+
+  @override
+  String get removeNode => '제거';
+
+  @override
+  String connectedNodes(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '노드 $count개에 연결됨',
+      zero: '연결되지 않음',
+    );
+    return '$_temp0';
+  }
 }

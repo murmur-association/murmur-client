@@ -6,13 +6,13 @@ import '../protocol/models.dart';
 import '../protocol/wire.dart' show protocolVersion;
 import '../services/node_client.dart';
 import '../services/storage.dart';
-import '../services/transport.dart';
 import '../services/updates.dart';
 import 'brand.dart';
 import 'chain_tab.dart';
 import 'common.dart';
 import 'compose_page.dart';
 import 'messages_tab.dart';
+import 'nodes_dialog.dart';
 import '../services/news.dart';
 import '../services/starred.dart';
 import 'starred_tab.dart';
@@ -78,10 +78,17 @@ class _HomePageState extends State<HomePage> with RouteAware, WidgetsBindingObse
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) => setState(() {});
 
+  MurmurClient? _client;
+
+  /// The nodes last remembered as reached, so the list is saved only when
+  /// they change.
+  Set<String> _reached = {};
+
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     routeObserver.unsubscribe(this);
+    _client?.removeListener(_rememberReached);
     super.dispose();
   }
 
@@ -94,7 +101,18 @@ class _HomePageState extends State<HomePage> with RouteAware, WidgetsBindingObse
     _started = true;
     final scope = AppScope.of(context);
     scope.wallets.load();
-    NodeSettings.load().then((s) => scope.client.connect(s.$1, s.$2));
+    final client = _client = scope.client;
+    client.addListener(_rememberReached);
+    NodeSettings.load().then(client.connectTo);
+  }
+
+  /// Keeps the nodes the client reached for the next session, which tries
+  /// them when the list's names can't be looked up (`NodeSettings.load`).
+  void _rememberReached() {
+    final peers = _client!.peers.toSet();
+    if (peers.difference(_reached).isEmpty) return;
+    _reached = {..._reached, ...peers};
+    NodeSettings.remember(peers);
   }
 
   void _compose(BuildContext context, WalletController wallets, TxKind kind) {
@@ -237,8 +255,7 @@ class _HomePageState extends State<HomePage> with RouteAware, WidgetsBindingObse
                   FilledButton(onPressed: () => openLink(latestReleaseUrl), child: Text(l.getNewVersion)),
                 if (client.state == LinkState.disconnected)
                   TextButton(
-                    onPressed: () => client.connect(
-                        client.host ?? NodeSettings.defaultHost, client.port ?? NodeSettings.defaultPort),
+                    onPressed: () async => client.connectTo(await NodeSettings.load()),
                     child: Text(l.reconnect),
                   ),
                 TextButton(onPressed: () => showConnectDialog(context), child: Text(l.changeNode)),
@@ -352,7 +369,7 @@ class ConnectionChip extends StatelessWidget {
     return ActionChip(
       avatar: MurmurIcon(Glyph.node, size: 10, color: color),
       label: Text(label),
-      tooltip: client.host == null ? l.connectToNode : l.nodeAt('${client.host}:${client.port}'),
+      tooltip: client.peers.isEmpty ? l.connectToNode : l.connectedNodes(client.peers.length),
       onPressed: () => showConnectDialog(context),
     );
   }
@@ -394,63 +411,4 @@ class ThemeToggle extends StatelessWidget {
       onPressed: () => prefs.setBrightness(dark ? Brightness.light : Brightness.dark),
     );
   }
-}
-
-Future<void> showConnectDialog(BuildContext context) async {
-  final l = context.l10n;
-  final client = AppScope.of(context).client;
-  final host = TextEditingController(text: client.host ?? NodeSettings.defaultHost);
-  final port = TextEditingController(text: '${client.port ?? NodeSettings.defaultPort}');
-  final formKey = GlobalKey<FormState>();
-  await showAppDialog<void>(
-    context: context,
-    builder: (context) => AlertDialog(
-      scrollable: true,
-      title: Text(l.node),
-      content: Form(
-        key: formKey,
-        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(viaBridge ? l.connectHelpBridge : l.connectHelpNative),
-          const SizedBox(height: 16),
-          TextFormField(
-            controller: host,
-            decoration: InputDecoration(labelText: l.host, border: const OutlineInputBorder()),
-            validator: (v) => (v == null || v.trim().isEmpty) ? l.required : null,
-          ),
-          const SizedBox(height: 12),
-          TextFormField(
-            controller: port,
-            decoration: InputDecoration(labelText: l.port, border: const OutlineInputBorder()),
-            keyboardType: TextInputType.number,
-            validator: (v) {
-              final p = int.tryParse(v ?? '');
-              return (p == null || p < 1 || p > 65535) ? l.enterPort : null;
-            },
-          ),
-        ]),
-      ),
-      actions: [
-        if (client.state != LinkState.disconnected)
-          TextButton(
-            onPressed: () {
-              client.disconnect();
-              Navigator.pop(context);
-            },
-            child: Text(l.disconnect),
-          ),
-        TextButton(onPressed: () => Navigator.pop(context), child: Text(l.cancel)),
-        FilledButton(
-          onPressed: () {
-            if (!formKey.currentState!.validate()) return;
-            final h = host.text.trim();
-            final p = int.parse(port.text);
-            NodeSettings.save(h, p);
-            client.connect(h, p);
-            Navigator.pop(context);
-          },
-          child: Text(l.connect),
-        ),
-      ],
-    ),
-  );
 }

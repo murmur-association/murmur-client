@@ -111,27 +111,33 @@ Platform notes:
   The bridge binds to localhost only, always dials the one configured node, and accepts only pages served from localhost.
 - **Paths with an apostrophe** (such as `C:\Users\o'brien`) break `flutter test` and web builds, because Flutter pastes the path into generated Dart code. Work around it by mapping a drive letter: `subst M: "C:\Users\o'brien"`, then work from `M:\murmur-client` with `TEMP`/`TMP` set to `M:\AppData\Local\Temp`.
 
-**Which node a fresh install uses:** `127.0.0.1:7878` natively and `127.0.0.1:7880` (the bridge) on the web, until the user picks another. Builds for the public testnet (`murmur-testnet-15`) set their own default:
+**Which nodes a fresh install uses:** a list, of which the client keeps up to three connected, from the top. By default `127.0.0.1:7878` natively and `127.0.0.1:7880` (the bridge) on the web, until the user changes the list (the connection chip opens it). Builds for the public testnet (`murmur-testnet-15`) set their own list, comma-separated:
 
 ```
-# Web: the TLS proxy in front of node 1's WebSocket listener
+# Web: the nodes' secure WebSocket names, behind Cloudflare (murmur's deploy/cloudflare.md)
 flutter build web --release --no-web-resources-cdn --base-href / \
-  --dart-define=MURMUR_NODE_HOST=node.murmur.info --dart-define=MURMUR_NODE_PORT=443
+  --dart-define=MURMUR_NODES=node-eu.murmur.info:443,node-us.murmur.info:443,node-sg.murmur.info:443,node.murmur.info:443
 dart run tool/fetch_fallback_fonts.dart
 
-# Native: the DNS seed, which lists every testnet node
-flutter build windows --dart-define=MURMUR_NODE_HOST=testnet-seed.murmur.info --dart-define=MURMUR_NODE_PORT=7878
+# Native: the DNS seed, which lists every testnet node; then the WebSocket name, for when none of them can be reached
+flutter build windows --dart-define=MURMUR_NODES=testnet-seed.murmur.info:7878,node.murmur.info:443
 ```
 
-- **Web:** the client opens `wss://` on port 443, and on any page served over HTTPS; the URL is `wss://node.murmur.info:443/`.
-- **Native:** port 443 is a secure WebSocket here too, so `node.murmur.info:443` works in the desktop and phone apps; any other port is a node's own peer-to-peer port (7878 by default). The client resolves the name and tries each address in turn, in random order. It moves on from a node that doesn't answer, drops the connection, fails the encrypted handshake or runs another protocol version, so one bad node doesn't stop it.
-- **Both:** when the connection is lost, or can't be made, the client tries again by itself, waiting 2 s, then 4, 8… up to a minute. The banner shows the countdown, and everything already downloaded is kept.
+`MURMUR_NODE_HOST` and `MURMUR_NODE_PORT`, which earlier builds used, still give a list of one.
+
+- **Web:** the client opens `wss://` on port 443, and on any page served over HTTPS; the URL is `wss://node.murmur.info:443/`. Each entry gives one connection (the browser picks the address).
+- **Native:** port 443 is a secure WebSocket here too, so `node.murmur.info:443` works in the desktop and phone apps; any other port is a node's own peer-to-peer port (7878 by default). The client resolves a name and connects to as many of its addresses as the pool has room for, in random order. It moves on from a node that doesn't answer, drops the connection, fails the encrypted handshake or runs another protocol version, so one bad node doesn't stop it. Addresses it reached are remembered, and tried after the list when its names can't be looked up.
+- **Both:**
+  - **The same node is connected once**, however many entries lead to it: it's told apart by the nonce in its Hello.
+  - **Requests go to the node at the best tip**, and move to the next when a node fails. A message's text a node lacks is asked of the others.
+  - **A node lost leaves the others working**, and the pool fills up again by itself (after 5 s, then longer waits).
+  - **When every node is lost, or none can be reached**, the client tries again by itself, waiting 2 s, then 4, 8… up to a minute. The banner shows the countdown, and everything already downloaded is kept.
 
 **Web: limits.** A web page can't see which addresses a name stands for, or choose among them: the browser does that. Browsers resolve `node.murmur.info` once, cache the answer, and keep using the same address.
 - **A node that's down** (it refuses the connection or doesn't answer) is skipped: the browser tries the next address.
 - **A node that accepts the connection and then fails TLS is not skipped.** The browser keeps returning to it, and the page shows "Could not reach the node" until the browser's DNS cache expires or the node is fixed. Retries and Reconnect reach the same node.
 
-Nothing in the page can work around this without a third party, such as a DNS-over-HTTPS service. The native apps don't have this limit: they resolve the name themselves and try every address, through the handshake, until one works.
+Nothing in the page can work around this without a third party, such as a DNS-over-HTTPS service. That's why the web page's list names each node on its own (`node-eu`, `node-us`, `node-sg`): with three entries, a broken node holds only one of the three connections. The native apps don't have this limit: they resolve a name themselves and try every address, through the handshake, until one works.
 - **Testnet label:** while connected to a testnet, a line under the top bar says so ("Testnet: tokens have no value").
 
 **No requests to other sites.** The page loads everything from its own origin, and its only other connection is the node. Two build steps make that true:

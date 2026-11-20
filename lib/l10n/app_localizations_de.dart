@@ -295,11 +295,6 @@ class AppLocalizationsDe extends AppLocalizations {
   String get connectToNode => 'Mit einem Knoten verbinden';
 
   @override
-  String nodeAt(String address) {
-    return 'Knoten $address';
-  }
-
-  @override
   String get language => 'Sprache';
 
   @override
@@ -312,27 +307,7 @@ class AppLocalizationsDe extends AppLocalizations {
   String get darkMode => 'Dunkler Modus';
 
   @override
-  String get node => 'Knoten';
-
-  @override
-  String get connectHelpBridge =>
-      'Im Browser verbindet sich der Client über WebSocket: mit der WebSocket-Adresse eines Knotens (etwa node.murmur.info, Port 443, über TLS) oder mit einer lokalen Bridge (dart run tool/ws_bridge.dart, Port 7880).';
-
-  @override
-  String get connectHelpNative =>
-      'Die Peer-to-Peer-Adresse eines murmur-node (sein --port, standardmäßig 7878). Der Steuerport (7879) funktioniert nicht. Port 443 erreicht einen Knoten hinter einem sicheren WebSocket, etwa node.murmur.info.';
-
-  @override
-  String get host => 'Host';
-
-  @override
-  String get port => 'Port';
-
-  @override
   String get required => 'Pflichtfeld';
-
-  @override
-  String get enterPort => 'Gib eine Portnummer ein';
 
   @override
   String get disconnect => 'Trennen';
@@ -2134,4 +2109,57 @@ class AppLocalizationsDe extends AppLocalizations {
   @override
   String get keyringUnavailable =>
       'Der Schlüsselbund des Systems ist gesperrt und kann nicht nach seinem Passwort fragen, daher lässt sich die Wallet auf diesem Gerät nicht speichern. Entsperre den Schlüsselbund (meist geschieht das beim Anmelden am Desktop) und starte Murmur neu.';
+
+  @override
+  String get nodes => 'Knoten';
+
+  @override
+  String get nodesPointPool =>
+      '**Bis zu drei** dieser Knoten werden gleichzeitig genutzt, von oben in der Liste.';
+
+  @override
+  String get nodesPointNext =>
+      'Fällt einer aus oder fehlt ihm der Text einer Nachricht, wird **der nächste** gefragt.';
+
+  @override
+  String get nodesPointEntryNative =>
+      'Ein Eintrag ist die Peer-to-Peer-Adresse eines Knotens, **Host:Port** (standardmäßig 7878), oder **wss://Host** für einen Knoten hinter einem sicheren WebSocket.';
+
+  @override
+  String get nodesPointEntryBridge =>
+      'Im Browser ist ein Eintrag **wss://Host**, ein Knoten hinter einem sicheren WebSocket, oder eine lokale Brücke wie **127.0.0.1:7880**.';
+
+  @override
+  String get addNode => 'Knoten hinzufügen';
+
+  @override
+  String get nodeEntryHint => 'Host:Port oder wss://Host';
+
+  @override
+  String get nodeEntryInvalid =>
+      'Keine Knotenadresse: Host:Port oder wss://Host verwenden';
+
+  @override
+  String get nodeEntryKnown => 'Schon in der Liste';
+
+  @override
+  String get defaultNodes => 'Standardknoten verwenden';
+
+  @override
+  String get moveNodeUp => 'Nach oben';
+
+  @override
+  String get removeNode => 'Entfernen';
+
+  @override
+  String connectedNodes(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Mit $count Knoten verbunden',
+      one: 'Mit 1 Knoten verbunden',
+      zero: 'Nicht verbunden',
+    );
+    return '$_temp0';
+  }
 }

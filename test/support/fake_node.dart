@@ -7,6 +7,7 @@
 // chain itself run against the real node (test_node.dart).
 
 import 'dart:io';
+import 'dart:math' show Random;
 import 'dart:typed_data';
 
 import 'package:cryptography/cryptography.dart';
@@ -17,11 +18,14 @@ import 'package:murmur_client/protocol/wire.dart';
 import 'package:murmur_client/services/secure_channel.dart';
 
 class FakeNode {
-  FakeNode._(this.server, this.version, this.chain, this.relay);
+  FakeNode._(this.server, this.version, this.chain, this.relay, this.nonce);
 
   static Future<FakeNode> bind(InternetAddress address, int port,
-      {int version = protocolVersion, List<Block> chain = const [], List<Message> relay = const []}) async {
-    final node = FakeNode._(await ServerSocket.bind(address, port), version, chain, relay);
+      {int version = protocolVersion,
+      List<Block> chain = const [],
+      List<Message> relay = const [],
+      int? nonce}) async {
+    final node = FakeNode._(await ServerSocket.bind(address, port), version, chain, relay, nonce ?? 1 + Random().nextInt(1 << 30));
     node.server.listen(node._serve);
     return node;
   }
@@ -37,7 +41,22 @@ class FakeNode {
 
   int get port => server.port;
 
+  /// Its Hello nonce: random per node unless given, as a node draws one per
+  /// run. Two nodes with the same one are the same node to a client.
+  final int nonce;
+
+  final _clients = <Socket>{};
+
   Future<void> close() => server.close();
+
+  /// Drops every client connected now, as a node that restarts does; new
+  /// ones are still taken.
+  void kick() {
+    for (final s in _clients) {
+      s.destroy();
+    }
+    _clients.clear();
+  }
 
   /// What it answers `request` with, if anything.
   Message? _answer(Message request) => switch (request) {
@@ -56,6 +75,7 @@ class FakeNode {
       };
 
   Future<void> _serve(Socket socket) async {
+    _clients.add(socket);
     final keyPair = await X25519().newKeyPair();
     final ours = (await keyPair.extractPublicKey()).bytes;
     socket.add(ours);
@@ -80,7 +100,7 @@ class FakeNode {
           socket.add(sender.sealFrame(encodePayload(Hello(
             version: version,
             genesis: NetworkInfo.demo.genesisHeader().hash,
-            nonce: u64Bytes(42),
+            nonce: u64Bytes(nonce),
             listenPort: 7878,
             height: chain.length,
             work: BigInt.zero,

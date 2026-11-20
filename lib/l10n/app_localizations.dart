@@ -500,12 +500,6 @@ abstract class AppLocalizations {
   /// **'Connect to a node'**
   String get connectToNode;
 
-  /// No description provided for @nodeAt.
-  ///
-  /// In en, this message translates to:
-  /// **'Node {address}'**
-  String nodeAt(String address);
-
   /// No description provided for @language.
   ///
   /// In en, this message translates to:
@@ -530,47 +524,11 @@ abstract class AppLocalizations {
   /// **'Dark mode'**
   String get darkMode;
 
-  /// No description provided for @node.
-  ///
-  /// In en, this message translates to:
-  /// **'Node'**
-  String get node;
-
-  /// No description provided for @connectHelpBridge.
-  ///
-  /// In en, this message translates to:
-  /// **'In the browser, the client connects over WebSocket: to a node\'s WebSocket address (such as node.murmur.info, port 443, over TLS), or to a local bridge (dart run tool/ws_bridge.dart, port 7880).'**
-  String get connectHelpBridge;
-
-  /// No description provided for @connectHelpNative.
-  ///
-  /// In en, this message translates to:
-  /// **'The peer-to-peer address of a murmur-node (its --port, 7878 by default). The control port (7879) will not work. Port 443 reaches a node behind a secure WebSocket, such as node.murmur.info.'**
-  String get connectHelpNative;
-
-  /// No description provided for @host.
-  ///
-  /// In en, this message translates to:
-  /// **'Host'**
-  String get host;
-
-  /// No description provided for @port.
-  ///
-  /// In en, this message translates to:
-  /// **'Port'**
-  String get port;
-
   /// No description provided for @required.
   ///
   /// In en, this message translates to:
   /// **'Required'**
   String get required;
-
-  /// No description provided for @enterPort.
-  ///
-  /// In en, this message translates to:
-  /// **'Enter a port number'**
-  String get enterPort;
 
   /// No description provided for @disconnect.
   ///
@@ -3181,6 +3139,84 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The system keyring is locked and can\'t ask for its password, so the wallet can\'t be saved on this device. Unlock the keyring (logging in to the desktop usually does) and start Murmur again.'**
   String get keyringUnavailable;
+
+  /// Title of the node list dialog, and the Chain tab label before the connected nodes
+  ///
+  /// In en, this message translates to:
+  /// **'Nodes'**
+  String get nodes;
+
+  /// Node list dialog: how many nodes are used at once; **…** marks the key words
+  ///
+  /// In en, this message translates to:
+  /// **'**Up to three** of these nodes are used at once, from the top of the list.'**
+  String get nodesPointPool;
+
+  /// Node list dialog: a failing node, or one lacking a text, passes the request to the next; **…** marks the key words
+  ///
+  /// In en, this message translates to:
+  /// **'When one fails, or lacks a message\'s text, **the next** is asked.'**
+  String get nodesPointNext;
+
+  /// Node list dialog, desktop and phone apps: what an entry looks like; **…** marks the key words
+  ///
+  /// In en, this message translates to:
+  /// **'An entry is a node\'s peer-to-peer address, **host:port** (7878 by default), or **wss://host** for a node behind a secure WebSocket.'**
+  String get nodesPointEntryNative;
+
+  /// Node list dialog, browser: what an entry looks like; **…** marks the key words
+  ///
+  /// In en, this message translates to:
+  /// **'In a browser, an entry is **wss://host**, a node behind a secure WebSocket, or a local bridge such as **127.0.0.1:7880**.'**
+  String get nodesPointEntryBridge;
+
+  /// Node list dialog: the field and button that add an entry
+  ///
+  /// In en, this message translates to:
+  /// **'Add a node'**
+  String get addNode;
+
+  /// Node list dialog: hint in the field; host, port and wss are kept as they are
+  ///
+  /// In en, this message translates to:
+  /// **'host:port or wss://host'**
+  String get nodeEntryHint;
+
+  /// Node list dialog: what was typed is not an entry
+  ///
+  /// In en, this message translates to:
+  /// **'Not a node address: use host:port or wss://host'**
+  String get nodeEntryInvalid;
+
+  /// Node list dialog: the entry typed is in the list already
+  ///
+  /// In en, this message translates to:
+  /// **'Already in the list'**
+  String get nodeEntryKnown;
+
+  /// Node list dialog: puts back the build's default list
+  ///
+  /// In en, this message translates to:
+  /// **'Use the default nodes'**
+  String get defaultNodes;
+
+  /// Node list dialog: tooltip of the button that moves an entry up
+  ///
+  /// In en, this message translates to:
+  /// **'Move up'**
+  String get moveNodeUp;
+
+  /// Node list dialog: tooltip of the button that removes an entry
+  ///
+  /// In en, this message translates to:
+  /// **'Remove'**
+  String get removeNode;
+
+  /// How many nodes the client is connected to now (status chip tooltip, node list entries)
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{Not connected} =1{Connected to 1 node} other{Connected to {count} nodes}}'**
+  String connectedNodes(int count);
 }
 
 class _AppLocalizationsDelegate

@@ -285,11 +285,6 @@ class AppLocalizationsJa extends AppLocalizations {
   String get connectToNode => 'ノードに接続';
 
   @override
-  String nodeAt(String address) {
-    return 'ノード $address';
-  }
-
-  @override
   String get language => '言語';
 
   @override
@@ -302,27 +297,7 @@ class AppLocalizationsJa extends AppLocalizations {
   String get darkMode => 'ダークモード';
 
   @override
-  String get node => 'ノード';
-
-  @override
-  String get connectHelpBridge =>
-      'ブラウザでは、クライアントは WebSocket で接続します。接続先はノードの WebSocket アドレス（例：node.murmur.info、ポート 443、TLS 経由）か、ローカルのブリッジ（dart run tool/ws_bridge.dart、ポート 7880）です。';
-
-  @override
-  String get connectHelpNative =>
-      'murmur-node のピアツーピアアドレス（その --port、既定は 7878）。制御ポート（7879）では接続できません。ポート 443 は、node.murmur.info のようにセキュア WebSocket の背後にあるノードに接続します。';
-
-  @override
-  String get host => 'ホスト';
-
-  @override
-  String get port => 'ポート';
-
-  @override
   String get required => '必須';
-
-  @override
-  String get enterPort => 'ポート番号を入力してください';
 
   @override
   String get disconnect => '切断';
@@ -2049,4 +2024,55 @@ class AppLocalizationsJa extends AppLocalizations {
   @override
   String get keyringUnavailable =>
       'システムのキーリングがロックされていて、パスワードを尋ねることができないため、この端末にウォレットを保存できません。キーリングのロックを解除して（通常はデスクトップへのログインで解除されます）、Murmur を起動し直してください。';
+
+  @override
+  String get nodes => 'ノード';
+
+  @override
+  String get nodesPointPool => 'リストの上から、これらのノードを**最大 3 つ**同時に使います。';
+
+  @override
+  String get nodesPointNext =>
+      'どれかが失敗したり、メッセージの本文を持っていなかったりすると、**次のノード**に尋ねます。';
+
+  @override
+  String get nodesPointEntryNative =>
+      'エントリはノードのピアツーピアアドレス **host:port**（既定は 7878）、または安全な WebSocket の後ろにあるノードの **wss://host** です。';
+
+  @override
+  String get nodesPointEntryBridge =>
+      'ブラウザでは、エントリは安全な WebSocket の後ろにあるノードの **wss://host**、または **127.0.0.1:7880** のようなローカルブリッジです。';
+
+  @override
+  String get addNode => 'ノードを追加';
+
+  @override
+  String get nodeEntryHint => 'host:port または wss://host';
+
+  @override
+  String get nodeEntryInvalid =>
+      'ノードのアドレスではありません。host:port または wss://host を使ってください';
+
+  @override
+  String get nodeEntryKnown => 'すでにリストにあります';
+
+  @override
+  String get defaultNodes => '既定のノードを使う';
+
+  @override
+  String get moveNodeUp => '上へ移動';
+
+  @override
+  String get removeNode => '削除';
+
+  @override
+  String connectedNodes(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count 個のノードに接続中',
+      zero: '未接続',
+    );
+    return '$_temp0';
+  }
 }

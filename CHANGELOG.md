@@ -4,7 +4,16 @@ Newest first. Each release is a `vX.Y.Z` tag matching `version` in `pubspec.yaml
 
 ## Unreleased
 
-- **Changed: the desktop apps' node is murmur-node v0.16.1** (no protocol or network change). Its miner, at a small share of the processor, kept one block template for minutes on a slow or busy machine, so a message sent meanwhile waited; it now builds a new template every 5 s.
+- **Added: several nodes at once** (PROTOCOL.md Section 7.7). The app keeps up to three nodes connected, from a list:
+  - **The chain is followed from the node at the best tip,** and a branch that brings no more work than the one it would replace is refused, so one node can't hold the app on a shorter or lighter chain while another shows a better one.
+  - **A node that fails or stops answering is let go,** and its requests move to the next: the app stays live as long as one node is there, and connects to others again by itself. Only losing every node is a lost link, retried as before.
+  - **A message's text one node lacks is asked of the others**, the node that gave the most text first. Today that's the project's EU node, the only one that keeps old messages.
+  - **A transaction goes to every node**, and a node that takes it outweighs one that refuses it.
+  - **Your messages are kept available on every node** connected (Restore and Serving, per node).
+  - **The same node is connected once,** however many names or addresses lead to it (each node draws a random number per run, which it says when connecting).
+- **Added: the node list.** The connection chip opens it: add a node (`host:port`, or `wss://host` for a node behind a secure WebSocket), move one up, remove one, or go back to the defaults. Up to three are used, from the top. Desktop and phone apps default to the testnet's seed on its peer-to-peer port, then `node.murmur.info:443` for when every node behind the seed is unreachable; the web page to `node-eu`, `node-us` and `node-sg.murmur.info`, then `node.murmur.info`. A node chosen in an earlier version stays first in the list.
+- **Added: nodes reached are remembered** (desktop and phone apps): up to eight addresses, tried after the list, so the app still finds a node when the list's names can't be looked up.
+- **Changed: the desktop apps' node is murmur-node v0.16.2** (no protocol or network change). Its miner, at a small share of the processor, kept one block template for minutes on a slow or busy machine, so a message sent meanwhile waited; it now builds a new template every 5 s. Nodes also keep places of their own for apps, apart from other nodes', which apps connected to three nodes need.
 
 ## v0.10.19: checkpoint refresh (2026-11-20)
 

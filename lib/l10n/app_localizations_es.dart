@@ -293,11 +293,6 @@ class AppLocalizationsEs extends AppLocalizations {
   String get connectToNode => 'Conectar a un nodo';
 
   @override
-  String nodeAt(String address) {
-    return 'Nodo $address';
-  }
-
-  @override
   String get language => 'Idioma';
 
   @override
@@ -310,27 +305,7 @@ class AppLocalizationsEs extends AppLocalizations {
   String get darkMode => 'Modo oscuro';
 
   @override
-  String get node => 'Nodo';
-
-  @override
-  String get connectHelpBridge =>
-      'En el navegador, el cliente se conecta por WebSocket: a la dirección WebSocket de un nodo (como node.murmur.info, puerto 443, con TLS) o a un puente local (dart run tool/ws_bridge.dart, puerto 7880).';
-
-  @override
-  String get connectHelpNative =>
-      'La dirección peer-to-peer de un murmur-node (su --port, 7878 por defecto). El puerto de control (7879) no funcionará. El puerto 443 llega a un nodo tras un WebSocket seguro, como node.murmur.info.';
-
-  @override
-  String get host => 'Host';
-
-  @override
-  String get port => 'Puerto';
-
-  @override
   String get required => 'Obligatorio';
-
-  @override
-  String get enterPort => 'Indica un número de puerto';
 
   @override
   String get disconnect => 'Desconectar';
@@ -2125,4 +2100,57 @@ class AppLocalizationsEs extends AppLocalizations {
   @override
   String get keyringUnavailable =>
       'El llavero del sistema está bloqueado y no puede pedir su contraseña, así que la cartera no se puede guardar en este dispositivo. Desbloquea el llavero (suele hacerlo el inicio de sesión en el escritorio) y vuelve a abrir Murmur.';
+
+  @override
+  String get nodes => 'Nodos';
+
+  @override
+  String get nodesPointPool =>
+      'Se usan **hasta tres** de estos nodos a la vez, desde el principio de la lista.';
+
+  @override
+  String get nodesPointNext =>
+      'Cuando uno falla, o no tiene el texto de un mensaje, se pregunta **al siguiente**.';
+
+  @override
+  String get nodesPointEntryNative =>
+      'Una entrada es la dirección peer-to-peer de un nodo, **host:puerto** (7878 por defecto), o **wss://host** para un nodo tras un WebSocket seguro.';
+
+  @override
+  String get nodesPointEntryBridge =>
+      'En un navegador, una entrada es **wss://host**, un nodo tras un WebSocket seguro, o un puente local como **127.0.0.1:7880**.';
+
+  @override
+  String get addNode => 'Añadir un nodo';
+
+  @override
+  String get nodeEntryHint => 'host:puerto o wss://host';
+
+  @override
+  String get nodeEntryInvalid =>
+      'No es la dirección de un nodo: usa host:puerto o wss://host';
+
+  @override
+  String get nodeEntryKnown => 'Ya está en la lista';
+
+  @override
+  String get defaultNodes => 'Usar los nodos predeterminados';
+
+  @override
+  String get moveNodeUp => 'Subir';
+
+  @override
+  String get removeNode => 'Quitar';
+
+  @override
+  String connectedNodes(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Conectado a $count nodos',
+      one: 'Conectado a 1 nodo',
+      zero: 'Sin conexión',
+    );
+    return '$_temp0';
+  }
 }

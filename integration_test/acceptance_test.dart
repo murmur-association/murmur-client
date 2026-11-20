@@ -18,6 +18,7 @@ import 'package:murmur_client/protocol/bytes.dart';
 import 'package:murmur_client/protocol/models.dart';
 import 'package:murmur_client/services/local_node.dart';
 import 'package:murmur_client/services/news.dart' show NotifyTopic;
+import 'package:murmur_client/services/node_client.dart' show LinkState, NodeAddress;
 import 'package:murmur_client/services/notifier.dart';
 import 'package:murmur_client/services/picture.dart';
 import 'package:murmur_client/services/storage.dart';
@@ -320,6 +321,39 @@ void main() {
     // desktop, or a browser whose driver can't grant them).
   }, skip: acceptanceNoNotifications, timeout: perTest);
 
+  testWidgets('the node list: entries are checked, and the same node under another name is connected once',
+      (tester) async {
+    final app = AppDriver(tester);
+    await app.start();
+    final l = app.l;
+    final node = acceptanceNodeAddress;
+
+    await app.openNodeList();
+    await app.waitFor(find.text(l.connectedNodes(1)), what: 'the test node, connected');
+    await app.addNode('not a node!');
+    await app.waitFor(find.text(l.nodeEntryInvalid), what: 'what was typed refused');
+    // The node already listed, written as a URL, is the same entry.
+    await app.addNode('ws://${node.host}:${node.port}');
+    await app.waitFor(find.text(l.nodeEntryKnown), what: 'the entry already listed');
+    if (kIsWeb) {
+      // A browser may reach only the test node (the page's policy admits no
+      // other origin), so no second entry is connected there.
+      await app.press<TextButton>(l.cancel);
+      return;
+    }
+    // The same node by another name: a second entry, one connection, since
+    // the node's Hello nonce tells it's the node already connected.
+    await app.addNode('localhost:${node.port}');
+    await app.press<FilledButton>(l.connect);
+    await app.waitUntil(() => app.client.nodes.length == 2 && app.client.state == LinkState.live,
+        what: 'the client on the new list');
+    expect(await NodeSettings.loadList(), [NodeAddress(node.host, node.port), NodeAddress('localhost', node.port)],
+        reason: 'the list is kept for the next start');
+    // Long enough for the pool to have tried the second entry.
+    await tester.pump(const Duration(seconds: 3));
+    expect(app.client.peers, hasLength(1));
+  }, timeout: perTest);
+
   testWidgets("a desktop's own node: it runs beside the app, and mines on the graphics card or says why not",
       (tester) async {
     // With the wallet the tests above left: mining pays it.
@@ -327,14 +361,15 @@ void main() {
     await app.start();
     final l = app.l;
     final node = app.ownNode;
-    final (host, port) = (app.client.host, app.client.port);
+    final nodes = app.client.nodes;
 
     await app.openTab(l.tabChain);
     await app.flip(l.localNodeRun);
     await app.waitUntil(() => node.state == LocalNodeState.running, what: "the app's own node to run");
     await app.waitFor(find.textContaining('127.0.0.1:${node.port}'), what: 'where the node listens');
     // The app goes on reading from the node it was given.
-    expect((app.client.host, app.client.port), (host, port));
+    expect(app.client.nodes, nodes);
+    expect(app.client.peers, isNot(contains('127.0.0.1:${node.port}')));
 
     // Mining pays the wallet here, shown in full.
     await app.flip(l.localNodeMine);
@@ -358,7 +393,8 @@ void main() {
         fail('still starting');
     }
     expect(node.state, LocalNodeState.running, reason: 'the node runs either way');
-    expect((app.client.host, app.client.port), (host, port));
+    expect(app.client.nodes, nodes);
+    expect(app.client.peers, isNot(contains('127.0.0.1:${node.port}')));
 
     // Switched off: the node stops, and its miner with it.
     await app.flip(l.localNodeRun);

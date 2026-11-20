@@ -109,8 +109,8 @@ void freshDevice() {
   final node = acceptanceNodeAddress;
   FlutterSecureStorage.setMockInitialValues({});
   SharedPreferences.setMockInitialValues({
-    'node_host': node.host,
-    'node_port': node.port,
+    // The test's node alone: no build default beside it.
+    'node_list': ['${NodeAddress(node.host, node.port)}'],
     'storage_consent': StorageConsent.rejected.name,
   });
 }
@@ -322,6 +322,19 @@ class AppDriver {
     await waitFor(field, what: 'the "$label" field');
     await tester.enterText(field.last, text);
     await tester.pump();
+  }
+
+  /// Opens the node list from the connection chip, as a user does.
+  Future<void> openNodeList() async {
+    await tap(find.byType(ConnectionChip), what: 'the connection chip');
+    await waitFor(find.text(l.addNode), what: 'the node list');
+  }
+
+  /// Types `entry` in the node list's field and presses its add button; what
+  /// the list says about it, if anything, stays under the field.
+  Future<void> addNode(String entry) async {
+    await type(l.addNode, entry);
+    await tap(find.byWidgetPredicate((w) => w is IconButton && w.tooltip == l.addNode), what: 'add');
   }
 
   /// What the field labelled `label` holds.

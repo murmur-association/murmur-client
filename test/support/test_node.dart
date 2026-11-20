@@ -61,12 +61,35 @@ class TestNode {
   /// A new demo chain of `blocks` blocks mined to `mineTo` (the node isn't
   /// started yet). Stopped, and its folder deleted, when the test ends.
   static Future<TestNode> build(int blocks, {required Uint8List mineTo, DateTime? endTime}) async {
+    final n = await _fresh();
+    await n.grow(blocks, mineTo: mineTo, endTime: endTime);
+    return n;
+  }
+
+  /// A node in a new folder, stopped and deleted when the test ends.
+  static Future<TestNode> _fresh() async {
     final n = TestNode._(await Directory.systemTemp.createTemp('murmur-test-node'));
     addTearDown(() async {
       await n.node.stop();
       await _deleteSoon(n.dir);
     });
-    await n.grow(blocks, mineTo: mineTo, endTime: endTime);
+    return n;
+  }
+
+  /// A second node on a copy of this one's chain and message content as
+  /// they are now (this node must be stopped), on ports of its own: another
+  /// node of the same network, for a client's pool.
+  Future<TestNode> copy() async {
+    final n = await _fresh();
+    await for (final e in dir.list(recursive: true)) {
+      final rel = e.path.substring(dir.path.length + 1);
+      // Not the pid file: the copy's start would take it for its own.
+      if (e is! File || rel == 'app-node.pid') continue;
+      final to = File('${n.dir.path}${Platform.pathSeparator}$rel');
+      await to.parent.create(recursive: true);
+      await e.copy(to.path);
+    }
+    n.hashes = [...hashes];
     return n;
   }
 

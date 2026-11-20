@@ -1,5 +1,8 @@
-// Light client for one Murmur node, over the node's encrypted peer-to-peer
-// connection (PROTOCOL.md Section 7).
+// Light client for the Murmur network, over nodes' encrypted peer-to-peer
+// connections (PROTOCOL.md Section 7). It keeps up to three nodes from the
+// user's list connected (Section 7.7), follows the heaviest valid chain any
+// of them shows, asks the one at its tip first, and moves a request to
+// another when one fails; message content no node gave is asked of the next.
 //
 // The client handshakes like a peer that has no blocks (zero work), so the
 // node never tries to sync from it. What it shows is checked against headers
@@ -52,14 +55,18 @@ import '../protocol/wire.dart';
 import 'aliases.dart';
 import 'chain_cache.dart';
 import 'fees.dart';
+import 'node_address.dart';
 import 'own_messages.dart';
 import 'secure_channel.dart';
 import 'threads.dart';
 import 'transport.dart';
 
 export '../protocol/wire.dart' show TxStatusCode;
+export 'node_address.dart' show NodeAddress;
 export 'fees.dart' show FeeInfo, FeeSource, minFee;
 export 'threads.dart' show ThreadSummary, activityTime;
+
+part 'node_link.dart';
 
 enum LinkState { disconnected, connecting, syncing, live }
 
@@ -462,12 +469,30 @@ class MurmurClient extends ChangeNotifier {
 
   LinkState state = LinkState.disconnected;
   LinkError? error;
-  String? host;
-  int? port;
+
+  /// The node list being used, in order (`connectTo`).
+  List<NodeAddress> nodes = const [];
   Uint8List? genesis;
   NetworkInfo? network;
 
-  /// Best height the node has reported (in its Hello or by relaying blocks).
+  /// How many nodes the client keeps connected at once, when the list gives
+  /// that many (PROTOCOL.md Section 7.7 recommends at least three).
+  static const poolSize = 3;
+
+  /// The nodes connected now (`address:port`, or the URL in a browser), the
+  /// one requests go to first.
+  List<String> get peers => [for (final l in _orderedLinks) l.peer];
+
+  /// How many of the connected nodes each entry of the list gave.
+  Map<NodeAddress, int> get connectedByEntry {
+    final by = <NodeAddress, int>{};
+    for (final l in _links) {
+      by[l.entry] = (by[l.entry] ?? 0) + 1;
+    }
+    return by;
+  }
+
+  /// Best height a node has reported (in its Hello or by relaying blocks).
   int peerHeight = 0;
 
   // ---- chain data ---------------------------------------------------------------
@@ -587,9 +612,11 @@ class MurmurClient extends ChangeNotifier {
   /// `address:flagged txid` of every flag in a fetched block.
   final Set<String> _flagKeys = {};
 
-  /// Message hashes the node didn't serve when asked (it may have deleted
-  /// the content); not asked for again this session.
-  final Set<String> _contentUnavailable = {};
+  /// Message hashes no connected node served when asked (they may have
+  /// deleted the content), with what asking again needs (null for a name,
+  /// which asks again when read): not asked for again until another node
+  /// joins (`_askAgainForContent`).
+  final Map<String, (int, Transaction)?> _contentUnavailable = {};
 
   /// Known transactions on the chain whose content isn't here yet, by
   /// message hash, with their height: what the next GetContent asks for,
@@ -678,21 +705,18 @@ class MurmurClient extends ChangeNotifier {
   DateTime? _lastSweep;
   int? _headersChangedFrom;
 
-  Transport? _socket;
-  SecureChannel? _channel;
-  StreamSubscription<Uint8List>? _sub;
-  Timer? _pingTimer;
-  Completer<Hello>? _helloWaiter;
-  Completer<List<BlockHeader>>? _headersWaiter;
-  Completer<List<BlockRecord>>? _blocksWaiter;
-  Completer<List<MessageContent>>? _contentWaiter;
-  Completer<State>? _stateWaiter;
-  Completer<Filters>? _filtersWaiter;
-  Completer<Tx>? _txWaiter;
-  Completer<Fees>? _feesWaiter;
-  Completer<HeaderProof>? _headerProofWaiter;
-  Completer<Thread>? _threadWaiter;
-  Completer<Address>? _addressWaiter;
+  /// The pool: the connected nodes, oldest first (`_fill`).
+  final List<NodeLink> _links = [];
+  int _nextLinkId = 0;
+  bool _filling = false;
+  Timer? _fillTimer;
+
+  /// Addresses tried for each entry since the last scheduled fill (natively;
+  /// a browser picks its own): each is tried once per round.
+  final Map<NodeAddress, Set<String>> _tried = {};
+
+  /// Fills since the pool was last full: each waits longer (`_scheduleFill`).
+  int _fillTries = 0;
   (DateTime, FeeInfo)? _lastFees;
 
   /// Bumped on every disconnect, so work tied to an old socket stops.
@@ -948,7 +972,7 @@ class MurmurClient extends ChangeNotifier {
     final hash = tx.messageHash;
     if (hash == null || tx.contentSize == 0 || !isOnline) return false;
     final key = toHex(hash);
-    return !_contents.containsKey(key) && !_contentUnavailable.contains(key) && !_withdrawnContent.contains(key);
+    return !_contents.containsKey(key) && !_contentUnavailable.containsKey(key) && !_withdrawnContent.contains(key);
   }
 
   /// Whether `address` has flagged transaction `txid`: proven on the chain,
@@ -1616,7 +1640,7 @@ class MurmurClient extends ChangeNotifier {
     if (_withdrawnContent.contains(key)) return null;
     final content = _contents[key];
     if (content == null) {
-      if (!_contentUnavailable.contains(key) && !_nameContent.containsKey(key)) {
+      if (!_contentUnavailable.containsKey(key) && !_nameContent.containsKey(key)) {
         _nameContent[key] = p!.height;
         _wake();
       }
@@ -1782,15 +1806,6 @@ class MurmurClient extends ChangeNotifier {
   String? _owner;
   bool _serve = false;
 
-  /// This connection: whether Serving was sent (from then on every GetContent
-  /// is answered, even after serving stops, since the node matches answers by
-  /// order), and whether Restore has run.
-  bool _servingSent = false;
-
-  /// Whether this connection's Hello was sent: nothing else may go before it.
-  bool _greeted = false;
-  bool _restoreDone = false;
-
   /// What this session gave: messages restored to nodes, and readers'
   /// requests answered with content.
   int restoredCount = 0;
@@ -1829,22 +1844,26 @@ class MurmurClient extends ChangeNotifier {
     _serve = serve;
     if (newOwner) {
       _sweepOwn();
-      // Another wallet's messages may want restoring on this connection too.
-      _restoreDone = false;
+      // Another wallet's messages may want restoring on these connections too.
+      for (final link in _links) {
+        link.restoreDone = false;
+      }
       _wake();
     }
     // Only once our Hello is out: a message before it breaks the handshake.
-    if (_greeted) _announceServing();
+    for (final link in _links) {
+      if (link.greeted) _announceServing(link);
+    }
   }
 
-  /// Tells the node which addresses this client serves: the owner's with
+  /// Tells `link`'s node which addresses this client serves: the owner's with
   /// serving on, none to stop. Nothing before the first, while there's none.
-  void _announceServing() {
+  void _announceServing(NodeLink link) {
     final owner = _owner;
     final addresses = _serve && owner != null ? [fromHex(owner)] : <Uint8List>[];
-    if (addresses.isEmpty && !_servingSent) return;
-    _send(Serving(addresses));
-    _servingSent = true;
+    if (addresses.isEmpty && !link.servingSent) return;
+    link.send(Serving(addresses));
+    link.servingSent = true;
   }
 
   /// Keeps `content` if `tx` is the owner's message (and not withdrawn).
@@ -1874,10 +1893,10 @@ class MurmurClient extends ChangeNotifier {
   /// for each request, in order, straight from here (the node holds the
   /// reader's answer only a few seconds). Only the owner's messages, not
   /// withdrawn; empty when there's nothing, so the node stops waiting.
-  void _answerForAuthor(GetContent request) {
+  void _answerForAuthor(NodeLink link, GetContent request) {
     // Never sent Serving: the node doesn't ask, and an answer would be
     // content it never asked for.
-    if (!_servingSent) return;
+    if (!link.servingSent) return;
     final owner = _owner;
     final items = <MessageContent>[];
     if (_serve && owner != null) {
@@ -1888,21 +1907,23 @@ class MurmurClient extends ChangeNotifier {
         }
       }
     }
-    _send(Content(items));
+    link.send(Content(items));
     if (items.isNotEmpty) {
       servedCount += items.length;
       notifyListeners();
     }
   }
 
-  /// Once per connection, after syncing: asks the node for the owner's
+  /// Once per connection, after syncing: asks each node for the owner's
   /// messages' content, newest first, and gives back what it lacks
   /// (Restore), up to [maxRestoredPerConnection]. Withdrawn messages are
   /// left out: the user asked for them to go. Nothing comes back, and what
-  /// the node refuses isn't tried again on this connection.
+  /// a node refuses isn't tried again on that connection. One node per call.
   Future<bool> _restoreOwn(int gen) async {
-    if (_restoreDone || _owner == null || state != LinkState.live) return false;
-    _restoreDone = true;
+    if (_owner == null || state != LinkState.live) return false;
+    final link = _links.where((l) => !l.restoreDone).firstOrNull;
+    if (link == null) return false;
+    link.restoreDone = true;
     _sweepOwn();
     final owner = _owner!;
     final mine = [
@@ -1913,13 +1934,19 @@ class MurmurClient extends ChangeNotifier {
     var given = 0;
     for (var i = 0; i < mine.length && given < maxRestoredPerConnection; i += maxContentRequest) {
       final batch = mine.sublist(i, min(i + maxContentRequest, mine.length));
-      final items = await _getContent([for (final m in batch) fromHex(m.hash)]);
+      // This node's own answer: what it lacks is what it's given back.
+      final List<MessageContent> items;
+      try {
+        items = (await _ask<Content>(GetContent([for (final m in batch) fromHex(m.hash)]), on: link)).items;
+      } on _LinkGone {
+        return true; // gone: nothing to give it
+      }
       if (gen != _generation) throw _Aborted();
       final has = {for (final item in items) toHex(item.hash)};
       final missing =
           [for (final m in batch) if (!has.contains(m.hash)) m].take(maxRestoredPerConnection - given).toList();
       if (missing.isEmpty) continue;
-      _send(Restore([for (final m in missing) MessageContent(fromHex(m.txid), m.content)]));
+      link.send(Restore([for (final m in missing) MessageContent(fromHex(m.txid), m.content)]));
       given += missing.length;
     }
     if (given > 0) {
@@ -2125,47 +2152,37 @@ class MurmurClient extends ChangeNotifier {
 
   // ---- connection -------------------------------------------------------------
 
-  /// Connects to the node at `host:port` (a name may stand for several).
+  /// Connects to the node at `host:port` (a name may stand for several): a
+  /// node list of one entry.
+  Future<void> connect(String host, int port) => connectTo([NodeAddress(host, port)]);
+
+  /// Connects to the nodes in `nodes`, keeping up to [poolSize] of them
+  /// connected, from the top of the list (a name may stand for several).
   /// Called by the user: automatic retries start over from a short wait.
-  Future<void> connect(String host, int port) {
+  Future<void> connectTo(List<NodeAddress> nodes) {
     _retries = 0;
-    return _connect(host, port);
+    return _connect(nodes);
   }
 
-  Future<void> _connect(String host, int port) async {
+  Future<void> _connect(List<NodeAddress> nodes) async {
     _cancelRetry();
     _teardown();
     final gen = _generation;
-    this.host = host;
-    this.port = port;
+    this.nodes = List.unmodifiable(nodes);
     error = null;
     state = LinkState.connecting;
-    _greeted = false;
     notifyListeners();
     try {
-      final hello = await _handshake(host, port, gen);
-      if (hello == null) return; // another connect or a disconnect came first
+      final first = await _openFirst(gen);
+      if (first == null) return; // another connect or a disconnect came first
+      final hello = first.hello;
       if (genesis != null && !bytesEqual(genesis!, hello.genesis)) {
         _resetChain();
       }
       genesis = hello.genesis;
       network = NetworkInfo.forGenesis(hello.genesis);
       peerHeight = hello.height;
-      _send(Hello(
-        version: protocolVersion,
-        genesis: hello.genesis,
-        nonce: _randomNonce(),
-        listenPort: 0, // not listening: keeps us out of the node's address book
-        height: 0,
-        work: BigInt.zero, // so the node never tries to sync from us
-      ));
-      _pingTimer = Timer.periodic(_pingInterval, (_) => _send(const Ping()));
-      // A new connection: say again what this client serves, and give back
-      // what the node lacks once synced.
-      _servingSent = false;
-      _greeted = true;
-      _restoreDone = false;
-      _announceServing();
+      _join(first);
       // The genesis header: derived for the built-in networks, else fetched.
       if (_genesisHeader == null) {
         final known = network!.known ? network!.genesisHeader() : null;
@@ -2184,81 +2201,81 @@ class MurmurClient extends ChangeNotifier {
       _prefetch = 1;
       notifyListeners();
       unawaited(_work(gen));
+      unawaited(_fill(gen));
     } catch (e) {
       if (gen == _generation) _fail(gen, _describe(e));
     }
   }
 
-  /// Opens the connection and runs it through the key exchange and the
-  /// node's Hello, trying the name's other nodes when one fails at any
-  /// point: unreachable, a broken key exchange, silence, a wrong protocol
-  /// version. Natively each try goes to an address not tried yet. In a
-  /// browser, which picks the address itself (and keeps picking the same
-  /// one), a few more tries only help with passing failures. Returns null
-  /// if a newer connect or a disconnect took over;
-  /// throws the last failure once there's nothing left to try.
-  Future<Hello?> _handshake(String host, int port, int gen) async {
-    final tried = <String>{};
-    Object? lastFailure;
+  // ---- the pool -------------------------------------------------------------------
+
+  /// The links in the order requests go to them: the one at the best tip
+  /// first, then the older (PROTOCOL.md Section 7.7: follow the heaviest
+  /// valid chain). A claim its headers didn't bear out was lowered.
+  List<NodeLink> get _orderedLinks => [..._links]..sort((a, b) {
+      final byHeight = b.height.compareTo(a.height);
+      return byHeight != 0 ? byHeight : a.id.compareTo(b.id);
+    });
+
+  NodeLink? get _primary => _orderedLinks.firstOrNull;
+
+  /// Connects to the first node of the list that answers: its entries in
+  /// order, and for each, its addresses (`_openFrom`). Null if a newer
+  /// connect or a disconnect took over; throws the failure that says the
+  /// most once every entry was tried.
+  Future<NodeLink?> _openFirst(int gen) async {
+    Object? failure;
+    for (final entry in nodes) {
+      try {
+        final link = await _openFrom(entry, gen, avoid: _tried.putIfAbsent(entry, () => {}));
+        if (link != null || gen != _generation) return link;
+      } catch (e) {
+        if (gen != _generation) return null;
+        if (!_saysAppOutdated(failure)) failure = e;
+      }
+    }
+    throw failure ?? TransportException('no node to try');
+  }
+
+  /// Opens a link to `entry`, trying the name's other nodes when one fails
+  /// at any point: unreachable, a broken key exchange, silence, a wrong
+  /// protocol version. Natively each try goes to an address not tried yet,
+  /// and not in `avoid` (it gets the ones tried). In a browser, which picks
+  /// the address itself (and keeps picking the same one), a few more tries
+  /// only help with passing failures. Null if a newer connect or a
+  /// disconnect took over; throws the failure that says the most once
+  /// there's nothing left to try.
+  Future<NodeLink?> _openFrom(NodeAddress entry, int gen, {required Set<String> avoid}) async {
+    Object? failure;
     for (var attempt = 0; attempt < _maxConnectTries; attempt++) {
       if (attempt > 0 && !canChooseAddress) await Future<void>.delayed(const Duration(seconds: 1));
       if (gen != _generation) return null;
-      final Transport socket;
       try {
-        socket = await openTransport(host, port, _connectTimeout, avoid: tried);
-      } catch (e) {
-        // Natively every address left was tried, and none answered; what
-        // went wrong with an earlier one says more than that.
-        if (canChooseAddress) {
-          lastFailure ??= e;
-          break;
-        }
-        if (!_saysAppOutdated(lastFailure)) lastFailure = e;
-        continue;
-      }
-      if (gen != _generation) {
-        socket.close();
-        return null;
-      }
-      tried.add(socket.peer);
-      _socket = socket;
-      try {
-        // Every connection is encrypted (PROTOCOL.md Section 7.4).
-        final channel = await SecureChannel.open(socket).timeout(const Duration(seconds: 30));
+        final link = await NodeLink.open(_nextLinkId++, entry,
+            avoid: avoid,
+            timeout: _connectTimeout,
+            onMessage: (link, message) => _onMessage(link, message, gen),
+            onLost: (link, reason) => _linkLost(link, reason, gen));
         if (gen != _generation) {
-          channel.close();
+          link.close();
           return null;
         }
-        _channel = channel;
-        final helloWaiter = _helloWaiter = Completer<Hello>();
-        _sub = channel.payloads.listen(
-          (payload) => _onPayload(payload, gen),
-          onError: (Object e) => _linkLost(gen, _describe(e)),
-          onDone: () => _linkLost(gen, const LinkError(LinkErrorKind.closed)),
-          cancelOnError: true,
-        );
-        // The node speaks first.
-        final hello = await helloWaiter.future.timeout(const Duration(seconds: 30));
-        if (hello.version != protocolVersion) {
-          if (hello.version > protocolVersion && hello.version > (_newerProtocolSeen ?? 0)) {
-            _newerProtocolSeen = hello.version;
-          }
-          throw LinkError(LinkErrorKind.version, nodeVersion: hello.version);
-        }
-        return hello;
+        return link;
       } catch (e) {
-        if (e is _Aborted || gen != _generation) return null;
-        if (!_saysAppOutdated(lastFailure)) lastFailure = e;
-        await _sub?.cancel();
-        _sub = null;
-        _channel?.close();
-        _channel = null;
-        socket.close();
-        _socket = null;
-        _helloWaiter = null;
+        if (gen != _generation) return null;
+        if (_saysAppOutdated(e) && (e as LinkError).nodeVersion > (_newerProtocolSeen ?? 0)) {
+          _newerProtocolSeen = e.nodeVersion;
+        }
+        // Natively every address left was tried when the transport fails:
+        // what went wrong with an earlier one says more than that.
+        if (canChooseAddress && e is TransportException) {
+          failure ??= e;
+          break;
+        }
+        if (!_saysAppOutdated(failure)) failure = e;
       }
     }
-    throw lastFailure ?? TransportException('no address to try');
+    throw failure ?? TransportException('no address to try');
   }
 
   /// Whether `failure` was a node on a newer protocol: that says the most
@@ -2267,20 +2284,121 @@ class MurmurClient extends ChangeNotifier {
   static bool _saysAppOutdated(Object? failure) =>
       failure is LinkError && failure.kind == LinkErrorKind.version && failure.nodeVersion > protocolVersion;
 
-  /// Tries per connect: natively, one per address (a DNS seed lists a few);
+  /// Tries per entry: natively, one per address (a DNS seed lists a few);
   /// in a browser, the same name again (a passing failure may clear).
   static const _maxConnectTries = canChooseAddress ? 8 : 3;
 
-  /// The connection ended or broke. During the handshake that's for
-  /// `_handshake` to handle (it tries another node); after it, the link is
-  /// lost.
-  void _linkLost(int gen, LinkError e) {
-    final hello = _helloWaiter;
-    if (gen == _generation && hello != null && !hello.isCompleted) {
-      hello.completeError(e);
+  /// Takes a link into the pool: the client's Hello (zero work and no
+  /// listening port, so the node never syncs from it nor passes its address
+  /// on), pings, and what this client serves.
+  void _join(NodeLink link) {
+    _links.add(link);
+    link.send(Hello(
+      version: protocolVersion,
+      genesis: link.hello.genesis,
+      nonce: _randomNonce(),
+      listenPort: 0,
+      height: 0,
+      work: BigInt.zero,
+    ));
+    link.greeted = true;
+    link.keepAlive(_pingInterval);
+    _announceServing(link);
+    peerHeight = max(peerHeight, link.height);
+    // Another node may have what the others didn't serve.
+    if (_links.length > 1) _askAgainForContent();
+    // Its chain may be heavier.
+    if (link.height > height) _needHeaders = true;
+    _wake();
+    notifyListeners();
+  }
+
+  /// Fills the pool up to [poolSize] in the background, from the list's
+  /// entries in order. Natively an entry gives as many nodes as its name has
+  /// addresses (a DNS seed); in a browser, which picks the address, one. A
+  /// node already connected through another entry or address (the same
+  /// Hello nonce) and a node on another network are let go. Tries again
+  /// later while the pool isn't full.
+  Future<void> _fill(int gen) async {
+    if (_filling) return;
+    _filling = true;
+    try {
+      for (final entry in nodes) {
+        if (_links.length >= poolSize) break;
+        final mine = [for (final l in _links) if (l.entry == entry) l];
+        if (!canChooseAddress && mine.isNotEmpty) continue;
+        // Per entry: names behind one proxy may share its addresses. What
+        // failed since the last scheduled fill isn't tried again yet.
+        final avoid = _tried.putIfAbsent(entry, () => {})..addAll([for (final l in mine) l.peer]);
+        while (_links.length < poolSize) {
+          final NodeLink? link;
+          try {
+            link = await _openFrom(entry, gen, avoid: avoid);
+          } catch (_) {
+            break; // nothing more from this entry
+          }
+          if (link == null || gen != _generation) return;
+          if (!_fits(link)) {
+            link.close();
+            if (!canChooseAddress) break;
+            continue;
+          }
+          _join(link);
+          if (!canChooseAddress) break;
+        }
+      }
+    } finally {
+      _filling = false;
+    }
+    if (gen != _generation) return;
+    if (_links.length >= poolSize) {
+      _fillTries = 0;
+    } else {
+      _scheduleFill(gen);
+    }
+  }
+
+  /// Whether a new link belongs in the pool: on this client's network, and
+  /// not a node already connected (nodes draw a random nonce per run).
+  bool _fits(NodeLink link) =>
+      genesis != null &&
+      bytesEqual(link.hello.genesis, genesis!) &&
+      !_links.any((l) => bytesEqual(l.hello.nonce, link.hello.nonce));
+
+  /// Tries to fill the pool again: after 5 s, then twice as long each time
+  /// it stays short, up to 5 minutes.
+  void _scheduleFill(int gen) {
+    _fillTimer?.cancel();
+    final delay = Duration(seconds: min(300, 5 * pow(2, min(_fillTries, 6)).toInt()));
+    _fillTries++;
+    _fillTimer = Timer(delay, () {
+      if (gen != _generation) return;
+      // A node that failed may be back by now.
+      _tried.clear();
+      unawaited(_fill(gen));
+    });
+  }
+
+  /// A link ended or broke. While others remain, the pool goes on without
+  /// it (requests waiting on it move on, `_ask`) and fills up again later;
+  /// the last one going is the client's link lost.
+  void _linkLost(NodeLink link, LinkError reason, int gen) {
+    if (gen != _generation || !_links.remove(link)) return;
+    if (_links.isEmpty) {
+      _fail(gen, reason);
       return;
     }
-    _fail(gen, e);
+    // A loss starts the waits over: the node may be back in moments.
+    _fillTries = 0;
+    _scheduleFill(gen);
+    _wake();
+    notifyListeners();
+  }
+
+  /// Lets a link go that failed a request, as if it had been lost.
+  void _drop(NodeLink link, LinkError reason) {
+    link.close(reason);
+    _linkLost(link, reason, _generation);
   }
 
   void disconnect() {
@@ -2333,52 +2451,27 @@ class MurmurClient extends ChangeNotifier {
     if (gen != _generation) return;
     _teardown();
     error = e;
-    final h = host, p = port;
-    if (h != null && p != null && _worthRetrying(e)) {
+    final list = nodes;
+    if (list.isNotEmpty && _worthRetrying(e)) {
       final delay = Duration(seconds: min(60, 2 * pow(2, min(_retries, 5)).toInt()));
       _retries++;
       retryAt = DateTime.now().add(delay);
-      _retryTimer = Timer(delay, () => _connect(h, p));
+      _retryTimer = Timer(delay, () => _connect(list));
     }
     notifyListeners();
   }
 
   void _teardown() {
     _generation++;
-    _pingTimer?.cancel();
-    _pingTimer = null;
-    _sub?.cancel();
-    _sub = null;
-    _channel?.close();
-    _channel = null;
-    _socket?.close();
-    _socket = null;
-    for (final c in [
-      _helloWaiter,
-      _headersWaiter,
-      _blocksWaiter,
-      _contentWaiter,
-      _stateWaiter,
-      _filtersWaiter,
-      _txWaiter,
-      _feesWaiter,
-      _headerProofWaiter,
-      _threadWaiter,
-      _addressWaiter,
-    ]) {
-      if (c != null && !c.isCompleted) c.completeError(_Aborted());
+    _fillTimer?.cancel();
+    _fillTimer = null;
+    _fillTries = 0;
+    _tried.clear();
+    // Requests still waiting end with the generation (`_ask`).
+    for (final link in _links) {
+      link.close();
     }
-    _helloWaiter = null;
-    _headersWaiter = null;
-    _blocksWaiter = null;
-    _contentWaiter = null;
-    _stateWaiter = null;
-    _filtersWaiter = null;
-    _txWaiter = null;
-    _feesWaiter = null;
-    _headerProofWaiter = null;
-    _threadWaiter = null;
-    _addressWaiter = null;
+    _links.clear();
     _headersSyncing = false;
     _wake();
     state = LinkState.disconnected;
@@ -2403,65 +2496,43 @@ class MurmurClient extends ChangeNotifier {
         _ => LinkError(LinkErrorKind.other, detail: e.toString()),
       };
 
-  void _send(Message msg) => _channel?.send(encodePayload(msg));
-
-  void _onPayload(Uint8List payload, int gen) {
+  /// Every message a link's node sends that no request waited for
+  /// (`NodeLink.request` takes the answers).
+  void _onMessage(NodeLink link, Message message, int gen) {
     if (gen != _generation) return;
-    try {
-      _handle(decodeMessage(payload));
-    } on FormatException catch (e) {
-      _linkLost(gen, LinkError(LinkErrorKind.protocol, detail: e.message));
-    }
-  }
-
-  void _complete<T>(Completer<T>? waiter, T value) {
-    if (waiter != null && !waiter.isCompleted) waiter.complete(value);
-  }
-
-  void _handle(Message message) {
     switch (message) {
-      case final Hello msg:
-        _complete(_helloWaiter, msg);
-      case final Headers msg:
-        _complete(_headersWaiter, msg.headers);
-        _headersWaiter = null;
-      case final Blocks msg:
-        _complete(_blocksWaiter, msg.blocks);
-        _blocksWaiter = null;
       case final NewBlock msg:
-        _onNewBlock(msg);
+        _onNewBlock(link, msg);
       case final NewTx msg:
         _onNewTx(msg);
-      case final Content msg:
-        _complete(_contentWaiter, msg.items);
-        _contentWaiter = null;
-      case final State msg:
-        _complete(_stateWaiter, msg);
-        _stateWaiter = null;
-      case final Filters msg:
-        _complete(_filtersWaiter, msg);
-        _filtersWaiter = null;
-      case final Tx msg:
-        _complete(_txWaiter, msg);
-        _txWaiter = null;
-      case final Fees msg:
-        _complete(_feesWaiter, msg);
-        _feesWaiter = null;
-      case final HeaderProof msg:
-        _complete(_headerProofWaiter, msg);
-        _headerProofWaiter = null;
-      case final Thread msg:
-        _complete(_threadWaiter, msg);
-        _threadWaiter = null;
-      case final Address msg:
-        _complete(_addressWaiter, msg);
-        _addressWaiter = null;
       // A reader wants one of the user's messages (after Serving).
       case final GetContent msg:
-        _answerForAuthor(msg);
+        _answerForAuthor(link, msg);
       case final TxStatus msg:
-        _statuses[toHex(msg.txid)] = msg;
-        notifyListeners();
+        // Every node is sent the transaction. One that took it (or had it)
+        // outweighs one that refused it: a full mempool, or a node lying to
+        // have the client give up on it.
+        final id = toHex(msg.txid);
+        final before = _statuses[id];
+        bool taken(TxStatus s) => s.code == TxStatusCode.accepted || s.code == TxStatusCode.known;
+        if (before == null || (!taken(before) && taken(msg))) {
+          _statuses[id] = msg;
+          notifyListeners();
+        }
+      // Answers that came after their request gave up, or that nothing asked
+      // for: ignored (Section 7.6). A second Hello breaks nothing either.
+      case Hello() ||
+            Headers() ||
+            Blocks() ||
+            Content() ||
+            State() ||
+            Filters() ||
+            Tx() ||
+            Fees() ||
+            HeaderProof() ||
+            Thread() ||
+            Address():
+        break;
       // The node never asks a peer with zero work and no blocks for anything,
       // and unsolicited light-client replies are ignored (Section 7.6).
       case GetHeaders() ||
@@ -2495,22 +2566,43 @@ class MurmurClient extends ChangeNotifier {
 
   // ---- requests -----------------------------------------------------------------
 
-  Future<T> _request<T>(Completer<T> waiter, Message msg) {
-    _now('waiting for the answer to ${msg.runtimeType}');
-    _send(msg);
-    return waiter.future.timeout(_requestTimeout);
+  /// Asks a node and waits for its answer of type `R`: the link at the best
+  /// tip (`_primary`), or the link given (`on`). A node that doesn't answer
+  /// in time is let go while others remain, and the request goes to the
+  /// next; so does one whose link goes meanwhile. Only the last link's
+  /// failure is the client's (`_fail`, through the worker).
+  Future<R> _ask<R extends Message>(Message msg, {NodeLink? on, Duration timeout = _requestTimeout}) async {
+    final gen = _generation;
+    while (true) {
+      final link = on ?? _primary;
+      if (link == null || gen != _generation) throw _Aborted();
+      _now('waiting for the answer to ${msg.runtimeType}');
+      try {
+        return await link.request<R>(msg, timeout);
+      } on TimeoutException {
+        if (on != null || _links.length <= 1) rethrow;
+        _drop(link, const LinkError(LinkErrorKind.timeout));
+      } on _LinkGone {
+        if (gen != _generation) throw _Aborted();
+        if (on != null) rethrow;
+      }
+    }
   }
 
-  Future<List<BlockHeader>> _getHeaders(List<Uint8List> locator) =>
-      _request(_headersWaiter = Completer(), GetHeaders(locator));
+  Future<List<BlockHeader>> _getHeaders(List<Uint8List> locator) async =>
+      (await _ask<Headers>(GetHeaders(locator))).headers;
 
-  Future<List<BlockRecord>> _getBlocks(List<Uint8List> hashes) {
+  Future<List<BlockRecord>> _getBlocks(List<Uint8List> hashes) async {
     _blocksAsked += hashes.length;
-    return _request(_blocksWaiter = Completer(), GetBlocks(hashes));
+    return (await _ask<Blocks>(GetBlocks(hashes))).blocks;
   }
 
-  Future<List<MessageContent>> _getContent(List<Uint8List> hashes) =>
-      _request(_contentWaiter = Completer(), GetContent(hashes));
+  /// Sends `msg` to every node: what each should hear (a transaction).
+  void _tellAll(Message msg) {
+    for (final link in _links) {
+      link.send(msg);
+    }
+  }
 
   // ---- the worker -----------------------------------------------------------------
 
@@ -2693,18 +2785,25 @@ class MurmurClient extends ChangeNotifier {
         await _startFromCheckpoint(start, gen);
         await _attachStored(gen);
       }
+      NodeLink? source;
       while (true) {
+        source = _primary;
         final headers = await _getHeaders(_locator());
         if (gen != _generation) throw _Aborted();
-        if (headers.isEmpty) break;
-        _attachHeaders(headers);
+        final complete = headers.length < maxHeaders;
+        if (headers.isEmpty || !_attachHeaders(headers, complete: complete)) break;
         peerHeight = max(peerHeight, height);
         notifyListeners();
-        if (headers.length < maxHeaders) break;
+        if (complete) break;
       }
+      // The node that claimed the best tip showed no more than this: its
+      // claim is lowered, so the next sync asks another.
+      if (source != null && source.height > height) source.height = height;
     } finally {
       if (gen == _generation) _headersSyncing = false;
     }
+    // Another node shows a longer chain: sync from it next.
+    if (_links.any((l) => l.height > height)) _needHeaders = true;
     peerHeight = max(peerHeight, height);
     _prunePending();
     state = LinkState.live;
@@ -2737,7 +2836,12 @@ class MurmurClient extends ChangeNotifier {
   /// Checks a batch of headers, rolls the chain back to where they attach if
   /// that's below our tip, and appends them. Headers we already have (a
   /// relayed block may have arrived meanwhile) are skipped.
-  void _attachHeaders(List<BlockHeader> headers) {
+  ///
+  /// With several nodes, the heaviest valid chain wins (PROTOCOL.md Section
+  /// 7.7): a branch that ends in this batch (`complete`) and carries no more
+  /// work than the headers it would replace is refused, and false returned.
+  /// A longer one is taken: only its first batch is at hand.
+  bool _attachHeaders(List<BlockHeader> headers, {bool complete = false}) {
     var i = 0;
     while (i < headers.length) {
       final at = headers[i].height;
@@ -2745,7 +2849,18 @@ class MurmurClient extends ChangeNotifier {
       if (known == null || !bytesEqual(known.hash, headers[i].hash)) break;
       i++;
     }
-    if (i == headers.length) return;
+    if (i == headers.length) return true;
+    final forkAt = headers[i].height - 1;
+    if (complete && forkAt >= _low && forkAt < height) {
+      var ours = BigInt.zero, theirs = BigInt.zero;
+      for (var h = forkAt + 1; h <= height; h++) {
+        ours += _headers[h - 1]!.work;
+      }
+      for (var j = i; j < headers.length; j++) {
+        theirs += headers[j].work;
+      }
+      if (theirs <= ours) return false;
+    }
     final first = headers[i];
     final fork = first.height - 1;
     // Below the known headers (a chain that doesn't contain the checkpoint)
@@ -2772,6 +2887,7 @@ class MurmurClient extends ChangeNotifier {
     // The new tip isn't fetched yet, so the newest stretch starts over.
     _top = height + 1;
     _headersChangedFrom = min(_headersChangedFrom ?? fork + 1, fork + 1);
+    return true;
   }
 
   /// A known header by height, genesis included.
@@ -2797,7 +2913,7 @@ class MurmurClient extends ChangeNotifier {
     final heights = [for (var h = from; h < cp.height; h++) h];
     for (var i = 0; i < heights.length || peaks == null; i += maxHeaderProofs) {
       final batch = heights.skip(i).take(maxHeaderProofs).toList();
-      final reply = await _request(_headerProofWaiter = Completer<HeaderProof>(), GetHeaderProof(hash, batch));
+      final reply = await _ask<HeaderProof>(GetHeaderProof(hash, batch));
       if (gen != _generation) throw _Aborted();
       if (!reply.available || !bytesEqual(reply.at, hash)) {
         throw LinkError(LinkErrorKind.checkpointMismatch, height: cp.height);
@@ -3067,7 +3183,7 @@ class MurmurClient extends ChangeNotifier {
     final hash = tx.messageHash;
     if (hash == null || tx.contentSize == 0) return;
     final key = toHex(hash);
-    if (!_contents.containsKey(key) && !_contentUnavailable.contains(key) && !_withdrawnContent.contains(key)) {
+    if (!_contents.containsKey(key) && !_contentUnavailable.containsKey(key) && !_withdrawnContent.contains(key)) {
       _missingContent[key] = (h, tx);
     }
   }
@@ -3192,6 +3308,7 @@ class MurmurClient extends ChangeNotifier {
       _contents.remove(key);
       _contentOwner.remove(key);
       _missingContent.remove(key);
+      _contentUnavailable.remove(key);
     }
     _blocks.remove(index);
     _fetched--;
@@ -3366,7 +3483,7 @@ class MurmurClient extends ChangeNotifier {
     for (final key in stale) {
       _stateAsked[toHex(key)] = at; // asked once per tip, whatever the answer
     }
-    final reply = await _request(_stateWaiter = Completer<State>(), GetState(hashAt(at), stale));
+    final reply = await _ask<State>(GetState(hashAt(at), stale));
     if (gen != _generation) throw _Aborted();
     // The tip may have moved on (or been reorganized) meanwhile.
     if (!reply.available || at > height || !bytesEqual(hashAt(at), reply.block)) return true;
@@ -3415,7 +3532,7 @@ class MurmurClient extends ChangeNotifier {
   /// Fetches the filters of blocks `start` to `top`, each checked against
   /// its header.
   Future<void> _getFilters(int start, int top, int gen) async {
-    final reply = await _request(_filtersWaiter = Completer<Filters>(), GetFilters(start, top - start + 1));
+    final reply = await _ask<Filters>(GetFilters(start, top - start + 1));
     if (gen != _generation) throw _Aborted();
     if (reply.start != start || reply.filters.isEmpty) {
       throw const FormatException('the node sent filters that were not requested');
@@ -3565,7 +3682,7 @@ class MurmurClient extends ChangeNotifier {
     _txAsking = ids.toSet();
     final Tx reply;
     try {
-      reply = await _request(_txWaiter = Completer<Tx>(), GetTx([for (final id in ids) fromHex(id)]));
+      reply = await _ask<Tx>(GetTx([for (final id in ids) fromHex(id)]));
     } finally {
       _txAsking = const {};
     }
@@ -3660,7 +3777,7 @@ class MurmurClient extends ChangeNotifier {
       final tip = height;
       final at = hashAt(tip);
       final root = _hdr(tip).historyRoot;
-      final reply = await _request(_headerProofWaiter = Completer<HeaderProof>(), GetHeaderProof(at, batch));
+      final reply = await _ask<HeaderProof>(GetHeaderProof(at, batch));
       if (gen != _generation) throw _Aborted();
       // The tip moved on meanwhile: whoever needs them asks again.
       if (!reply.available || !bytesEqual(reply.at, at) || tip > height || !bytesEqual(hashAt(tip), at)) return;
@@ -3752,7 +3869,7 @@ class MurmurClient extends ChangeNotifier {
   Future<void> _readFlags(_FlagRead read, int gen) async {
     final back = read.total != null && read.low > 0 && read.reorgs == _reorgs;
     final msg = GetAddress(fromHex(read.address), read.list, back ? read.low : 0, maxPageEntries);
-    final page = (await _request(_addressWaiter = Completer<Address>(), msg)).page;
+    final page = (await _ask<Address>(msg)).page;
     if (gen != _generation) throw _Aborted();
     if (!page.available) {
       read.unavailable = true;
@@ -3812,8 +3929,8 @@ class MurmurClient extends ChangeNotifier {
 
   Future<ListPage?> _askPage(_ListRead read, int end, int count) async {
     final msg = read.request(end, count);
-    if (msg is GetThread) return (await _request(_threadWaiter = Completer<Thread>(), msg)).page;
-    return (await _request(_addressWaiter = Completer<Address>(), msg)).page;
+    if (msg is GetThread) return (await _ask<Thread>(msg)).page;
+    return (await _ask<Address>(msg)).page;
   }
 
   /// Reads one page of what `read` wants and doesn't hold: the first (the
@@ -3866,7 +3983,7 @@ class MurmurClient extends ChangeNotifier {
       _needHeaders = true;
       return;
     }
-    final reply = await _request(_stateWaiter = Completer<State>(), GetState(page.at, [read.key]));
+    final reply = await _ask<State>(GetState(page.at, [read.key]));
     if (gen != _generation) throw _Aborted();
     if (!reply.available || !bytesEqual(reply.block, page.at) || reply.proofs.isEmpty) return;
     if (read.reorgs != _reorgs || at > height || !_headers.hashIs(at - 1, page.at)) return; // reorganized meanwhile
@@ -3917,8 +4034,13 @@ class MurmurClient extends ChangeNotifier {
 
   // ---- gossip -------------------------------------------------------------------
 
-  void _onNewBlock(NewBlock m) {
+  /// A block `link`'s node announces: its chain reaches that height, so it
+  /// is asked first if that's the best (`_primary`).
+  void _onNewBlock(NodeLink link, NewBlock m) {
     final h = m.block.header;
+    // Only a header with its proof of work raises the claim: a made-up
+    // height would otherwise make a node the one asked first, for nothing.
+    if (h.meetsTarget) link.height = max(link.height, h.height);
     peerHeight = max(peerHeight, h.height);
     try {
       if (h.height >= _low && h.height <= height && bytesEqual(hashAt(h.height), h.hash)) {
@@ -3979,50 +4101,95 @@ class MurmurClient extends ChangeNotifier {
 
   // ---- content ------------------------------------------------------------------
 
-  /// Asks the node for up to 256 missing contents, newest first, of every
-  /// transaction known on the chain (fetched blocks and GetTx). Returns
-  /// whether it asked. The node serves what it has (possibly nothing: it may
-  /// have deleted it); what it didn't send isn't asked for again.
+  /// Asks for up to 256 missing contents, newest first, of every transaction
+  /// known on the chain (fetched blocks and GetTx). Returns whether it
+  /// asked. A node serves what it has (possibly nothing: it may have deleted
+  /// it, or keep none past the content window), so the node that gave most
+  /// so far is asked first, and each next node only for what the ones
+  /// before didn't give (PROTOCOL.md Section 7.3, rule 4). What no node
+  /// gave isn't asked for again until another node joins the pool.
   Future<bool> _fetchContent(int gen) async {
     bool settled(String key) =>
-        _contents.containsKey(key) || _contentUnavailable.contains(key) || _withdrawnContent.contains(key);
+        _contents.containsKey(key) || _contentUnavailable.containsKey(key) || _withdrawnContent.contains(key);
     _missingContent.removeWhere((key, _) => settled(key));
     _nameContent.removeWhere((key, _) => settled(key));
     if (_missingContent.isEmpty && _nameContent.isEmpty) return false;
-    // Names first: every row shows one. Then messages, newest first.
+    // Names first: every row shows one. Then messages, newest first. A name
+    // has no transaction here: its content is checked by hash and length.
     final newestFirst = _missingContent.entries.toList()..sort((a, b) => b.value.$1.compareTo(a.value.$1));
-    final wanted = <String, Transaction?>{
+    final wanted = <String, (int, Transaction)?>{
       for (final key in _nameContent.keys.take(maxContentRequest)) key: null,
     };
     for (final e in newestFirst) {
       if (wanted.length >= maxContentRequest) break;
-      wanted[e.key] = e.value.$2;
+      wanted[e.key] = e.value;
     }
-    final items = await _getContent([for (final k in wanted.keys) fromHex(k)]);
-    if (gen != _generation) throw _Aborted();
-    for (final item in items) {
-      final key = toHex(item.hash);
-      if (!wanted.containsKey(key) || _contents.containsKey(key) || _withdrawnContent.contains(key)) continue;
-      final tx = wanted[key];
-      // Only what we asked for, and only valid content: its hash, and its
-      // length (a name's is an alias's or a profile's; a message's is its
-      // transaction's).
-      final valid = tx != null
-          ? tx.isContent(item.content)
-          : isNameContentSize(item.content.length) && toHex(sha256Bytes(item.content)) == key;
-      if (!valid) continue;
-      _contents[key] = item.content;
-      if (tx != null) _keepOwn(tx, item.content);
-      _unsavedContents[key] = item.content;
+    final left = Map.of(wanted);
+    for (final link in _contentOrder()) {
+      if (left.isEmpty) break;
+      final List<MessageContent> items;
+      try {
+        items = (await _ask<Content>(GetContent([for (final k in left.keys) fromHex(k)]), on: link)).items;
+      } on TimeoutException {
+        if (_links.length <= 1) rethrow;
+        _drop(link, const LinkError(LinkErrorKind.timeout));
+        continue;
+      } on _LinkGone {
+        if (gen != _generation) throw _Aborted();
+        continue;
+      }
+      if (gen != _generation) throw _Aborted();
+      final asked = left.length;
+      for (final item in items) {
+        final key = toHex(item.hash);
+        if (!left.containsKey(key) || _contents.containsKey(key) || _withdrawnContent.contains(key)) continue;
+        final tx = left[key]?.$2;
+        // Only what we asked for, and only valid content: its hash, and its
+        // length (a name's is an alias's or a profile's; a message's is its
+        // transaction's).
+        final valid = tx != null
+            ? tx.isContent(item.content)
+            : isNameContentSize(item.content.length) && toHex(sha256Bytes(item.content)) == key;
+        if (!valid) continue;
+        _contents[key] = item.content;
+        if (tx != null) _keepOwn(tx, item.content);
+        _unsavedContents[key] = item.content;
+        left.remove(key);
+      }
+      // 256 contents are at most 266 KB, well under the reply's 8 MiB cap,
+      // so what's missing from the reply is what the node doesn't serve.
+      link.contentGiven += asked - left.length;
+      link.contentMissed += left.length;
     }
-    // 256 contents are at most 266 KB, well under the reply's 8 MiB cap, so
-    // what's missing from the reply is what the node doesn't serve.
     for (final key in wanted.keys) {
-      if (!_contents.containsKey(key)) _contentUnavailable.add(key);
+      if (left.containsKey(key)) _contentUnavailable[key] = left[key];
       _missingContent.remove(key);
       _nameContent.remove(key);
     }
     return true;
+  }
+
+  /// The order nodes are asked for content: the best record of giving it
+  /// first (a node that keeps it all, against nodes that prune), then the
+  /// order of requests.
+  List<NodeLink> _contentOrder() {
+    final byRequests = _orderedLinks;
+    final rank = {for (var i = 0; i < byRequests.length; i++) byRequests[i]: i};
+    return byRequests
+      ..sort((a, b) {
+        final byRecord = b.contentRecord.compareTo(a.contentRecord);
+        return byRecord != 0 ? byRecord : rank[a]!.compareTo(rank[b]!);
+      });
+  }
+
+  /// Content no node gave is wanted again (a node joined that may have it).
+  /// A name's comes back by itself, when it's next read (`publishedAlias`).
+  void _askAgainForContent() {
+    for (final e in _contentUnavailable.entries) {
+      final want = e.value;
+      if (want != null) _missingContent[e.key] = want;
+    }
+    _contentUnavailable.clear();
   }
 
   // ---- fees -----------------------------------------------------------------------
@@ -4042,8 +4209,9 @@ class MurmurClient extends ChangeNotifier {
   Future<FeeInfo> _askFees() async {
     if (state == LinkState.live) {
       try {
-        final fees = await _request(_feesWaiter = Completer<Fees>(), const GetFees())
-            .timeout(const Duration(seconds: 3));
+        // The node at the tip only: one silent on fees (it answers at most
+        // every 10 s) mustn't be let go for it.
+        final fees = await _ask<Fees>(const GetFees(), on: _primary, timeout: const Duration(seconds: 3));
         final info = feeInfoFromNode(fees);
         _lastFees = (DateTime.now(), info);
         return info;
@@ -4233,7 +4401,7 @@ class MurmurClient extends ChangeNotifier {
     if (_txIndex.containsKey(tx.id) || _pending.containsKey(tx.id)) {
       throw const TxProblem(TxProblemKind.duplicate);
     }
-    _send(SubmitTx(tx, content));
+    _tellAll(SubmitTx(tx, content));
     if (content != null) _keepOwn(tx, content);
     _pending[tx.id] = PendingTx(tx, content, mine: true, sentAtHeight: height);
     _sentHere.add(tx.id);
