@@ -171,22 +171,32 @@ jobs:
     - run: dart run tool/bundle_node.dart --for-tests
     # Once more on a fresh emulator if the emulator itself went away during
     # the tests (offline, its log ending without a word: 2 runs of 5 on
-    # 2026-11-03, at different steps); a failure with the emulator still up
-    # is the app's, and isn't tried again. After the acceptance tests, on
+    # 2026-11-03, at different steps), or if the app went silent for 5
+    # minutes (tool/acceptance_test.dart stops the run and leaves
+    # $ACCEPTANCE_SILENT_MARK: 26 silent minutes on 2026-11-19, the
+    # emulator still up); any other failure with the emulator still up is
+    # the app's, and isn't tried again. After the acceptance tests, on
     # the same emulator, the phone storage test
     # (integration_test/phone_storage_test.dart): the local copy in the
     # cache folder, cleared by the system itself, own messages kept.
     - name: Acceptance tests
       run: |
         df -h / | tail -n 1
+        export ACCEPTANCE_SILENT_MARK=/tmp/murmur-app-silent
         for attempt in 1 2; do
+          rm -f "$ACCEPTANCE_SILENT_MARK"
           # Assigned apart from export, so a failed boot stops the step.
           device=$(tool/android_emulator.sh)
           export ACCEPTANCE_DEVICE=$device
           if flutter test --reporter expanded tool/acceptance_test.dart &&
              flutter test --reporter expanded tool/phone_storage_test.dart; then exit 0; fi
-          if [ "$(adb -s "$device" get-state 2>/dev/null)" = device ]; then exit 1; fi
-          echo "::warning::the emulator went offline during the acceptance tests (attempt $attempt)"
+          if [ -f "$ACCEPTANCE_SILENT_MARK" ]; then
+            echo "::warning::the app went silent during the acceptance tests (attempt $attempt)"
+          elif [ "$(adb -s "$device" get-state 2>/dev/null)" = device ]; then
+            exit 1
+          else
+            echo "::warning::the emulator went offline during the acceptance tests (attempt $attempt)"
+          fi
           sudo dmesg | grep -iE 'segfault|traps:|killed process|out of memory' | tail -n 20 || true
           grep -- '^----' /tmp/murmur-emulator.log || true
           df -h / /tmp | tail -n 2

@@ -2,6 +2,10 @@
 
 Newest first. Each release is a `vX.Y.Z` tag matching `version` in `pubspec.yaml`; see [README](README.md#releases-and-deployment). Entries marked **Breaking** need action from users.
 
+## Unreleased
+
+- **Changed: the desktop apps' node is murmur-node v0.16.1** (no protocol or network change). Its miner, at a small share of the processor, kept one block template for minutes on a slow or busy machine, so a message sent meanwhile waited; it now builds a new template every 5 s.
+
 ## v0.10.19: checkpoint refresh (2026-11-20)
 
 No protocol or network change.

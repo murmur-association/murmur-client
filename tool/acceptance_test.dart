@@ -287,7 +287,38 @@ void main() {
     final flutter = await Process.start(Platform.isWindows ? 'flutter.bat' : 'flutter', args,
         environment: environment, includeParentEnvironment: false, runInShell: Platform.isWindows);
     final output = DeviceOutput();
+    // On Android, a run whose app has gone silent ends there, not at this
+    // test's timeout. Once installed, the app never went 12 s without a
+    // line (two passing runs, 2026-11-18 and 20; its longest wait is 3
+    // minutes), yet on 2026-11-19 it said nothing for 26 minutes, past its
+    // own 20-minute timeout, with the emulator still up; the job counted
+    // that as the app's failure and didn't try again. Silent for 5 minutes,
+    // the run is stopped and the file ACCEPTANCE_SILENT_MARK names is
+    // written, so the job takes it as the emulator's fault and tries once
+    // more, on a fresh emulator. An app that hangs every time still fails.
+    // Not on other devices: none has a second attempt, and a slow runner
+    // (ACCEPTANCE_SLOW) can wait silently for minutes.
+    const silentLimit = Duration(minutes: 5);
+    var heard = DateTime.now();
+    var installed = false;
+    final silenceWatch = android == null
+        ? null
+        : Timer.periodic(const Duration(seconds: 15), (watch) async {
+            if (!installed || DateTime.now().difference(heard) < silentLimit) return;
+            watch.cancel();
+            final pid = await android.adb(['shell', 'pidof', android.package], timeout: const Duration(seconds: 30));
+            print('::warning::the app said nothing for ${silentLimit.inMinutes} minutes; its process on the '
+                'device: ${'${pid.stdout}'.trim().isEmpty ? 'none' : '${pid.stdout}'.trim()} (adb exit code ${pid.exitCode})');
+            if (_env['ACCEPTANCE_SILENT_MARK'] case final mark?) File(mark).writeAsStringSync('silent\n');
+            flutter.kill();
+            await flutter.exitCode.timeout(const Duration(seconds: 30), onTimeout: () {
+              flutter.kill(ProcessSignal.sigkill);
+              return -1;
+            });
+          });
     output.capture(() => eachLine(flutter, (line) {
+          heard = DateTime.now();
+          if (line.contains('Installing build/')) installed = true;
           output.add(line);
           if (chooser == 'host' && (line.contains(chooserPickRequest) || line.contains(chooserCancelRequest))) {
             chooserDone.add(answerChooser(line));
@@ -307,7 +338,9 @@ void main() {
             });
           }
         }));
-    expect(output.failed(await flutter.exitCode, 'the acceptance tests on $_device', node: node.node.recentOutput), isFalse,
+    final exitCode = await flutter.exitCode;
+    silenceWatch?.cancel();
+    expect(output.failed(exitCode, 'the acceptance tests on $_device', node: node.node.recentOutput), isFalse,
         reason: 'the acceptance tests on $_device');
     if (android != null) expect(backgroundJobRan, isTrue, reason: "the app's background job, run as Android runs it");
     // A cancel and a pick from each source the device offers (Android has

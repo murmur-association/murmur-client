@@ -112,7 +112,9 @@ class TestNode {
       // as long as it hashed at 1%, so on a busy runner (iOS's, beside its
       // simulator) it kept one template for minutes, and the chain went
       // about 4 minutes without a block while a test waited for its thread.
-      // At 20% the rest is 4 times the work. Running ahead of the clock
+      // At 20% the rest is 4 times the work. v0.16.1 rests between short
+      // slices and builds a template every 5 s, so 1% would do now; 20%
+      // stays, since it's what the iOS runs proved. Running ahead of the clock
       // isn't a concern any more: since v0.10.5 the miner waits for its
       // clock instead of stamping a block ahead of it (Section 8.3).
       if (mineTo != null) ...['--mine-to', toHex(mineTo), '--mine-cpu', '20'],
