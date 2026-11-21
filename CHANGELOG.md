@@ -2,8 +2,9 @@
 
 Newest first. Each release is a `vX.Y.Z` tag matching `version` in `pubspec.yaml`; see [README](README.md#releases-and-deployment). Entries marked **Breaking** need action from users.
 
-## Unreleased
+## v0.10.20: scheduled release, with what was waiting (2026-11-21)
 
+- **Changed: the testnet checkpoint** is now block 57,500, refreshed from the live network by the scheduled release.
 - **Changed: the desktop apps' node is murmur-node v0.16.1** (no protocol or network change). Its miner, at a small share of the processor, kept one block template for minutes on a slow or busy machine, so a message sent meanwhile waited; it now builds a new template every 5 s.
 
 ## v0.10.19: checkpoint refresh (2026-11-20)
